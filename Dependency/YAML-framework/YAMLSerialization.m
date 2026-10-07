@@ -38,30 +38,70 @@ __YAMLSerializationParserInputReadHandler (void *data, unsigned char *buffer, si
     }
 }
 
-// Validate aliases before creating Foundation containers. Cyclic graphs cannot
-// be represented safely by the recursive front-matter HTML consumer.
-static BOOL YAMLNodeIsAcyclic(yaml_document_t *document, int index,
-                              unsigned char *states, NSUInteger depth) {
-    if (depth > 256 || states[index - 1] == 1)
+// Bound the work done by recursive consumers (title description and HTML),
+// counting an aliased subtree once per reference rather than once per node.
+// These ceilings allow ordinary front matter while preventing a small alias
+// graph from requesting hundreds of megabytes from Foundation consumers.
+static const NSUInteger YAMLMaximumExpandedNodes = 100000;
+static const NSUInteger YAMLMaximumExpandedScalarBytes = 16 * 1024 * 1024;
+static const NSUInteger YAMLMaximumDepth = 256;
+
+typedef struct {
+    unsigned char state; // 0: unseen, 1: visiting, 2: complete
+    NSUInteger height;
+    NSUInteger expandedNodes;
+    NSUInteger scalarBytes;
+} YAMLGraphMetrics;
+
+static BOOL YAMLMeasureNode(yaml_document_t *document, int index,
+                            YAMLGraphMetrics *metrics, NSUInteger depth);
+
+static BOOL YAMLMeasureChild(yaml_document_t *document, int index,
+                             YAMLGraphMetrics *metrics, NSUInteger depth,
+                             YAMLGraphMetrics *parent) {
+    if (!YAMLMeasureNode(document, index, metrics, depth + 1))
         return NO;
-    if (states[index - 1] == 2)
-        return YES;
-    states[index - 1] = 1;
+    YAMLGraphMetrics *child = &metrics[index - 1];
+    // Subtraction before addition prevents overflow and bounds alias expansion.
+    if (child->expandedNodes > YAMLMaximumExpandedNodes - parent->expandedNodes
+        || child->scalarBytes > YAMLMaximumExpandedScalarBytes - parent->scalarBytes)
+        return NO;
+    parent->expandedNodes += child->expandedNodes;
+    parent->scalarBytes += child->scalarBytes;
+    parent->height = MAX(parent->height, child->height + 1);
+    return parent->height <= YAMLMaximumDepth;
+}
+
+static BOOL YAMLMeasureNode(yaml_document_t *document, int index,
+                            YAMLGraphMetrics *metrics, NSUInteger depth) {
+    if (depth > YAMLMaximumDepth)
+        return NO;
+    YAMLGraphMetrics *current = &metrics[index - 1];
+    if (current->state == 1)
+        return NO;
+    if (current->state == 2)
+        return current->height <= YAMLMaximumDepth - depth;
+    current->state = 1;
+    current->expandedNodes = 1;
     yaml_node_t *node = yaml_document_get_node(document, index);
-    if (node->type == YAML_SEQUENCE_NODE) {
+    if (node->type == YAML_SCALAR_NODE) {
+        if (node->data.scalar.length > YAMLMaximumExpandedScalarBytes)
+            return NO;
+        current->scalarBytes = node->data.scalar.length;
+    } else if (node->type == YAML_SEQUENCE_NODE) {
         for (yaml_node_item_t *item = node->data.sequence.items.start;
              item < node->data.sequence.items.top; item++)
-            if (!YAMLNodeIsAcyclic(document, *item, states, depth + 1))
+            if (!YAMLMeasureChild(document, *item, metrics, depth, current))
                 return NO;
     } else if (node->type == YAML_MAPPING_NODE) {
         for (yaml_node_pair_t *pair = node->data.mapping.pairs.start;
              pair < node->data.mapping.pairs.top; pair++)
-            if (!YAMLNodeIsAcyclic(document, pair->key, states, depth + 1)
-                || !YAMLNodeIsAcyclic(document, pair->value, states, depth + 1))
+            if (!YAMLMeasureChild(document, pair->key, metrics, depth, current)
+                || !YAMLMeasureChild(document, pair->value, metrics, depth, current))
                 return NO;
     }
-    states[index - 1] = 2;
-    return YES;
+    current->state = 2;
+    return current->height <= YAMLMaximumDepth - depth;
 }
 
 // M13OrderedDictionary has identity equality and copying creates a different
@@ -91,7 +131,7 @@ static id YAMLMappingKey(id object, NSMapTable *copies) {
 
 // Populate children before inserting mapping keys. Foundation dictionaries copy
 // keys, so inserting an empty collection key and filling it later breaks lookup.
-// The acyclic check has already bounded recursion; states memoizes aliases.
+// Graph validation has already bounded recursion; states memoizes aliases.
 static void YAMLFillNode(yaml_document_t *document, int index, id *objects,
                          unsigned char *states, NSMapTable *keyCopies) {
     if (states[index - 1])
@@ -172,14 +212,24 @@ __YAMLSerializationObjectWithYAMLDocument (yaml_document_t *document, YAMLReadOp
         return nil;
     }
 
-    unsigned char *states = calloc(document->nodes.top - document->nodes.start, 1);
-    BOOL acyclic = states && YAMLNodeIsAcyclic(document, 1, states, 0);
-    if (!acyclic) {
+    NSUInteger nodeCount = document->nodes.top - document->nodes.start;
+    YAMLGraphMetrics *metrics = calloc(nodeCount, sizeof(YAMLGraphMetrics));
+    unsigned char *states = calloc(nodeCount, 1);
+    if (!metrics || !states) {
+        free(metrics);
+        free(states);
+        free(objects);
+        YAML_SET_ERROR(kYAMLErrorCodeOutOfMemory, @"Couldn't allocate graph validation state", @"Please free memory and retry");
+        return nil;
+    }
+    BOOL bounded = YAMLMeasureNode(document, 1, metrics, 0);
+    free(metrics);
+    if (!bounded) {
         free(states);
         free(objects);
         YAML_SET_ERROR(kYAMLErrorInvalidYamlObject,
-                       @"Cyclic or excessively nested YAML document",
-                       @"Remove recursive aliases or reduce nesting");
+                       @"Cyclic, excessively nested or excessively expanded YAML document",
+                       @"Reduce nesting, alias repetition or scalar size");
         return nil;
     }
 
