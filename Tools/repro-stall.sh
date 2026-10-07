@@ -65,7 +65,7 @@ for i in $(seq 1 "$ITER"); do
   restart=$(grep -c "Restarting after" "$log")
   total=$(grep -oE "Executed [0-9]+ tests, with [0-9]+ failures \([0-9]+ unexpected\)" "$log" | tail -1)
 
-  if [ -z "$total" ] && [ "$hung" -eq 0 ] && [ "$restart" -eq 0 ]; then
+  if { [ -z "$total" ] || [[ "$total" == "Executed 0 tests,"* ]]; } && [ "$hung" -eq 0 ] && [ "$restart" -eq 0 ]; then
     noruns=$((noruns + 1))
     reason=$(grep -aoE "error: .{0,90}" "$log" | head -1)
     printf "run %-3s %4ss  NORUN  %s\n" "$i" "$dur" "${reason:-no tests executed, cause unknown}"
