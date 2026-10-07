@@ -1247,7 +1247,7 @@
                                              toDefaults:destination timeout:2]);
         XCTAssertEqualObjects([destination objectForKey:@"htmlStyleName"], @"chosen");
         XCTAssertEqualObjects([destination objectForKey:@"editorMaximumWidth"], @800);
-        XCTAssertNil([destination objectForKey:@"auditInheritedKey"]);
+        XCTAssertNil([destination persistentDomainForName:current][@"auditInheritedKey"]);
         XCTAssertNil([destination persistentDomainForName:current][@"AppleIgnored"]);
     }
     @finally
