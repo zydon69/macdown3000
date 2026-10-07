@@ -37,6 +37,7 @@ jobs:
         python3 MacDownTests/BuildTools/peg_contracts.py
         python3 MacDownTests/BuildTools/print_colors_tests.py
         python3 MacDownTests/Sandbox/preferences_tests.py
+        python3 MacDownTests/Sandbox/assets_tests.py
         node MacDownTests/JavaScript/mermaid-init.test.js
         node MacDownTests/JavaScript/header-locations.test.js
 

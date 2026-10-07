@@ -13,6 +13,9 @@
 #import <hoedown/escape.h>
 #import "../MacDown/Code/Extension/hoedown_html_patch.h"
 #import "MPMarkdownPreprocessor.h"
+#import <errno.h>
+#import <pwd.h>
+#import <unistd.h>
 
 // Error domain for Quick Look renderer
 NSString * const MPQuickLookRendererErrorDomain = @"MPQuickLookRendererErrorDomain";
@@ -60,6 +63,25 @@ NS_INLINE NSString *MPReadFileContents(NSString *path)
     return content;
 }
 
+// NSSearchPath and NSHomeDirectory resolve inside the extension container.
+// The app stores user assets in the account's real Application Support folder;
+// QuickLook has read-only entitlements for its Styles and Prism/themes folders.
+NS_INLINE NSString *MPQuickLookUserAssetRoot(void)
+{
+    struct passwd account;
+    struct passwd *result = NULL;
+    for (size_t size = 16384; size <= 1024 * 1024; size *= 2) {
+        NSMutableData *storage = [NSMutableData dataWithLength:size];
+        int status = getpwuid_r(getuid(), &account, storage.mutableBytes, size, &result);
+        if (status == ERANGE) continue;
+        if (status != 0 || !result || !account.pw_dir) return nil;
+        NSString *home = [NSString stringWithUTF8String:account.pw_dir];
+        return home.length ? [home stringByAppendingPathComponent:
+            @"Library/Application Support/MacDown 3000"] : nil;
+    }
+    return nil;
+}
+
 /**
  * Get the path to a CSS style file.
  */
@@ -75,10 +97,9 @@ NS_INLINE NSString *MPStylePathForName(NSString *name)
     NSFileManager *manager = [NSFileManager defaultManager];
 
     // Look in Application Support first (user styles)
-    NSArray *paths = NSSearchPathForDirectoriesInDomains(
-        NSApplicationSupportDirectory, NSUserDomainMask, YES);
-    if (paths.count > 0) {
-        NSString *appSupportPath = [paths[0] stringByAppendingPathComponent:@"MacDown 3000/Styles"];
+    NSString *userAssetRoot = MPQuickLookUserAssetRoot();
+    if (userAssetRoot) {
+        NSString *appSupportPath = [userAssetRoot stringByAppendingPathComponent:@"Styles"];
         NSString *stylePath = [appSupportPath stringByAppendingPathComponent:name];
         if ([manager fileExistsAtPath:stylePath]) {
             return stylePath;
@@ -121,14 +142,10 @@ NS_INLINE NSURL *MPHighlightingThemeURLForName(NSString *name)
     NSFileManager *manager = [NSFileManager defaultManager];
 
     // Check Application Support first (user themes)
-    NSArray *paths = NSSearchPathForDirectoriesInDomains(
-        NSApplicationSupportDirectory, NSUserDomainMask, YES);
-    if (paths.count > 0) {
-        NSString *userThemePath = [paths[0]
-            stringByAppendingPathComponent:
-                [@"MacDown 3000" stringByAppendingPathComponent:
-                    [kMPPrismThemeDirectory stringByAppendingPathComponent:
-                        fileName]]];
+    NSString *userAssetRoot = MPQuickLookUserAssetRoot();
+    if (userAssetRoot) {
+        NSString *userThemePath = [userAssetRoot stringByAppendingPathComponent:
+            [kMPPrismThemeDirectory stringByAppendingPathComponent:fileName]];
         if ([manager fileExistsAtPath:userThemePath]) {
             return [NSURL fileURLWithPath:userThemePath];
         }
