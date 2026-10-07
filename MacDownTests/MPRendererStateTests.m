@@ -490,4 +490,19 @@
     XCTAssertEqual(self.delegate.htmlOutputCallCount, 1);
 }
 
+- (void)testMathJaxPreferenceChangeRefreshesScriptResources
+{
+    [self.renderer parseMarkdown:@"$x^2$"];
+    [self.renderer render];
+    self.delegate.lastHTML = nil;
+    self.delegate.mathJax = YES;
+    [self.renderer renderIfPreferencesChanged];
+    XCTAssertTrue([self.delegate.lastHTML containsString:@"MathJax.js"]);
+    self.delegate.lastHTML = nil;
+    self.delegate.mathJax = NO;
+    [self.renderer renderIfPreferencesChanged];
+    XCTAssertNotNil(self.delegate.lastHTML);
+    XCTAssertFalse([self.delegate.lastHTML containsString:@"MathJax.js"]);
+}
+
 @end

@@ -238,6 +238,7 @@ NS_INLINE BOOL MPAreNilableStringsEqual(NSString *s1, NSString *s2)
 @property BOOL syntaxHighlighting;
 @property BOOL mermaid;
 @property BOOL graphviz;
+@property BOOL mathJax;
 @property MPCodeBlockAccessoryType codeBlockAccesory;
 @property BOOL lineNumbers;
 @property BOOL manualRender;
@@ -793,6 +794,8 @@ NS_INLINE NSString *MPPreviewHeadTags(NSString *checkboxBridgeToken)
         changed = YES;
     else if ([d rendererHasGraphviz:self] != self.graphviz)
         changed = YES;
+    else if ([d rendererHasMathJax:self] != self.mathJax)
+        changed = YES;
     else if (!MPAreNilableStringsEqual(
             [d rendererHighlightingThemeName:self], self.highlightingThemeName))
         changed = YES;
@@ -843,6 +846,7 @@ NS_INLINE NSString *MPPreviewHeadTags(NSString *checkboxBridgeToken)
     self.syntaxHighlighting = [delegate rendererHasSyntaxHighlighting:self];
     self.mermaid = [delegate rendererHasMermaid:self];
     self.graphviz = [delegate rendererHasGraphviz:self];
+    self.mathJax = [delegate rendererHasMathJax:self];
     self.highlightingThemeName = [delegate rendererHighlightingThemeName:self];
     self.codeBlockAccesory = [delegate rendererCodeBlockAccesory:self];
 }
