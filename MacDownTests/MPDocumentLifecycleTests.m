@@ -17,12 +17,78 @@
 #import "HGMarkdownHighlighter.h"
 #import "pmh_parser.h"
 #import <sys/stat.h>
+#import <sys/socket.h>
+#import <netinet/in.h>
+#import <unistd.h>
 #import <objc/runtime.h>
 #import <WebKit/WebKit.h>
 #import <JavaScriptCore/JavaScriptCore.h>
 #import "MPResourceWatcherSet.h"
 #import "MPHTMLResourceURLs.h"
 
+
+// A real loopback HTTP response exercises WebKit navigation and its delegates.
+@interface MPPreviewHTTPFixture : NSObject
+@property (strong) NSURL *URL;
+@property (strong) dispatch_source_t listener;
+@end
+
+@implementation MPPreviewHTTPFixture
+- (instancetype)init
+{
+    self = [super init];
+    if (!self) return nil;
+    int descriptor = socket(AF_INET, SOCK_STREAM, 0);
+    if (descriptor < 0) return nil;
+    struct sockaddr_in address = {0};
+    address.sin_len = sizeof(address);
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (bind(descriptor, (struct sockaddr *)&address, sizeof(address)) != 0 || listen(descriptor, 4) != 0) {
+        close(descriptor);
+        return nil;
+    }
+    socklen_t length = sizeof(address);
+    if (getsockname(descriptor, (struct sockaddr *)&address, &length) != 0) {
+        close(descriptor);
+        return nil;
+    }
+    self.URL = [NSURL URLWithString:[NSString stringWithFormat:@"http://127.0.0.1:%u/remote.html", ntohs(address.sin_port)]];
+    NSString *html = @"<html><head><meta name='remote-marker' content='foreign'></head><body>Remote HTTP</body></html>";
+    NSData *body = [html dataUsingEncoding:NSUTF8StringEncoding];
+    NSMutableData *response = [[NSString stringWithFormat:@"HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: %lu\r\nConnection: close\r\n\r\n", (unsigned long)body.length] dataUsingEncoding:NSUTF8StringEncoding].mutableCopy;
+    [response appendData:body];
+    dispatch_source_t source = dispatch_source_create(DISPATCH_SOURCE_TYPE_READ, descriptor, 0, dispatch_get_global_queue(QOS_CLASS_DEFAULT, 0));
+    dispatch_source_set_event_handler(source, ^{
+        int client = accept(descriptor, NULL, NULL);
+        if (client < 0) return;
+        int noSignal = 1;
+        setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, &noSignal, sizeof(noSignal));
+        struct timeval timeout = {2, 0};
+        setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+        char request[4096];
+        if (read(client, request, sizeof(request)) > 0) {
+            const char *bytes = response.bytes;
+            NSUInteger remaining = response.length;
+            while (remaining) {
+                ssize_t sent = write(client, bytes, remaining);
+                if (sent <= 0) break;
+                bytes += sent;
+                remaining -= sent;
+            }
+        }
+        close(client);
+    });
+    dispatch_source_set_cancel_handler(source, ^{ close(descriptor); });
+    self.listener = source;
+    dispatch_resume(source);
+    return self;
+}
+- (void)dealloc
+{
+    if (_listener) dispatch_source_cancel(_listener);
+}
+@end
 
 #pragma mark - Test Infrastructure for Issue #358
 
@@ -1385,5 +1451,65 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
     }
 }
 
+
+- (void)testDeferredConsumerRestoresLocalHeadAndBaseAfterHTTPNavigation
+{
+    MPPreviewHTTPFixture *server = [MPPreviewHTTPFixture new];
+    XCTAssertNotNil(server);
+    if (!server) return;
+    MPDocument *document = [MPDocument new];
+    document.fileURL = [NSURL fileURLWithPath:[self.testDirectory stringByAppendingPathComponent:@"preview.md"]];
+    MPPreferences *preferences = document.preferences;
+    BOOL math = preferences.htmlMathJax, mermaid = preferences.htmlMermaid, graphviz = preferences.htmlGraphviz;
+    MPEditorView *editor = [[MPEditorView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600)];
+    editor.string = @"# Local initial";
+    document.editor = editor;
+    WebView *preview = [[WebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600)];
+    document.preview = preview;
+    preview.frameLoadDelegate = (id<WebFrameLoadDelegate>)document;
+    preview.policyDelegate = (id<WebPolicyDelegate>)document;
+    MPRenderer *renderer = [MPRenderer new];
+    renderer.delegate = (id<MPRendererDelegate>)document;
+    renderer.dataSource = (id<MPRendererDataSource>)document;
+    document.renderer = renderer;
+    @try {
+        preferences.htmlMathJax = NO;
+        preferences.htmlMermaid = NO;
+        preferences.htmlGraphviz = NO;
+        __block NSString *localBase;
+        XCTestExpectation *initial = [self expectationWithDescription:@"Published local preview"];
+        [document performAfterRender:^{
+            localBase = [[preview.mainFrame.javaScriptContext evaluateScript:@"document.baseURI"] toString];
+            XCTAssertTrue([[preview.mainFrame.javaScriptContext evaluateScript:@"document.querySelector('meta[name=macdown-checkbox-token]') !== null"] toBool]);
+            [initial fulfill];
+        }];
+        [self waitForExpectations:@[initial] timeout:10];
+        [preview.mainFrame loadRequest:[NSURLRequest requestWithURL:server.URL]];
+        XCTNSPredicateExpectation *remote = [[XCTNSPredicateExpectation alloc] initWithPredicate:
+            [NSPredicate predicateWithBlock:^BOOL(id object, NSDictionary *bindings) {
+                return [[preview.mainFrame.javaScriptContext evaluateScript:@"document.querySelector('meta[name=remote-marker]') !== null && document.readyState === 'complete'"] toBool];
+            }] object:preview];
+        [self waitForExpectations:@[remote] timeout:10];
+        XCTAssertEqualObjects([[preview.mainFrame.javaScriptContext evaluateScript:@"document.baseURI"] toString], server.URL.absoluteString);
+        editor.string = @"# Returned Markdown";
+        XCTestExpectation *consumer = [self expectationWithDescription:@"Fresh local preview after navigation"];
+        [document performAfterRender:^{
+            JSContext *context = preview.mainFrame.javaScriptContext;
+            XCTAssertEqualObjects([[context evaluateScript:@"document.baseURI"] toString], localBase);
+            XCTAssertTrue([[context evaluateScript:@"document.querySelector('meta[name=macdown-checkbox-token]') !== null"] toBool]);
+            XCTAssertFalse([[context evaluateScript:@"document.querySelector('meta[name=remote-marker]') !== null"] toBool]);
+            XCTAssertEqualObjects([[context evaluateScript:@"document.querySelector('h1').textContent"] toString], @"Returned Markdown");
+            [consumer fulfill];
+        }];
+        [self waitForExpectations:@[consumer] timeout:10];
+    } @finally {
+        preview.frameLoadDelegate = nil;
+        preview.policyDelegate = nil;
+        [document close];
+        preferences.htmlMathJax = math;
+        preferences.htmlMermaid = mermaid;
+        preferences.htmlGraphviz = graphviz;
+    }
+}
 
 @end

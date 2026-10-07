@@ -2295,7 +2295,11 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     // the async typesetting correctly. Scroll is restored after typesetting completes.
     // Skip DOM replacement if styles changed, since <head> CSS links need updating.
     // Related to issue #325.
-    if (self.isPreviewReady && [self.currentBaseUrl isEqualTo:baseUrl] && !stylesChanged && !scriptsChanged
+    // A navigation can replace the loaded page while the publication cache
+    // still describes our last Markdown preview. Never reuse that foreign head.
+    NSURL *loadedURL = self.preview.mainFrame.dataSource.request.URL;
+    if (self.isPreviewReady && [self.currentBaseUrl isEqualTo:baseUrl]
+        && [loadedURL isEqual:baseUrl] && !stylesChanged && !scriptsChanged
         && !self.preferences.htmlMermaid && !self.preferences.htmlGraphviz)
     {
         DOMDocument *doc = self.preview.mainFrame.DOMDocument;
