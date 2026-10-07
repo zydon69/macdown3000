@@ -34,15 +34,15 @@ int actionCount= 0;
 int ruleCount= 0;
 int lastToken= -1;
 
-static inline Node *_newNode(int type, int size)
+static inline Node *_newNode(int type)
 {
-  Node *node= calloc(1, size);
+  Node *node= calloc(1, sizeof(Node));
   node->type= type;
   ((struct Any *) node)->errblock= NULL;
   return node;
 }
 
-#define newNode(T)	_newNode(T, sizeof(struct T))
+#define newNode(T)	_newNode(T)
 
 Node *makeRule(char *name)
 {
