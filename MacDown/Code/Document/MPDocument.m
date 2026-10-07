@@ -2963,12 +2963,26 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
             evaluateScript:kMPPDFSnapshotJS] toString]];
 }
 
+- (void)publishPDFDocument:(PDFDocument *)document atURL:(NSURL *)url
+{
+    NSData *data = document.dataRepresentation;
+    NSError *error = nil;
+    if (!data || ![data writeToURL:url options:NSDataWritingAtomic error:&error])
+        self.pdfExportError = error ?: [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileWriteUnknownError userInfo:nil];
+}
+
 - (void)postProcessExportedPDFAtURL:(NSURL *)url
 {
     PDFDocument *original = [[PDFDocument alloc] initWithURL:self.pdfExportTemporaryURL];
     if (!original || ![self PDFExportSnapshotIsCurrent]) {
         self.pdfExportError = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileWriteUnknownError
             userInfo:@{NSLocalizedDescriptionKey: NSLocalizedString(@"The preview changed during PDF export.", nil)}];
+        return;
+    }
+    BOOL hasAnchors = [[self.pdfExportOriginalContext evaluateScript:
+        @"!!document.querySelector('a[href^=\"#\"]:not([href=\"#\"])')"] toBool];
+    if (!hasAnchors) {
+        [self publishPDFDocument:original atURL:url];
         return;
     }
     self.pdfExportMetadataURL = [self.pdfExportTemporaryURL.URLByDeletingLastPathComponent
@@ -3001,9 +3015,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     [MPPDFAnchorInjector resolveNativeLinksInDocument:original metadataDocument:metadata
         markerPrefix:session[@"prefix"] linkTargets:session[@"links"] headingSlugs:session[@"headings"] error:&error];
     if (error) { self.pdfExportError = error; return; }
-    NSData *data = original.dataRepresentation;
-    if (!data || ![data writeToURL:url options:NSDataWritingAtomic error:&error])
-        self.pdfExportError = error ?: [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileWriteUnknownError userInfo:nil];
+    [self publishPDFDocument:original atURL:url];
 }
 
 - (IBAction)convertToH1:(id)sender

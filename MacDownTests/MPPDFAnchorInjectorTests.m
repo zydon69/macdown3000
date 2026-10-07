@@ -2,6 +2,9 @@
 #import <AppKit/AppKit.h>
 #import <WebKit/WebKit.h>
 #import <PDFKit/PDFKit.h>
+#import <arpa/inet.h>
+#import <sys/socket.h>
+#import <unistd.h>
 #import "MPDocument.h"
 #import "MPPDFAnchorInjector.h"
 
@@ -20,6 +23,60 @@
     self.presentedPDFError = error;
     return YES;
 }
+@end
+
+// Serve the exact fixture on loopback, with no external dependency or refetch.
+@interface MPPDFLocalCSSServer : NSObject
+@property (strong) dispatch_source_t source;
+@property (strong) NSURL *URL;
+@end
+@implementation MPPDFLocalCSSServer
+- (instancetype)init
+{
+    self = [super init];
+    if (!self) return nil;
+    int socketFD = socket(AF_INET, SOCK_STREAM, 0);
+    struct sockaddr_in address = {0};
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (socketFD < 0 || bind(socketFD, (struct sockaddr *)&address, sizeof(address)) != 0 || listen(socketFD, 1) != 0) {
+        if (socketFD >= 0) close(socketFD);
+        return nil;
+    }
+    socklen_t length = sizeof(address);
+    if (getsockname(socketFD, (struct sockaddr *)&address, &length) != 0) {
+        close(socketFD);
+        return nil;
+    }
+    self.URL = [NSURL URLWithString:[NSString stringWithFormat:@"http://127.0.0.1:%u/style.css", ntohs(address.sin_port)]];
+    NSData *CSS = [@"body{font:26px Helvetica;color:red}h2{margin-top:40px}" dataUsingEncoding:NSUTF8StringEncoding];
+    self.source = dispatch_source_create(DISPATCH_SOURCE_TYPE_READ, socketFD, 0, dispatch_get_global_queue(QOS_CLASS_UTILITY, 0));
+    dispatch_source_set_event_handler(self.source, ^{
+        int client = accept(socketFD, NULL, NULL);
+        if (client < 0) return;
+        int noSignal = 1;
+        setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, &noSignal, sizeof(noSignal));
+        struct timeval timeout = {1, 0};
+        setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+        char request[4096];
+        if (recv(client, request, sizeof(request), 0) <= 0) { close(client); return; }
+        NSString *header = [NSString stringWithFormat:@"HTTP/1.1 200 OK\r\nContent-Type: text/css\r\nContent-Length: %lu\r\nConnection: close\r\n\r\n", (unsigned long)CSS.length];
+        NSMutableData *response = [[header dataUsingEncoding:NSUTF8StringEncoding] mutableCopy];
+        [response appendData:CSS];
+        const uint8_t *bytes = response.bytes;
+        NSUInteger sent = 0;
+        while (sent < response.length) {
+            ssize_t count = send(client, bytes + sent, response.length - sent, 0);
+            if (count <= 0) break;
+            sent += (NSUInteger)count;
+        }
+        close(client);
+    });
+    dispatch_source_set_cancel_handler(self.source, ^{ close(socketFD); });
+    dispatch_resume(self.source);
+    return self;
+}
+- (void)dealloc { if (_source) dispatch_source_cancel(_source); }
 @end
 
 @interface MPPDFAnchorInjectorTests : XCTestCase
@@ -376,5 +433,28 @@
 - (void)testFluidLinkWidthAndPrintMediaKeepOriginalPixels
 {
     [self assertOriginalPixelsWithCSS:@"body{width:auto}a[href^='#']{display:block;width:75%;font-size:26px;border:2px solid green}@media print{h2{margin-top:30px}}"];
+}
+- (void)testNoAnchorsExportsOriginalWithActuallyInaccessibleCrossOriginCSS
+{
+    __attribute__((objc_precise_lifetime)) MPPDFLocalCSSServer *server = [MPPDFLocalCSSServer new];
+    XCTAssertNotNil(server);
+    MPNativePDFDocument *document = [self documentWithBody:@"<h2 id='target'>Heading</h2>" CSS:@""];
+    WebView *view = [document valueForKey:@"preview"];
+    NSString *HTML = [NSString stringWithFormat:@"<html><head><meta name='cross-origin-css-fixture'><link rel='stylesheet' href='%@'></head><body><h2 id='target'>Heading</h2><a href='#'>Empty fragment</a></body></html>", server.URL.absoluteString];
+    [view.mainFrame loadHTMLString:HTML baseURL:[NSURL URLWithString:@"http://127.0.0.1:1/document.md"]];
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:5];
+    while (![[view stringByEvaluatingJavaScriptFromString:@"document.readyState==='complete'&&!!document.querySelector('meta[name=cross-origin-css-fixture]')&&document.styleSheets.length===1"] isEqualToString:@"true"] && deadline.timeIntervalSinceNow > 0)
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+    XCTAssertEqualObjects([view stringByEvaluatingJavaScriptFromString:@"getComputedStyle(document.body).fontSize"], @"26px");
+    XCTAssertEqualObjects([view stringByEvaluatingJavaScriptFromString:@"getComputedStyle(document.body).color"], @"rgb(255, 0, 0)");
+    XCTAssertEqualObjects([view stringByEvaluatingJavaScriptFromString:@"(function(){try{document.styleSheets[0].cssRules;return 'accessible'}catch(e){return e.name}})()"], @"SecurityError");
+    PDFDocument *original = [self printTemporaryPDF:document];
+    PDFDocument *published = [self completeExport:document];
+    XCTAssertEqual(published.pageCount, original.pageCount);
+    XCTAssertEqualObjects([self pixelsForPage:[published pageAtIndex:0]], [self pixelsForPage:[original pageAtIndex:0]]);
+    XCTAssertEqual([published findString:@"Heading" withOptions:0].count, 1u);
+    XCTAssertEqual([self GoToAnnotations:published].count, 0u);
+    [self assertNoMarkers:published];
+    XCTAssertNil([document valueForKey:@"pdfExportAnchorSession"]);
 }
 @end
