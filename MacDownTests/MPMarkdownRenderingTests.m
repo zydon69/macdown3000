@@ -10,6 +10,14 @@
 #import <hoedown/document.h>
 #import "MPRendererTestHelpers.h"
 #import "hoedown_html_patch.h"
+#import "MPDocument.h"
+#import "MPPreferences.h"
+#import "MPEditorView.h"
+
+@interface MPDocument (UnderlineTesting)
+@property (nonatomic, weak) MPEditorView *editor;
+- (IBAction)toggleUnderline:(id)sender;
+@end
 
 // Uncomment to regenerate golden files
 // #define REGENERATE_GOLDEN_FILES
@@ -565,9 +573,9 @@
 /**
  * Regression test for Issue #37: Square brackets in code blocks
  *
- * FIXED: The markdown preprocessor inserts a zero-width space between
- * ] and : inside fenced code blocks, preventing Hoedown's is_ref() from
- * matching these patterns as reference links.
+ * FIXED: The preprocessor protects reference-shaped code with per-parse
+ * markers that the block-code renderer removes, preserving the original
+ * code bytes without invisible characters in the rendered result.
  *
  * Related: Issue #37
  */
@@ -896,8 +904,8 @@
                   @"Heading id must skip every HTML entity. Got: %@", html);
 }
 
-// Heading collisions must produce distinct DOM destinations.
-
+// Distinct headings whose punctuation collapses to the same base slug still
+// need distinct DOM destinations so links can target each section.
 - (void)testCollidingHeadingsHaveDistinctIds
 {
     NSString *html = [self renderMarkdown:@"## C\n\n## C++\n"
@@ -1156,6 +1164,55 @@
     XCTAssertTrue([html containsString:@"id=\"section\""],
                   @"The trailing empty heading must render with the fallback id. "
                   @"Got: %@", html);
+}
+
+- (void)assertUnderlineActionWithExtensionEnabled:(BOOL)enabled
+{
+    MPDocument *document = [[MPDocument alloc] init];
+    MPEditorView *editor = [[MPEditorView alloc] initWithFrame:NSMakeRect(0, 0, 400, 200)];
+    document.editor = editor;
+    BOOL previous = document.preferences.extensionUnderline;
+    @try {
+        document.preferences.extensionUnderline = enabled;
+        editor.string = @"avant azerqzs après";
+        editor.selectedRange = NSMakeRange(6, 7);
+        [document toggleUnderline:nil];
+        XCTAssertEqualObjects(editor.string, enabled
+                              ? @"avant _azerqzs_ après"
+                              : @"avant <u>azerqzs</u> après");
+        XCTAssertEqualObjects([editor.string substringWithRange:editor.selectedRange], @"azerqzs");
+        NSString *html = [self renderMarkdown:editor.string
+                               withExtensions:enabled ? HOEDOWN_EXT_UNDERLINE : 0
+                                rendererFlags:0];
+        XCTAssertTrue([html containsString:@"<u>azerqzs</u>"], @"%@", html);
+        XCTAssertFalse([html containsString:@"<em>azerqzs</em>"], @"%@", html);
+        [document toggleUnderline:nil];
+        XCTAssertEqualObjects(editor.string, @"avant azerqzs après");
+        XCTAssertTrue(NSEqualRanges(editor.selectedRange, NSMakeRange(6, 7)));
+    } @finally {
+        document.preferences.extensionUnderline = previous;
+        [document close];
+    }
+}
+
+- (void)testUnderlineActionWithoutExtensionRendersUnderlineAndTogglesOff
+{
+    [self assertUnderlineActionWithExtensionEnabled:NO];
+}
+
+- (void)testUnderlineActionWithExtensionRendersUnderlineAndTogglesOff
+{
+    [self assertUnderlineActionWithExtensionEnabled:YES];
+}
+
+- (void)testAsterisksRemainItalicWithUnderlineExtension
+{
+    for (NSNumber *enabled in @[@NO, @YES]) {
+        NSString *html = [self renderMarkdown:@"*azerqzs*"
+                               withExtensions:enabled.boolValue ? HOEDOWN_EXT_UNDERLINE : 0
+                                rendererFlags:0];
+        XCTAssertTrue([html containsString:@"<em>azerqzs</em>"], @"%@", html);
+    }
 }
 
 - (void)testEmptyHeadingWithTOCDoesNotCrash

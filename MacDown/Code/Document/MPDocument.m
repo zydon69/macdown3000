@@ -3001,7 +3001,11 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 
 - (IBAction)toggleUnderline:(id)sender
 {
-    [self.editor toggleForMarkupPrefix:@"_" suffix:@"_"];
+    // Underscores mean emphasis unless Hoedown's underline extension is enabled.
+    if (self.preferences.extensionUnderline)
+        [self.editor toggleForMarkupPrefix:@"_" suffix:@"_"];
+    else
+        [self.editor toggleForMarkupPrefix:@"<u>" suffix:@"</u>"];
 }
 
 - (IBAction)toggleHighlight:(id)sender

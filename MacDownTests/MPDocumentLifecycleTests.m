@@ -27,11 +27,16 @@
 @property (weak) MPEditorView *editor;
 @property (copy) NSString *loadedString;
 - (void)reloadFromLoadedString;
+- (IBAction)toggleUnderline:(id)sender;
 @property (nonatomic) BOOL isPreviewReady;
 @property (nonatomic) BOOL alreadyRenderingInWeb;
 @property (nonatomic) BOOL renderToWebPending;
 + (NSInvocation *)printCompletionForDelegate:(id)delegate selector:(SEL)selector context:(void *)context;
 - (void)document:(NSDocument *)doc didPrint:(BOOL)ok context:(void *)context;
+@end
+
+@interface MPRenderer (DocumentActionTesting)
+- (void)parseMarkdown:(NSString *)markdown;
 @end
 
 // Spy renderer: records whether parseAndRenderNow was called without
@@ -972,5 +977,33 @@
     XCTAssertTrue(probe.success);
     XCTAssertEqual(probe.context, expectedContext);
 }
+
+
+- (void)testUnderlineActionKeepsUnderlineMeaningWithExtensionEnabledOrDisabled
+{
+    MPPreferences *preferences = self.document.preferences;
+    BOOL original = preferences.extensionUnderline;
+    MPEditorView *editor = [[MPEditorView alloc] initWithFrame:NSMakeRect(0, 0, 400, 200)];
+    self.document.editor = editor;
+    MPRenderer *renderer = [MPRenderer new];
+    renderer.dataSource = (id<MPRendererDataSource>)self.document;
+    renderer.delegate = (id<MPRendererDelegate>)self.document;
+    @try {
+        for (NSNumber *enabled in @[@NO, @YES]) {
+            preferences.extensionUnderline = enabled.boolValue;
+            editor.string = @"text";
+            editor.selectedRange = NSMakeRange(0, editor.string.length);
+            [self.document toggleUnderline:nil];
+            XCTAssertEqualObjects(editor.string, enabled.boolValue ? @"_text_" : @"<u>text</u>");
+            [renderer parseMarkdown:editor.string];
+            XCTAssertTrue([renderer.currentHtml containsString:@"<u>text</u>"]);
+            XCTAssertFalse([renderer.currentHtml containsString:@"<em>"]);
+        }
+    } @finally {
+        preferences.extensionUnderline = original;
+    }
+}
+
+
 
 @end
