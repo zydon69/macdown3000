@@ -8,6 +8,7 @@
 
 #import <XCTest/XCTest.h>
 #import "MPUtilities.h"
+#import "NSDocumentController+Document.h"
 #import "FileURLInlining.h"
 #import "NSString+Lookup.h"
 #import "NSPasteboard+Types.h"
@@ -709,6 +710,22 @@
         [data writeToURL:url atomically:YES];
         XCTAssertEqualObjects([[FileURLInlining alloc] initWithURL:url].inlineContent, url.path);
     }
+}
+
+- (void)testNewEmptyDocumentDoesNotOverwriteExistingFileAndReportsWriteFailure {
+    NSURL *url = [NSURL fileURLWithPath:[self.tempDir stringByAppendingPathComponent:@"existing.md"]];
+    NSData *content = [@"preserve me" dataUsingEncoding:NSUTF8StringEncoding];
+    [content writeToURL:url atomically:YES];
+    NSError *error = nil;
+    XCTAssertNil([[NSDocumentController sharedDocumentController]
+        createNewEmptyDocumentForURL:url display:NO error:&error]);
+    XCTAssertNotNil(error);
+    XCTAssertEqualObjects([NSData dataWithContentsOfURL:url], content);
+    error = nil;
+    NSURL *missingParent = [NSURL fileURLWithPath:[self.tempDir stringByAppendingPathComponent:@"missing/target.md"]];
+    XCTAssertNil([[NSDocumentController sharedDocumentController]
+        createNewEmptyDocumentForURL:missingParent display:NO error:&error]);
+    XCTAssertNotNil(error);
 }
 
 @end
