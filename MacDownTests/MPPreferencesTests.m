@@ -1073,6 +1073,9 @@
     XCTAssertTrue(prefs.extensionIntraEmphasis,
                   @"Future version should not apply any migrations");
 
+    XCTAssertEqual([defaults integerForKey:@"MPMigrationVersion"], 99,
+                   @"Downgrading must preserve the migration marker of a newer app");
+
     // Restore original values
     if (originalVersion)
         [defaults setObject:originalVersion forKey:@"MPMigrationVersion"];

@@ -496,7 +496,8 @@ static NSString * const kMPDefaultHtmlStyleName = @"GitHub2";
     }
 
     // Update to current version
-    [defaults setInteger:kMPCurrentMigrationVersion forKey:@"MPMigrationVersion"];
+    [defaults setInteger:MAX(currentVersion, kMPCurrentMigrationVersion)
+                 forKey:@"MPMigrationVersion"];
 }
 
 @end
