@@ -1,5 +1,27 @@
 // Shared Markdown compatibility rules for the application and Quick Look.
 #import <Foundation/Foundation.h>
+#import <hoedown/buffer.h>
+
+// Both HTML and TOC renderers reserve final ids in document order. Keep the
+// registry local to one parse, including naturally suffixed headings.
+NS_INLINE hoedown_buffer *MPUniqueHeadingSlug(const hoedown_buffer *slug, void *owner)
+{
+    NSDictionary *context = (__bridge NSDictionary *)owner;
+    NSMutableDictionary<NSString *, NSNumber *> *used = context[@"headingSlugs"];
+    NSString *base = [[NSString alloc] initWithBytes:slug->data length:slug->size encoding:NSUTF8StringEncoding];
+    if (!used || !base) return NULL;
+    NSString *candidate = base;
+    NSUInteger suffix = used[base].unsignedIntegerValue;
+    while (used[candidate]) {
+        candidate = [NSString stringWithFormat:@"%@-%lu", base, (unsigned long)++suffix];
+    }
+    used[base] = @(suffix);
+    used[candidate] = @0;
+    NSData *bytes = [candidate dataUsingEncoding:NSUTF8StringEncoding];
+    hoedown_buffer *result = hoedown_buffer_new(MAX((size_t)1, bytes.length));
+    hoedown_buffer_put(result, bytes.bytes, bytes.length);
+    return result;
+}
 
 // Bound recursive Markdown nesting for interactive previews and Quick Look.
 static const size_t MPMarkdownMaximumNesting = 128;

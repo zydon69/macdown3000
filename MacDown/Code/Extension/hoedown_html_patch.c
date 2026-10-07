@@ -354,19 +354,33 @@ static void slugify(hoedown_buffer *out, const hoedown_buffer *content)
     }
 }
 
+static hoedown_buffer *heading_slug(const hoedown_buffer *content,
+                                   const hoedown_renderer_data *data)
+{
+    hoedown_buffer *slug = new_growable_buffer(content ? content->size : 16);
+    slugify(slug, content);
+    if (!slug->size) HOEDOWN_BUFPUTSL(slug, "section");
+    hoedown_html_renderer_state *state = data->opaque;
+    hoedown_html_renderer_state_extra *extra = state->opaque;
+    if (extra && extra->heading_slug) {
+        hoedown_buffer *unique = extra->heading_slug(slug, extra->owner);
+        if (unique) {
+            hoedown_buffer_free(slug);
+            slug = unique;
+        }
+    }
+    return slug;
+}
+
 // rndr_header replacement that always emits a text-derived id, independent
 // of the TOC nesting level. Enables [link](#section-name) navigation.
 void hoedown_patch_render_header(
     hoedown_buffer *ob, const hoedown_buffer *content, int level,
     const hoedown_renderer_data *data)
 {
-    (void)data;
     if (ob->size) hoedown_buffer_putc(ob, '\n');
 
-    hoedown_buffer *slug = new_growable_buffer(content ? content->size : 16);
-    slugify(slug, content);
-    if (slug->size == 0)
-        HOEDOWN_BUFPUTSL(slug, "section");
+    hoedown_buffer *slug = heading_slug(content, data);
 
     hoedown_buffer_printf(ob, "<h%d id=\"", level);
     hoedown_buffer_put(ob, slug->data, slug->size);
@@ -574,10 +588,7 @@ void hoedown_patch_render_toc_header(
             HOEDOWN_BUFPUTSL(ob,"</li>\n<li>\n");
         }
 
-        hoedown_buffer *slug = new_growable_buffer(content ? content->size : 16);
-        slugify(slug, content);
-        if (slug->size == 0)
-            HOEDOWN_BUFPUTSL(slug, "section");
+        hoedown_buffer *slug = heading_slug(content, data);
         HOEDOWN_BUFPUTSL(ob, "<a href=\"#");
         hoedown_buffer_put(ob, slug->data, slug->size);
         HOEDOWN_BUFPUTSL(ob, "\">");

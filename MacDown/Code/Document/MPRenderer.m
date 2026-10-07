@@ -353,16 +353,21 @@ NS_INLINE hoedown_renderer *MPCreateHTMLRenderer(int flags, int tocLevel, NSDict
     extra->interactive_checkboxes = 1;
     extra->task_marker_prefix = NULL;
     extra->checkbox_addition = checkbox_addition;
+    extra->heading_slug = MPUniqueHeadingSlug;
 
     ((hoedown_html_renderer_state *)htmlRenderer->opaque)->opaque = extra;
     return htmlRenderer;
 }
 
-NS_INLINE hoedown_renderer *MPCreateHTMLTOCRenderer(void)
+NS_INLINE hoedown_renderer *MPCreateHTMLTOCRenderer(NSDictionary *context)
 {
     hoedown_renderer *tocRenderer =
         hoedown_html_toc_renderer_new(kMPRendererTOCLevel);
     tocRenderer->header = hoedown_patch_render_toc_header;
+    hoedown_html_renderer_state_extra *extra = calloc(1, sizeof(*extra));
+    extra->owner = (__bridge void *)context;
+    extra->heading_slug = MPUniqueHeadingSlug;
+    ((hoedown_html_renderer_state *)tocRenderer->opaque)->opaque = extra;
     return tocRenderer;
 }
 
@@ -737,7 +742,9 @@ NS_INLINE NSString *MPPreviewHeadTags(NSString *checkboxBridgeToken)
     NSString *sourceMarkdown = markdown ?: @"";
     NSMutableArray *languages = [NSMutableArray array];
     NSMutableArray *checkboxOffsets = [NSMutableArray array];
-    NSDictionary *context = @{@"languages": languages, @"checkboxOffsets": checkboxOffsets};
+    __attribute__((objc_precise_lifetime)) NSDictionary *context = @{@"languages": languages, @"checkboxOffsets": checkboxOffsets,
+        @"headingSlugs": [NSMutableDictionary dictionary]};
+    __attribute__((objc_precise_lifetime)) NSDictionary *tocContext = @{@"headingSlugs": [NSMutableDictionary dictionary]};
     NSUInteger sourceOffset = 0;
     if ([options[@"frontMatter"] boolValue])
     {
@@ -749,11 +756,11 @@ NS_INLINE NSString *MPPreviewHeadTags(NSString *checkboxBridgeToken)
     BOOL hasTOC = [options[@"toc"] boolValue];
     hoedown_renderer *htmlRenderer = MPCreateHTMLRenderer(
         [options[@"flags"] intValue], hasTOC ? kMPRendererTOCLevel : 0, context);
-    hoedown_renderer *tocRenderer = hasTOC ? MPCreateHTMLTOCRenderer() : NULL;
+    hoedown_renderer *tocRenderer = hasTOC ? MPCreateHTMLTOCRenderer(tocContext) : NULL;
     NSString *html = MPHTMLFromMarkdown(markdown, [options[@"extensions"] intValue],
         [options[@"smartypants"] boolValue], nil, sourceOffset, htmlRenderer, tocRenderer);
     if (tocRenderer)
-        hoedown_html_renderer_free(tocRenderer);
+        MPFreeHTMLRenderer(tocRenderer);
     MPFreeHTMLRenderer(htmlRenderer);
     return @{@"html": html ?: @"", @"languages": [languages copy],
              @"checkboxOffsets": [checkboxOffsets copy], @"sourceMarkdown": sourceMarkdown,

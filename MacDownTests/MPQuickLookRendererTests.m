@@ -673,6 +673,18 @@
 
 #pragma mark - Heading Anchor ID Tests
 
+- (void)testRepeatedHeadingsUseTheSameUniqueIdsAsApplication
+{
+    NSString *html = [self.renderer renderMarkdown:@"# Repeat\n\n# Repeat\n\n# Repeat-1\n\n# Repeat\n\n# !!!\n\n# ???"];
+    for (NSString *slug in @[@"repeat", @"repeat-1", @"repeat-1-1", @"repeat-2", @"section", @"section-1"]) {
+        NSString *idAttribute = [NSString stringWithFormat:@"id=\"%@\"", slug];
+        XCTAssertEqual([html componentsSeparatedByString:idAttribute].count, 2U);
+    }
+    NSString *again = [self.renderer renderMarkdown:@"# Repeat"];
+    XCTAssertTrue([again containsString:@"id=\"repeat\""]);
+    XCTAssertFalse([again containsString:@"id=\"repeat-1\""]);
+}
+
 // Quick Look mirrors the preview slugify(), so heading ids must match exactly.
 // See MPMarkdownRenderingTests for the full slug contract.
 

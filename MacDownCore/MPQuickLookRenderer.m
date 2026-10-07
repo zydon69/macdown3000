@@ -262,6 +262,9 @@ NS_INLINE NSString *MPQuickLookContentSecurityPolicy(void)
 
     // Preserve Prism language classes, but Quick Look never executes Prism JS.
     hoedown_html_renderer_state_extra extra = {0};
+    __attribute__((objc_precise_lifetime)) NSDictionary *context = @{@"headingSlugs": [NSMutableDictionary dictionary]};
+    extra.owner = (__bridge void *)context;
+    extra.heading_slug = MPUniqueHeadingSlug;
     extra.code_escape_token = codeEscapeToken.UTF8String;
     extra.task_marker_prefix = taskPrefix.UTF8String;
     ((hoedown_html_renderer_state *)renderer->opaque)->opaque = &extra;

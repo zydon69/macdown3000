@@ -26,6 +26,7 @@ typedef struct hoedown_html_renderer_state_extra {
     int interactive_checkboxes;
     const char *task_marker_prefix;
     void (*checkbox_addition)(size_t source_offset, void *owner);
+    hoedown_buffer *(*heading_slug)(const hoedown_buffer *slug, void *owner);
 
 } hoedown_html_renderer_state_extra;
 

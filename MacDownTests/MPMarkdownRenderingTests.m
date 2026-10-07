@@ -896,22 +896,18 @@
                   @"Heading id must skip every HTML entity. Got: %@", html);
 }
 
-// Documents the current slug contract: identical headings are not uniquified,
-// so "## C" and "## C++" both collapse to id="c". This pins the behavior so a
-// future change to deduplication is a conscious decision, not a silent side
-// effect.
+// Heading collisions must produce distinct DOM destinations.
 
-- (void)testDuplicateHeadingsCollapseToSameId
+- (void)testCollidingHeadingsHaveDistinctIds
 {
     NSString *html = [self renderMarkdown:@"## C\n\n## C++\n"
                            withExtensions:0
                             rendererFlags:0];
-    NSUInteger firstC = [html rangeOfString:@"id=\"c\""].location;
-    NSUInteger secondC = [html rangeOfString:@"id=\"c\""
-                                  options:0
-                                    range:NSMakeRange(firstC + 1, html.length - firstC - 1)].location;
-    XCTAssertNotEqual(firstC, NSNotFound, @"First heading should have id=\"c\". Got: %@", html);
-    XCTAssertNotEqual(secondC, NSNotFound, @"Second heading should also have id=\"c\". Got: %@", html);
+    XCTAssertTrue([html containsString:@"<h2 id=\"c\">C</h2>"],
+                  @"First heading keeps its base slug. Got: %@", html);
+    XCTAssertTrue([html containsString:@"<h2 id=\"c-1\">C++</h2>"],
+                  @"Colliding heading must have a distinct destination. Got: %@", html);
+    XCTAssertEqual([html componentsSeparatedByString:@"id=\"c\""].count, 2u);
 }
 
 // Because this PR changes both the heading id and the TOC href, lock in the
