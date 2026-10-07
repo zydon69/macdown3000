@@ -31,7 +31,7 @@ with tempfile.TemporaryDirectory(prefix='macdown version ') as directory:
     run('make', cwd=version_dir)
     assert header.stat().st_mtime_ns == original_mtime
 
-    version = '1.2.3'
+    version = '1.2.3"%n'
     run('git', 'tag', 'v' + version)
     run('make', cwd=version_dir)
     consumer = version_dir / 'consumer.c'

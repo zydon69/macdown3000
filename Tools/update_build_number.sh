@@ -34,8 +34,11 @@ INFO_PLIST="${TARGET_BUILD_DIR}/${INFOPLIST_PATH}"
 [[ -f "$INFO_PLIST" ]] || { echo "Processed Info.plist missing: $INFO_PLIST" >&2; exit 1; }
 set_plist_string() {
     local key="$1" value="$2"
-    /usr/libexec/PlistBuddy -c "Set :$key $value" "$INFO_PLIST" 2>/dev/null ||
-        /usr/libexec/PlistBuddy -c "Add :$key string $value" "$INFO_PLIST"
+    # PlistBuddy parses its own command language after shell argument quoting.
+    value=${value//\\/\\\\}
+    value=${value//\"/\\\"}
+    /usr/libexec/PlistBuddy -c "Set :$key \"$value\"" "$INFO_PLIST" 2>/dev/null ||
+        /usr/libexec/PlistBuddy -c "Add :$key string \"$value\"" "$INFO_PLIST"
 }
 set_plist_string CFBundleBuildVersion "$BUILD_VERSION"
 set_plist_string CFBundleShortVersionString "$SHORT_VERSION"
