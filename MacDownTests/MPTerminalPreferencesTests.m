@@ -18,6 +18,20 @@
 - (NSString *)userBinPath;
 - (BOOL)isOwnedShellUtilityAtURL:(NSURL *)url;
 - (BOOL)removeOwnedShellUtilityAtURL:(NSURL *)url error:(NSError **)error;
+- (void)lookForShellUtility;
+- (void)detectHomebrewPrefixWithCompletionHandler:(void (^)(NSString *))handler;
+@end
+
+// Only substitute the asynchronous process boundary. Exercise the production
+// completion block, including weak ownership and URL construction.
+@interface MPDelayedTerminalPreferencesController : MPTerminalPreferencesViewController
+@property (nonatomic, copy) void (^pendingDiscovery)(NSString *);
+@end
+@implementation MPDelayedTerminalPreferencesController
+- (void)detectHomebrewPrefixWithCompletionHandler:(void (^)(NSString *))handler
+{
+    self.pendingDiscovery = handler;
+}
 @end
 
 @interface MPTerminalPreferencesTests : XCTestCase
@@ -350,6 +364,24 @@
 }
 
 #pragma mark - Integration Tests
+
+- (void)testDiscoveryCompletionAfterControllerReleaseDoesNotTouchUIOrBuildNilURL
+{
+    for (id output in @[[NSNull null], @"/test/homebrew"]) {
+        __weak MPDelayedTerminalPreferencesController *releasedController;
+        void (^completion)(NSString *);
+        @autoreleasepool {
+            MPDelayedTerminalPreferencesController *controller =
+                [[MPDelayedTerminalPreferencesController alloc] init];
+            [controller lookForShellUtility];
+            completion = controller.pendingDiscovery;
+            XCTAssertNotNil(completion);
+            releasedController = controller;
+        }
+        XCTAssertNil(releasedController, @"Discovery must not retain its preferences controller");
+        XCTAssertNoThrow(completion(output == [NSNull null] ? nil : output));
+    }
+}
 
 - (void)testReinstallRepairsDanglingLink
 {

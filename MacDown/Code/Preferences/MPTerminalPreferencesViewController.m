@@ -269,7 +269,7 @@ NS_INLINE NSColor *MPGetInstallationIndicatorColor(BOOL installed)
 - (void)lookForShellUtility
 {
     __weak MPTerminalPreferencesViewController *weakSelf = self;
-    MPDetectHomebrewPrefixWithCompletionhandler(^(NSString *output) {
+    [self detectHomebrewPrefixWithCompletionHandler:^(NSString *output) {
         MPTerminalPreferencesViewController *controller = weakSelf;
         if (!controller)
             return;
@@ -294,7 +294,13 @@ NS_INLINE NSColor *MPGetInstallationIndicatorColor(BOOL installed)
             else
                 controller.shellUtilityURL = nil;  // Utility not found in any location
         }
-    });
+    }];
+}
+
+// Process discovery is a boundary; the lifetime-sensitive UI callback stays here.
+- (void)detectHomebrewPrefixWithCompletionHandler:(void (^)(NSString *))handler
+{
+    MPDetectHomebrewPrefixWithCompletionhandler(handler);
 }
 
 - (void)installShellUtility
