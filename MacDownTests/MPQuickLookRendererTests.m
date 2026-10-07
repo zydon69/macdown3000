@@ -843,6 +843,29 @@
                   @"without crashing. Got: %@", html);
 }
 
+- (void)testCodeFenceLanguageCannotInjectHTMLAttributes
+{
+    NSString *html = [self.renderer renderMarkdown:@"```js\"/><img/src=x>\ncontent\n```"];
+    XCTAssertFalse([html containsString:@"<img/src"]);
+    XCTAssertTrue([html containsString:@"language-js&quot;/&gt;&lt;img/src=x&gt;"]);
+}
+
+- (void)testQuickLookFencedCodePreservesListsAndReferenceDefinitions
+{
+    NSString *code = @"text\n- item\n[a] [b]\n[id]: https://example.com";
+    NSString *html = [self.renderer renderMarkdown:
+        [NSString stringWithFormat:@"````text\n%@\n````", code]];
+    XCTAssertTrue([html containsString:code]);
+    XCTAssertFalse([html containsString:@"macdown-code-"]);
+}
+
+- (void)testQuickLookTaskListsProduceDisabledCheckboxes
+{
+    NSString *html = [self.renderer renderMarkdown:@"- [ ] Todo\n- [x] Done"];
+    XCTAssertTrue([html containsString:@"type=\"checkbox\" data-checkbox-index=\"0\" disabled"]);
+    XCTAssertTrue([html containsString:@"type=\"checkbox\" checked data-checkbox-index=\"1\" disabled"]);
+}
+
 @end
 
 #else

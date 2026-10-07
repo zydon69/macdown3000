@@ -193,6 +193,7 @@
 		UITEST000004SWIFTSRC /* MacDownUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = UITEST000001SWIFTFILE /* MacDownUITests.swift */; };
 		URLSECPOL0001BUILDFILE /* MPURLSecurityPolicy.m in Sources */ = {isa = PBXBuildFile; fileRef = URLSECPOLIMPFILEREFID /* MPURLSecurityPolicy.m */; };
 		URLSECPOL0002BUILDFILE /* MPURLSecurityPolicyTests.m in Sources */ = {isa = PBXBuildFile; fileRef = URLSECPOLTSTFILEREFID /* MPURLSecurityPolicyTests.m */; };
+		AUDIT00001COREPATCHC /* hoedown_html_patch.c in Sources */ = {isa = PBXBuildFile; fileRef = 1FBBD4CA194CA36500BB3C88 /* hoedown_html_patch.c */; };
 		AUDIT00002TERMINALBUILD /* MPTerminalPreferencesTests.m in Sources */ = {isa = PBXBuildFile; fileRef = AUDIT00002TERMINALREF /* MPTerminalPreferencesTests.m */; };
 /* End PBXBuildFile section */
 
@@ -1869,6 +1870,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				34C7CDD88457F3330405D3A5 /* MPQuickLookRenderer.m in Sources */,
+				AUDIT00001COREPATCHC /* hoedown_html_patch.c in Sources */,
 				500508BEEAB722605BD87FE5 /* MPQuickLookPreferences.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

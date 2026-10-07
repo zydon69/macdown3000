@@ -25,6 +25,10 @@ typedef NS_ENUM(NSUInteger, MPCodeBlockAccessoryType)
 @property (weak) id<MPRendererDataSource> dataSource;
 @property (weak) id<MPRendererDelegate> delegate;
 @property (nonatomic, copy, readonly) NSString *checkboxBridgeToken;
+@property (nonatomic, copy, readonly) NSArray<NSNumber *> *checkboxSourceOffsets;
+@property (nonatomic, copy, readonly) NSString *checkboxSourceMarkdown;
+
++ (NSArray<NSNumber *> *)checkboxOffsetsForMarkdown:(NSString *)markdown;
 
 - (void)parseAndRenderNow;
 - (void)parseAndRenderLater;

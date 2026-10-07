@@ -2056,6 +2056,8 @@ static const NSUInteger MPScrollOwnerNeither = 2;
     doc.editor = editor;
     editor.string = @"- [ ] Task";
     [renderer setValue:@"expected-token" forKey:@"checkboxBridgeToken"];
+    [renderer setValue:editor.string forKey:@"checkboxSourceMarkdown"];
+    [renderer setValue:@[@3] forKey:@"checkboxSourceOffsets"];
 
     NSURL *url = [NSURL URLWithString:
                   @"x-macdown-checkbox://toggle/0?token=expected-token"];

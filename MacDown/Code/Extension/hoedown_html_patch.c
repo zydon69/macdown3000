@@ -17,17 +17,6 @@
     (opt->flags & HOEDOWN_HTML_BLOCKCODE_INFORMATION)
 #define USE_TASK_LIST(opt) (opt->flags & HOEDOWN_HTML_USE_TASK_LIST)
 
-// Global checkbox index counter for interactive checkbox support.
-// NOTE: This counter is NOT thread-safe. Markdown rendering must be serialized
-// on a single thread (which MacDown does via the main thread).
-// Related to GitHub issue #269.
-static int g_checkbox_index = 0;
-
-void hoedown_patch_reset_checkbox_index(void)
-{
-    g_checkbox_index = 0;
-}
-
 // hoedown_buffer_new() stores its argument as the buffer's growth "unit", and
 // hoedown_buffer_grow() asserts that unit is non-zero. Passing a size hint of 0
 // (e.g. when a heading or code-fence info string is empty) therefore produces a
@@ -38,9 +27,23 @@ static hoedown_buffer *new_growable_buffer(size_t size_hint)
     return hoedown_buffer_new(size_hint ? size_hint : 16);
 }
 
-int hoedown_patch_get_checkbox_index(void)
+// Decode only a marker generated for this parse; bounds and integer overflow
+// are checked before reading or recording an original UTF-16 source offset.
+static size_t task_marker_length(const uint8_t *bytes, size_t size,
+                                const char *prefix, size_t *source_offset)
 {
-    return g_checkbox_index;
+    if (!prefix) return 0;
+    size_t prefix_size = strlen(prefix);
+    if (size <= prefix_size || memcmp(bytes, prefix, prefix_size) != 0) return 0;
+    size_t i = prefix_size, offset = 0;
+    for (; i < size && bytes[i] >= '0' && bytes[i] <= '9'; i++) {
+        size_t digit = bytes[i] - '0';
+        if (offset > (SIZE_MAX - digit) / 10) return 0;
+        offset = offset * 10 + digit;
+    }
+    if (i == prefix_size || i >= size || bytes[i] != 'Z') return 0;
+    *source_offset = offset;
+    return i + 1;
 }
 
 // rndr_blockcode from HEAD. The "language-" prefix in class in needed to make
@@ -74,7 +77,7 @@ void hoedown_patch_render_blockcode(
     }
 
     hoedown_buffer *mapped = NULL;
-    if (lang && extra->language_addition)
+    if (lang && extra && extra->language_addition)
     {
         mapped = extra->language_addition(lang, extra->owner);
         if (mapped)
@@ -104,7 +107,22 @@ void hoedown_patch_render_blockcode(
         size_t size = text->size;
         if (size > 0 && text->data[size - 1] == '\n')
             size--;
-        hoedown_escape_html(ob, text->data, size, 0);
+        size_t marker_size = extra && extra->code_escape_token ? strlen(extra->code_escape_token) : 0;
+        size_t start = 0;
+        for (size_t i = 0; i < size; i++) {
+            size_t ignored_offset;
+            size_t skip = task_marker_length(text->data + i, size - i,
+                extra ? extra->task_marker_prefix : NULL, &ignored_offset);
+            if (!skip && marker_size && i + marker_size <= size &&
+                memcmp(text->data + i, extra->code_escape_token, marker_size) == 0)
+                skip = marker_size;
+            if (skip) {
+                hoedown_escape_html(ob, text->data + start, i - start, 0);
+                i += skip - 1;
+                start = i + 1;
+            }
+        }
+        hoedown_escape_html(ob, text->data + start, size - start, 0);
     }
 
 	HOEDOWN_BUFPUTSL(ob, "</code></pre></div>\n");
@@ -124,12 +142,13 @@ void hoedown_patch_render_listitem(
 	if (text)
     {
         hoedown_html_renderer_state *state = data->opaque;
+        hoedown_html_renderer_state_extra *extra = state->opaque;
         size_t offset = 0;
         if (flags & HOEDOWN_LI_BLOCK)
             offset = 3;
 
         // Do task list checkbox ([x], [X], or [ ]).
-        if (USE_TASK_LIST(state) && text->size >= 3)
+        if (USE_TASK_LIST(state) && extra && text->size >= offset + 3)
         {
             if (strncmp((char *)(text->data + offset), "[ ]", 3) == 0)
             {
@@ -137,9 +156,15 @@ void hoedown_patch_render_listitem(
                 hoedown_buffer_put(ob, text->data, offset);
                 // Include data-checkbox-index for interactive checkbox support
                 hoedown_buffer_printf(ob,
-                    "<input type=\"checkbox\" data-checkbox-index=\"%d\">",
-                    g_checkbox_index++);
-				offset += 3;
+                    "<input type=\"checkbox\" data-checkbox-index=\"%u\"%s>",
+                    extra->checkbox_index++, extra->interactive_checkboxes ? "" : " disabled");
+                offset += 3;
+                size_t source_offset = SIZE_MAX;
+                size_t marker_length = task_marker_length(text->data + offset,
+                    text->size - offset, extra->task_marker_prefix, &source_offset);
+                if (extra->checkbox_addition)
+                    extra->checkbox_addition(source_offset, extra->owner);
+                offset += marker_length;
             }
             else if (strncmp((char *)(text->data + offset), "[x]", 3) == 0 ||
                      strncmp((char *)(text->data + offset), "[X]", 3) == 0)
@@ -148,9 +173,15 @@ void hoedown_patch_render_listitem(
                 hoedown_buffer_put(ob, text->data, offset);
                 // Include data-checkbox-index for interactive checkbox support
                 hoedown_buffer_printf(ob,
-                    "<input type=\"checkbox\" checked data-checkbox-index=\"%d\">",
-                    g_checkbox_index++);
-				offset += 3;
+                    "<input type=\"checkbox\" checked data-checkbox-index=\"%u\"%s>",
+                    extra->checkbox_index++, extra->interactive_checkboxes ? "" : " disabled");
+                offset += 3;
+                size_t source_offset = SIZE_MAX;
+                size_t marker_length = task_marker_length(text->data + offset,
+                    text->size - offset, extra->task_marker_prefix, &source_offset);
+                if (extra->checkbox_addition)
+                    extra->checkbox_addition(source_offset, extra->owner);
+                offset += marker_length;
             }
             else
             {

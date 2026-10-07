@@ -398,4 +398,47 @@
     XCTAssertTrue([html containsString:@"🎉"], @"Should preserve party emoji");
 }
 
+- (void)testFencedCodeRetainsListsReferencesAndAdjacentBracketsVerbatim
+{
+    self.delegate.extensions = HOEDOWN_EXT_FENCED_CODE;
+    NSString *code = @"text\n- item\n[a] [b]\n[id]: https://example.com";
+    [self.renderer parseMarkdown:[NSString stringWithFormat:@"````text\n%@\n````", code]];
+    NSString *html = self.renderer.currentHtml;
+    XCTAssertTrue([html containsString:code]);
+    XCTAssertFalse([html containsString:@"\u200B"]);
+    XCTAssertFalse([html containsString:@"macdown-code-"]);
+}
+
+- (void)testUnclosedFencedCodeRetainsReferenceDefinition
+{
+    self.delegate.extensions = HOEDOWN_EXT_FENCED_CODE;
+    [self.renderer parseMarkdown:@"```text\n[id]: https://example.com"];
+    XCTAssertTrue([self.renderer.currentHtml containsString:@"[id]: https://example.com"]);
+    XCTAssertFalse([self.renderer.currentHtml containsString:@"macdown-code-"]);
+}
+
+- (void)testCheckboxOffsetsFollowRenderedTasksAndOriginalUTF16Source
+{
+    self.delegate.extensions = HOEDOWN_EXT_FENCED_CODE;
+    self.renderer.rendererFlags = (1 << 4);
+    NSString *markdown = @"😀\r\n````text\r\n- [ ] code\r\n````\r\n> - [ ] quoted\r\n\r\n- [x] actual";
+    [self.renderer parseMarkdown:markdown];
+    XCTAssertEqualObjects(self.renderer.checkboxSourceMarkdown, markdown);
+    NSUInteger quoted = [markdown rangeOfString:@"[ ] quoted"].location + 1;
+    NSUInteger actual = [markdown rangeOfString:@"[x] actual"].location + 1;
+    XCTAssertEqualObjects(self.renderer.checkboxSourceOffsets, (@[@(quoted), @(actual)]));
+    XCTAssertFalse([self.renderer.currentHtml containsString:@"macdown-task-"]);
+    XCTAssertTrue([self.renderer.currentHtml containsString:@"- [ ] code"]);
+    NSString *previousToken = self.renderer.checkboxBridgeToken;
+    [self.renderer parseMarkdown:markdown];
+    XCTAssertNotEqualObjects(self.renderer.checkboxBridgeToken, previousToken);
+}
+
+- (void)testExcessiveNestingIsBoundedAndStillProducesPreview
+{
+    NSString *quotes = [@"" stringByPaddingToLength:220 withString:@"> " startingAtIndex:0];
+    [self.renderer parseMarkdown:[quotes stringByAppendingString:@"Deep text"]];
+    XCTAssertTrue([self.renderer.currentHtml containsString:@"Deep text"]);
+}
+
 @end

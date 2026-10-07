@@ -1685,6 +1685,11 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 
 #pragma mark - NSTextViewDelegate
 
+- (NSUndoManager *)undoManagerForTextView:(NSTextView *)textView
+{
+    return self.undoManager;
+}
+
 - (BOOL)textView:(NSTextView *)textView doCommandBySelector:(SEL)commandSelector
 {
     if (commandSelector == @selector(insertTab:))
@@ -4810,59 +4815,31 @@ to link outside that scope.", \
     }
 
     NSString *path = url.path;
-    if (path.length < 2)
-        return;
-
-    // Extract index from path (e.g., "/0" -> 0)
-    NSInteger index = [[path substringFromIndex:1] integerValue];
-    if (index < 0)
-        return;
-
-    NSString *newMarkdown = [MPDocument toggleCheckboxAtIndex:(NSUInteger)index
-                                                   inMarkdown:self.editor.string];
-    if (![newMarkdown isEqualToString:self.editor.string])
+    if (path.length < 2 || ![path hasPrefix:@"/"]) return;
+    NSString *digits = [path substringFromIndex:1];
+    NSUInteger index = 0;
+    for (NSUInteger i = 0; i < digits.length; i++)
     {
-        // Preserve cursor position
-        NSRange selectedRange = self.editor.selectedRange;
-
-        // Replace the editor content
-        [self.editor.textStorage beginEditing];
-        [self.editor.textStorage replaceCharactersInRange:NSMakeRange(0, self.editor.string.length)
-                                               withString:newMarkdown];
-        [self.editor.textStorage endEditing];
-
-        // Issue #376: replaceCharactersInRange:withString: leaves the inserted
-        // text carrying character 0's attributes (e.g. a leading heading's font
-        // and color smeared across the whole document). The highlighter only
-        // re-parses on NSTextDidChangeNotification, which this direct textStorage
-        // edit deliberately does not fire ("Gap 10" below) — so re-highlight
-        // explicitly, following -reloadFromLoadedString's programmatic-swap recipe.
-        // (We intentionally skip that path's -readClearTextStylesFromTextView: a
-        // checkbox toggle leaves the font, theme, and default color unchanged, so
-        // the highlighter's clear baselines are still valid.)
-        //
-        // The full-range -clearHighlighting is load-bearing: -parseAndHighlightNow
-        // ultimately calls -applyVisibleRangeHighlighting, which clears and restyles
-        // only the on-screen range. Without a full-document clear first, the heading
-        // smear would persist on any content scrolled off-screen until it next
-        // re-entered the viewport.
-        [self.highlighter clearHighlighting];
-        [self.highlighter parseAndHighlightNow];
-
-        // Gap 10: textStorage editing doesn't fire NSTextDidChangeNotification.
-        // Mirror editorTextDidChange: — trigger render and claim ownership.
-        if (self.needsHtml)
-        {
-            [self.renderer parseAndRenderLater];
-            _scrollOwner = MPScrollOwnerEditor;
-        }
-
-        // Restore cursor position (adjust if needed)
-        if (selectedRange.location <= newMarkdown.length)
-        {
-            self.editor.selectedRange = selectedRange;
-        }
+        unichar c = [digits characterAtIndex:i];
+        if (c < '0' || c > '9' || index > (NSUIntegerMax - (c - '0')) / 10) return;
+        index = index * 10 + c - '0';
     }
+    NSString *markdown = self.editor.string;
+    if (![markdown isEqualToString:self.renderer.checkboxSourceMarkdown] ||
+        index >= self.renderer.checkboxSourceOffsets.count) return;
+    NSUInteger offset = self.renderer.checkboxSourceOffsets[index].unsignedIntegerValue;
+    if (offset < 1 || offset >= markdown.length - 1 ||
+        [markdown characterAtIndex:offset - 1] != '[' ||
+        [markdown characterAtIndex:offset + 1] != ']') return;
+    unichar state = [markdown characterAtIndex:offset];
+    if (state != ' ' && state != 'x' && state != 'X') return;
+    NSString *replacement = state == ' ' ? @"x" : @" ";
+    NSRange range = NSMakeRange(offset, 1);
+    NSRange selection = self.editor.selectedRange;
+    if (![self.editor shouldChangeTextInRange:range replacementString:replacement]) return;
+    [self.editor.textStorage replaceCharactersInRange:range withString:replacement];
+    [self.editor didChangeText];
+    self.editor.selectedRange = selection;
 }
 
 /**
@@ -4876,126 +4853,15 @@ to link outside that scope.", \
  */
 + (NSString *)toggleCheckboxAtIndex:(NSUInteger)index inMarkdown:(NSString *)markdown
 {
-    if (!markdown || markdown.length == 0)
-        return markdown;
-
-    // Regex pattern to match checkbox syntax: - [ ], - [x], - [X], * [ ], etc.
-    NSError *error = nil;
-    NSRegularExpression *regex = [NSRegularExpression
-        regularExpressionWithPattern:@"^([ \\t]*)[-*+][ \\t]+\\[([ xX])\\]|^([ \\t]*)\\d+\\.[ \\t]+\\[([ xX])\\]"
-                             options:NSRegularExpressionAnchorsMatchLines
-                               error:&error];
-
-    if (error)
-        return markdown;
-
-    // We need to skip checkboxes inside code blocks.
-    NSMutableIndexSet *codeBlockRanges = [NSMutableIndexSet indexSet];
-
-    // Find fenced code blocks (``` or ~~~)
-    NSRegularExpression *fencedCodeRegex = [NSRegularExpression
-        regularExpressionWithPattern:@"^[ \\t]*(```|~~~).*?\\n[\\s\\S]*?^[ \\t]*\\1[ \\t]*$"
-                             options:NSRegularExpressionAnchorsMatchLines
-                               error:nil];
-    NSArray *fencedMatches = [fencedCodeRegex matchesInString:markdown
-                                                      options:0
-                                                        range:NSMakeRange(0, markdown.length)];
-    for (NSTextCheckingResult *match in fencedMatches)
-    {
-        [codeBlockRanges addIndexesInRange:match.range];
-    }
-
-    // Find all checkbox matches in document order
-    NSArray *matches = [regex matchesInString:markdown
-                                      options:0
-                                        range:NSMakeRange(0, markdown.length)];
-
-    // Build list of valid checkboxes with their indentation levels
-    NSMutableArray *checkboxes = [NSMutableArray array];
-    for (NSTextCheckingResult *match in matches)
-    {
-        // Skip if this match is inside a code block
-        if ([codeBlockRanges containsIndex:match.range.location])
-            continue;
-
-        // Get indentation level (capture group 1 or 3)
-        NSRange indentRange = [match rangeAtIndex:1];
-        if (indentRange.location == NSNotFound)
-            indentRange = [match rangeAtIndex:3];
-        NSUInteger indentLevel = (indentRange.location != NSNotFound) ? indentRange.length : 0;
-
-        // Get checkbox content range (capture group 2 or 4)
-        NSRange contentRange = [match rangeAtIndex:2];
-        if (contentRange.location == NSNotFound)
-            contentRange = [match rangeAtIndex:4];
-
-        if (contentRange.location != NSNotFound)
-        {
-            [checkboxes addObject:@{
-                @"match": match,
-                @"indent": @(indentLevel),
-                @"contentRange": [NSValue valueWithRange:contentRange]
-            }];
-        }
-    }
-
-    if (checkboxes.count == 0)
-        return markdown;
-
-    // Compute depth-first order using a stack-based algorithm.
-    // This matches hoedown's behavior where nested items are rendered before their parent.
-    // Algorithm: For each checkbox, pop stack items with indent >= current indent, then push.
-    NSMutableArray *stack = [NSMutableArray array];
-    NSMutableArray *depthFirstOrder = [NSMutableArray array];
-
-    for (NSUInteger i = 0; i < checkboxes.count; i++)
-    {
-        NSDictionary *current = checkboxes[i];
-        NSUInteger currentIndent = [current[@"indent"] unsignedIntegerValue];
-
-        // Pop items from stack that are NOT parents of this item
-        while (stack.count > 0)
-        {
-            NSDictionary *top = stack.lastObject;
-            NSUInteger topIndent = [top[@"indent"] unsignedIntegerValue];
-            if (topIndent >= currentIndent)
-            {
-                [depthFirstOrder addObject:top];
-                [stack removeLastObject];
-            }
-            else
-            {
-                break;
-            }
-        }
-
-        [stack addObject:current];
-    }
-
-    // Pop remaining items from stack
-    while (stack.count > 0)
-    {
-        [depthFirstOrder addObject:stack.lastObject];
-        [stack removeLastObject];
-    }
-
-    // Check if index is valid
-    if (index >= depthFirstOrder.count)
-        return markdown;
-
-    // Find the target checkbox in depth-first order
-    NSDictionary *target = depthFirstOrder[index];
-    NSRange checkboxContentRange = [target[@"contentRange"] rangeValue];
-
-    NSString *currentState = [markdown substringWithRange:checkboxContentRange];
-    NSString *newState;
-    if ([currentState isEqualToString:@" "])
-        newState = @"x";
-    else
-        newState = @" ";
-
+    if (!markdown.length) return markdown;
+    NSArray<NSNumber *> *offsets = [MPRenderer checkboxOffsetsForMarkdown:markdown];
+    if (index >= offsets.count) return markdown;
+    NSUInteger offset = offsets[index].unsignedIntegerValue;
+    if (offset >= markdown.length) return markdown;
+    unichar state = [markdown characterAtIndex:offset];
+    if (state != ' ' && state != 'x' && state != 'X') return markdown;
     NSMutableString *result = [markdown mutableCopy];
-    [result replaceCharactersInRange:checkboxContentRange withString:newState];
+    [result replaceCharactersInRange:NSMakeRange(offset, 1) withString:state == ' ' ? @"x" : @" "];
     return result;
 }
 

@@ -18,6 +18,7 @@
 #import "MPAsset.h"
 #import "MPPreferences.h"
 #import "MPHTMLResourceURLs.h"
+#import "../../../MacDownCore/MPMarkdownPreprocessor.h"
 
 // Warning: If the version of MathJax is ever updated, please check the status
 // of https://github.com/mathjax/MathJax/issues/548. If the fix has been merged
@@ -29,7 +30,6 @@ static NSString * const kMPMathJaxCDN =
 static NSString * const kMPPrismScriptDirectory = @"Prism/components";
 static NSString * const kMPPrismThemeDirectory = @"Prism/themes";
 static NSString * const kMPPrismPluginDirectory = @"Prism/plugins";
-static size_t kMPRendererNestingLevel = SIZE_MAX;
 static int kMPRendererTOCLevel = 6;  // h1 to h6.
 
 
@@ -93,115 +93,23 @@ NS_INLINE NSArray *MPPrismScriptURLsForLanguage(NSString *language)
     return urls;
 }
 
-/**
- * Preprocess markdown to work around Hoedown parser limitations.
- *
- * Handles:
- * - Issue #254: Lists immediately after paragraphs (insert blank line)
- * - Issue #36: Fenced code blocks immediately after text (insert blank line)
- * - Issue #37: Square brackets in code blocks parsed as reference links
- * - Issue #25: Adjacent shortcut-style links not rendering correctly
- *
- * KNOWN EDGE CASES (intentionally not handled for simplicity):
- * - Block elements inside existing code blocks may be incorrectly modified
- * - Blockquotes may need special handling
- */
-NS_INLINE NSString *MPPreprocessMarkdown(NSString *text)
-{
-    if (!text.length)
-        return text;
-
-    // Normalize Windows CRLF to LF (Issue #382). Handles content arriving via
-    // paste or programmatic assignment that bypasses readFromData:ofType:error:.
-    text = [text stringByReplacingOccurrencesOfString:@"\r\n" withString:@"\n"];
-
-    // Lists after paragraphs (Issue #254)
-    static NSRegularExpression *listRegex = nil;
-    static dispatch_once_t listToken;
-    dispatch_once(&listToken, ^{
-        NSString *pattern = @"^(?![ \\t]*[-*+][ \\t])(?![ \\t]*\\d+\\.[ \\t])(.+)\\n([-*+]|\\d+\\.)[ \\t]";
-        listRegex = [[NSRegularExpression alloc] initWithPattern:pattern
-                                                         options:NSRegularExpressionAnchorsMatchLines
-                                                           error:NULL];
-    });
-
-    // Fenced code blocks after text (Issue #36)
-    // Lookahead ensures we only match OPENING fences (followed by content),
-    // not closing fences (followed by end of string or blank line).
-    static NSRegularExpression *fenceRegex = nil;
-    static dispatch_once_t fenceToken;
-    dispatch_once(&fenceToken, ^{
-        NSString *pattern = @"^(\\S.*)\\n(`{3,}|~{3,})(?=\\S|\\n.)";
-        fenceRegex = [[NSRegularExpression alloc] initWithPattern:pattern
-                                                          options:NSRegularExpressionAnchorsMatchLines
-                                                            error:NULL];
-    });
-
-    // Fenced code block content (Issue #37)
-    // Matches fence, optional language, content, closing fence.
-    static NSRegularExpression *blockRegex = nil;
-    static dispatch_once_t blockToken;
-    dispatch_once(&blockToken, ^{
-        NSString *pattern = @"(`{3,}|~{3,})([^\\n]*)\\n([\\s\\S]*?)\\n\\1";
-        blockRegex = [[NSRegularExpression alloc] initWithPattern:pattern
-                                                          options:0
-                                                            error:NULL];
-    });
-
-    // Adjacent shortcut links (Issue #25)
-    // Matches [text] followed by whitespace then [, indicating adjacent links.
-    // Converts to explicit form [text][] to disambiguate for Hoedown.
-    // Requires whitespace to avoid matching [text][ref] (explicit reference links).
-    // Uses negative lookbehind (?<!\]) to avoid matching the ref part of [text][ref]
-    // when it appears before another [ on a different line.
-    static NSRegularExpression *shortcutRegex = nil;
-    static dispatch_once_t shortcutToken;
-    dispatch_once(&shortcutToken, ^{
-        NSString *pattern = @"(?<!\\])\\[([^\\]]+)\\](\\s+)(?=\\[)";
-        shortcutRegex = [[NSRegularExpression alloc] initWithPattern:pattern
-                                                             options:0
-                                                               error:NULL];
-    });
-
-    NSString *result = text;
-    result = [listRegex stringByReplacingMatchesInString:result options:0
-                                                   range:NSMakeRange(0, result.length)
-                                            withTemplate:@"$1\n\n$2 "];
-    result = [fenceRegex stringByReplacingMatchesInString:result options:0
-                                                    range:NSMakeRange(0, result.length)
-                                             withTemplate:@"$1\n\n$2"];
-
-    // Issue #25: Convert shortcut links to explicit form when followed by [
-    result = [shortcutRegex stringByReplacingMatchesInString:result options:0
-                                                       range:NSMakeRange(0, result.length)
-                                                withTemplate:@"[$1][]$2"];
-
-    // Issue #37: Break reference link pattern inside fenced code blocks.
-    // Hoedown's is_ref() matches [id]: patterns before code blocks are parsed.
-    // Insert zero-width space between ] and : to prevent matching.
-    NSMutableString *mut = [result mutableCopy];
-    NSArray *blocks = [blockRegex matchesInString:mut options:0
-                                            range:NSMakeRange(0, mut.length)];
-    for (NSTextCheckingResult *match in [blocks reverseObjectEnumerator]) {
-        NSRange contentRange = [match rangeAtIndex:3];
-        NSString *content = [mut substringWithRange:contentRange];
-        content = [content stringByReplacingOccurrencesOfString:@"]: "
-                                                     withString:@"]\u200B: "];
-        [mut replaceCharactersInRange:contentRange withString:content];
-    }
-    return mut;
-}
-
 NS_INLINE NSString *MPHTMLFromMarkdown(
-    NSString *text, int flags, BOOL smartypants, NSString *frontMatter,
+    NSString *text, int flags, BOOL smartypants, NSString *frontMatter, NSUInteger sourceOffset,
     hoedown_renderer *htmlRenderer, hoedown_renderer *tocRenderer)
 {
     // Preprocess markdown for Hoedown compatibility (Issues #254, #36, #37)
-    text = MPPreprocessMarkdown(text);
+    NSDictionary *preprocessed = MPPreprocessMarkdown(text, (flags & HOEDOWN_EXT_FENCED_CODE) != 0, sourceOffset);
+    text = preprocessed[@"text"];
+    __attribute__((objc_precise_lifetime)) NSString *codeEscapeToken = preprocessed[@"codeEscapeToken"];
+    hoedown_html_renderer_state_extra *extra =
+        ((hoedown_html_renderer_state *)htmlRenderer->opaque)->opaque;
+    extra->code_escape_token = codeEscapeToken.UTF8String;
+    __attribute__((objc_precise_lifetime)) NSString *taskPrefix = preprocessed[@"taskPrefix"];
+    extra->task_marker_prefix = taskPrefix.UTF8String;
 
     NSData *inputData = [text dataUsingEncoding:NSUTF8StringEncoding];
     hoedown_document *document = hoedown_document_new(
-        htmlRenderer, flags, kMPRendererNestingLevel);
+        htmlRenderer, flags, MPMarkdownMaximumNesting);
     hoedown_buffer *ob = hoedown_buffer_new(64);
     hoedown_document_render(document, ob, inputData.bytes, inputData.length);
     if (smartypants)
@@ -218,7 +126,7 @@ NS_INLINE NSString *MPHTMLFromMarkdown(
     if (tocRenderer)
     {
         document = hoedown_document_new(
-            tocRenderer, flags, kMPRendererNestingLevel);
+            tocRenderer, flags, MPMarkdownMaximumNesting);
         ob = hoedown_buffer_new(64);
         hoedown_document_render(
             document, ob, inputData.bytes, inputData.length);
@@ -243,7 +151,7 @@ NS_INLINE NSString *MPHTMLFromMarkdown(
     if (frontMatter)
         result = [NSString stringWithFormat:@"%@\n%@", frontMatter, result];
     
-    return result;
+    return MPRemoveTaskMarkers(result, taskPrefix);
 }
 
 NS_INLINE NSString *MPEscapeHTMLAttribute(NSString *value);
@@ -335,6 +243,8 @@ NS_INLINE BOOL MPAreNilableStringsEqual(NSString *s1, NSString *s2)
 @property BOOL manualRender;
 @property (copy) NSString *highlightingThemeName;
 @property (nonatomic, copy, readwrite) NSString *checkboxBridgeToken;
+@property (nonatomic, copy, readwrite) NSArray<NSNumber *> *checkboxSourceOffsets;
+@property (nonatomic, copy, readwrite) NSString *checkboxSourceMarkdown;
 
 // Issue #110: Cache-busting timestamps for local resources
 @property (strong) NSMutableDictionary<NSString *, NSNumber *> *resourceTimestamps;
@@ -373,7 +283,8 @@ NS_INLINE void add_to_languages(
 NS_INLINE hoedown_buffer *language_addition(
     const hoedown_buffer *language, void *owner)
 {
-    MPRenderer *renderer = (__bridge MPRenderer *)owner;
+    NSDictionary *context = (__bridge NSDictionary *)owner;
+    NSMutableArray *languages = context[@"languages"];
     NSString *lang = [[NSString alloc] initWithBytes:language->data
                                               length:language->size
                                             encoding:NSUTF8StringEncoding];
@@ -411,14 +322,19 @@ NS_INLINE hoedown_buffer *language_addition(
     }
 
     // Walk dependencies to include all required scripts.
-    add_to_languages(lang, renderer.currentLanguages, languageMap);
+    add_to_languages(lang, languages, languageMap);
     
     return mapped;
 }
 
-NS_INLINE hoedown_renderer *MPCreateHTMLRenderer(MPRenderer *renderer, int tocLevel)
+NS_INLINE void checkbox_addition(size_t offset, void *owner)
 {
-    int flags = renderer.rendererFlags;
+    NSDictionary *context = (__bridge NSDictionary *)owner;
+    [context[@"checkboxOffsets"] addObject:@(offset)];
+}
+
+NS_INLINE hoedown_renderer *MPCreateHTMLRenderer(int flags, int tocLevel, NSDictionary *context)
+{
     hoedown_renderer *htmlRenderer = hoedown_html_renderer_new(
         flags, tocLevel);
     htmlRenderer->blockcode = hoedown_patch_render_blockcode;
@@ -429,7 +345,12 @@ NS_INLINE hoedown_renderer *MPCreateHTMLRenderer(MPRenderer *renderer, int tocLe
     hoedown_html_renderer_state_extra *extra =
         hoedown_malloc(sizeof(hoedown_html_renderer_state_extra));
     extra->language_addition = language_addition;
-    extra->owner = (__bridge void *)renderer;
+    extra->owner = (__bridge void *)context;
+    extra->checkbox_index = 0;
+    extra->code_escape_token = NULL;
+    extra->interactive_checkboxes = 1;
+    extra->task_marker_prefix = NULL;
+    extra->checkbox_addition = checkbox_addition;
 
     ((hoedown_html_renderer_state *)htmlRenderer->opaque)->opaque = extra;
     return htmlRenderer;
@@ -521,6 +442,15 @@ NS_INLINE NSString *MPPreviewHeadTags(NSString *checkboxBridgeToken)
 
 
 @implementation MPRenderer
+
++ (NSArray<NSNumber *> *)checkboxOffsetsForMarkdown:(NSString *)markdown
+{
+    MPRenderer *renderer = [[self alloc] init];
+    NSDictionary *options = @{@"extensions": @(HOEDOWN_EXT_FENCED_CODE | HOEDOWN_EXT_TABLES |
+        HOEDOWN_EXT_STRIKETHROUGH | HOEDOWN_EXT_AUTOLINK), @"smartypants": @NO,
+        @"frontMatter": @NO, @"toc": @NO, @"flags": @(HOEDOWN_HTML_USE_TASK_LIST)};
+    return [renderer parseResultForMarkdown:markdown options:options][@"checkboxOffsets"];
+}
 
 - (instancetype)init
 {
@@ -764,41 +694,64 @@ NS_INLINE NSString *MPPreviewHeadTags(NSString *checkboxBridgeToken)
     }
 }
 
-- (void)parseMarkdown:(NSString *)markdown {
-    [self.currentLanguages removeAllObjects];
-
-    // Reset checkbox index counter for interactive checkbox support.
-    // Related to GitHub issue #269.
-    hoedown_patch_reset_checkbox_index();
-    
+- (NSDictionary *)parseOptions
+{
     id<MPRendererDelegate> delegate = self.delegate;
-    int extensions = [delegate rendererExtensions:self];
-    BOOL smartypants = [delegate rendererHasSmartyPants:self];
-    BOOL hasFrontMatter = [delegate rendererDetectsFrontMatter:self];
-    BOOL hasTOC = [delegate rendererRendersTOC:self];
-    
-    if (hasFrontMatter)
+    return @{@"extensions": @([delegate rendererExtensions:self]),
+             @"smartypants": @([delegate rendererHasSmartyPants:self]),
+             @"frontMatter": @([delegate rendererDetectsFrontMatter:self]),
+             @"toc": @([delegate rendererRendersTOC:self]),
+             @"flags": @(self.rendererFlags)};
+}
+
+- (NSDictionary *)parseResultForMarkdown:(NSString *)markdown options:(NSDictionary *)options
+{
+    NSString *sourceMarkdown = markdown ?: @"";
+    NSMutableArray *languages = [NSMutableArray array];
+    NSMutableArray *checkboxOffsets = [NSMutableArray array];
+    NSDictionary *context = @{@"languages": languages, @"checkboxOffsets": checkboxOffsets};
+    NSUInteger sourceOffset = 0;
+    if ([options[@"frontMatter"] boolValue])
     {
         NSUInteger offset = 0;
         [markdown frontMatter:&offset];
         markdown = [markdown substringFromIndex:offset];
+        sourceOffset = offset;
     }
-    int tocLevel = hasTOC ? kMPRendererTOCLevel : 0;
-    hoedown_renderer *htmlRenderer = MPCreateHTMLRenderer(self, tocLevel);
-    hoedown_renderer *tocRenderer = NULL;
-    if (hasTOC)
-    tocRenderer = MPCreateHTMLTOCRenderer();
-    self.currentHtml = MPHTMLFromMarkdown(
-                                          markdown, extensions, smartypants, nil,
-                                          htmlRenderer, tocRenderer);
+    BOOL hasTOC = [options[@"toc"] boolValue];
+    hoedown_renderer *htmlRenderer = MPCreateHTMLRenderer(
+        [options[@"flags"] intValue], hasTOC ? kMPRendererTOCLevel : 0, context);
+    hoedown_renderer *tocRenderer = hasTOC ? MPCreateHTMLTOCRenderer() : NULL;
+    NSString *html = MPHTMLFromMarkdown(markdown, [options[@"extensions"] intValue],
+        [options[@"smartypants"] boolValue], nil, sourceOffset, htmlRenderer, tocRenderer);
     if (tocRenderer)
-    hoedown_html_renderer_free(tocRenderer);
+        hoedown_html_renderer_free(tocRenderer);
     MPFreeHTMLRenderer(htmlRenderer);
-    
-    self.extensions = extensions;
-    self.smartypants = smartypants;
-    self.TOC = hasTOC;
-    self.frontMatter = hasFrontMatter;
+    return @{@"html": html ?: @"", @"languages": [languages copy],
+             @"checkboxOffsets": [checkboxOffsets copy], @"sourceMarkdown": sourceMarkdown,
+             @"checkboxToken": NSUUID.UUID.UUIDString};
+}
+
+- (void)publishParseResult:(NSDictionary *)result options:(NSDictionary *)options
+{
+    self.currentHtml = result[@"html"];
+    self.checkboxSourceOffsets = result[@"checkboxOffsets"];
+    self.checkboxSourceMarkdown = result[@"sourceMarkdown"];
+    self.checkboxBridgeToken = result[@"checkboxToken"];
+    self.currentLanguages = [result[@"languages"] mutableCopy];
+    self.extensions = [options[@"extensions"] intValue];
+    self.smartypants = [options[@"smartypants"] boolValue];
+    self.TOC = [options[@"toc"] boolValue];
+    self.frontMatter = [options[@"frontMatter"] boolValue];
+}
+
+// Synchronous entry used by headless callers; asynchronous requests use the
+// same pure parse pipeline and publish their snapshots on the main queue.
+- (void)parseMarkdown:(NSString *)markdown
+{
+    NSDictionary *options = [self parseOptions];
+    [self publishParseResult:[self parseResultForMarkdown:markdown options:options]
+                    options:options];
 }
 
 - (void)renderIfPreferencesChanged
