@@ -8,6 +8,7 @@
 
 #import <XCTest/XCTest.h>
 #import "MPUtilities.h"
+#import "MPEditorView.h"
 #import "pmh_styleparser.h"
 #import "YAMLSerialization.h"
 #import "NSTextView+Autocomplete.h"
@@ -935,6 +936,31 @@
         }
     XCTAssertEqual(count, 100u);
     pmh_free_style_collection(styles);
+}
+
+- (void)testPastingURLPreservesBracketsAndUnbalancedURLParenthesis {
+    NSPasteboard *board = NSPasteboard.generalPasteboard;
+    NSMutableArray *savedItems = [NSMutableArray array];
+    for (NSPasteboardItem *item in board.pasteboardItems) {
+        NSPasteboardItem *copy = [[NSPasteboardItem alloc] init];
+        for (NSString *type in item.types) {
+            NSData *data = [item dataForType:type];
+            if (data) [copy setData:data forType:type];
+        }
+        [savedItems addObject:copy];
+    }
+    @try {
+        [board clearContents];
+        [board setString:@"https://example.com/a)" forType:NSPasteboardTypeString];
+        MPEditorView *view = [[MPEditorView alloc] initWithFrame:NSZeroRect];
+        view.string = @"a]b";
+        view.selectedRange = NSMakeRange(0, 3);
+        [view paste:nil];
+        XCTAssertEqualObjects(view.string, @"[a\\]b](https://example.com/a%29)");
+    } @finally {
+        [board clearContents];
+        if (savedItems.count) [board writeObjects:savedItems];
+    }
 }
 
 @end
