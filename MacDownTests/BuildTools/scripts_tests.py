@@ -71,7 +71,29 @@ def test_css_generation():
         assert not list(repo.glob('*.sass.*')) and not list(repo.glob('*.css.*'))
         print('PASS CSS failure preserves artifact; success replaces it atomically')
 
+
+def test_stall_status(status, summary):
+    with tempfile.TemporaryDirectory() as directory:
+        repo = Path(directory)
+        (repo / 'Tools').mkdir()
+        (repo / 'Tools/repro-stall.sh').write_text(
+            (ROOT / 'Tools/repro-stall.sh').read_text())
+        (repo / 'bin').mkdir()
+        policy = repo / 'bin/taskpolicy'
+        policy.write_text(f'#!/bin/sh\necho "{summary}"\nexit {status}\n')
+        policy.chmod(0o755)
+        env = dict(os.environ, PATH=str(repo / 'bin') + ':' + os.environ['PATH'],
+                   TMPDIR=directory)
+        result = subprocess.run(['bash', 'Tools/repro-stall.sh', '1', '60'],
+                                cwd=repo, env=env, capture_output=True)
+        assert (result.returncode == 0) == (status == 0 and bool(summary))
+        print('PASS stall runner status', status, 'summary', bool(summary))
+
+
 if __name__ == '__main__':
     for scenario in ['regeneration-failure', 'verification-failure', 'success']:
         test_regeneration(scenario)
     test_css_generation()
+    test_stall_status(0, 'Executed 2 tests, with 0 failures (0 unexpected)')
+    test_stall_status(65, 'Executed 2 tests, with 1 failures (0 unexpected)')
+    test_stall_status(65, '')
