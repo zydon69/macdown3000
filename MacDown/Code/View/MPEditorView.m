@@ -258,6 +258,11 @@ NS_INLINE BOOL MPAreRectsEqual(NSRect r1, NSRect r2)
 
 - (void)updateContentGeometry
 {
+    // A deferred update may outlive the preference that scheduled it. Keep the
+    // disabled mode's contentRect fallback intact when that update runs later.
+    if (!self.scrollsPastEnd)
+        return;
+
     static NSCharacterSet *visibleCharacterSet = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
