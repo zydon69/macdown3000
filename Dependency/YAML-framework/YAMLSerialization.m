@@ -465,8 +465,10 @@ __YAMLSerializationAddObject (yaml_document_t *document, id value) {
 }
 
 + (NSString *) createYAMLStringWithObject: (id) object options: (YAMLWriteOptions) opt error: (NSError **) error {
-    return [[NSString alloc] initWithData: [self YAMLDataWithObject: object options: opt error: error]
-                                 encoding: NSUTF8StringEncoding];
+    NSData *data = [self YAMLDataWithObject:object options:opt error:error];
+    if (!data)
+        return nil;
+    return [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
 
 }
 

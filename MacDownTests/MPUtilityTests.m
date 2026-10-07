@@ -905,4 +905,20 @@
     }
 }
 
+- (void)testYAMLStringWriterReturnsNilOnSerializationFailure {
+    NSError *error = nil;
+    XCTAssertNil([YAMLSerialization YAMLStringWithObject:NSObject.new
+        options:kYAMLWriteOptionSingleDocument error:&error]);
+    XCTAssertNotNil(error);
+    XCTAssertNil([YAMLSerialization YAMLStringWithObject:nil
+        options:kYAMLWriteOptionSingleDocument error:NULL]);
+    NSString *yaml = [YAMLSerialization YAMLStringWithObject:@{@"title": @"é漢😀"}
+        options:kYAMLWriteOptionSingleDocument error:&error];
+    XCTAssertNotNil(yaml);
+    XCTAssertNil(error);
+    id decoded = [YAMLSerialization objectWithYAMLString:yaml
+        options:kYAMLReadOptionStringScalars error:&error];
+    XCTAssertEqualObjects([decoded objectForKey:@"title"], @"é漢😀");
+}
+
 @end
