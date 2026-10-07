@@ -1,6 +1,6 @@
 # Commits campagne 02
 
-Chaque correction possède son commit autonome, avec ses tests et sa preuve. Les gates globales demeurent ouvertes.
+Chaque correction possède son commit autonome, avec ses tests et sa preuve. Les preuves finales de suites, builds et consommateurs sont regroupées dans preuves/campagne02-gates.md.
 
 | Finding | Commit | Correction | Preuve |
 | --- | --- | --- | --- |
@@ -13,3 +13,5 @@ Chaque correction possède son commit autonome, avec ses tests et sa preuve. Les
 | A2-B02 | d92bbf5 | Budget expansion graphe YAML | preuves/campagne02-build.md |
 | A2-U02 | a33a103 | Règles pluriels fr/pt-BR/is | preuves/A2-U02.md |
 | A2-B03 | 431c456 | File CLI interprocess partagée et consommateur unique | preuves/A2-B03.md |
+| A2-R04 | 723ef22 | Classes Prism PRE/CODE communes, contraste Quick Look offline | preuves/A2-R04.md |
+| A2-D02 | f5870f5 | Publication des éditions AppleScript, rendu/sauvegarde et undo cohérents | preuves/A2-D02.md |

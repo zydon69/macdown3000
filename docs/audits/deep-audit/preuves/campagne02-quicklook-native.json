@@ -1,14 +1,13 @@
 {
-  "identity": "org.macdown.audit.ql.5ee8a398ab6446fb8a1009cba1974503",
-  "provider": "org.macdown.audit.ql.5ee8a398ab6446fb8a1009cba1974503.QuickLook",
-  "uti": "org.macdown.audit.ql.5ee8a398ab6446fb8a1009cba1974503.markdown",
+  "identity": "org.macdown.audit.ql.3e70a664d8ea429a8a2292cbc6e965bf",
+  "provider": "org.macdown.audit.ql.3e70a664d8ea429a8a2292cbc6e965bf.QuickLook",
+  "uti": "org.macdown.audit.ql.3e70a664d8ea429a8a2292cbc6e965bf.markdown",
   "sourceExtension": "/Users/zydon/Sites/MacDown/build/AuditCampaign02/Build/Products/Debug/MacDownQuickLook.appex",
   "sourceHashes": {
-    "Contents/Info.plist": "0d0082734e38a878c8f97da0a117c4bff5764ca291e7048aaa7ef0657098f88f",
-    "Contents/_CodeSignature/CodeResources": "4ba7556b3e7fb157612faeb49785213595c4232fd033700494b1005e6cf23d40",
-    "Contents/MacOS/MacDownQuickLook": "d16ae26802c52154e4ece56da438c19f4169c170816c2f62755efeaef8e7f227",
-    "Contents/Frameworks/MacDownCore.framework/Versions/A/MacDownCore": "284deece1361d1b016fd4889cdaf1b07304f4ff796eba8a67ac69c2704b90135",
-    "Contents/Frameworks/MacDownCore.framework/Versions/A/_CodeSignature/CodeResources": "3c58075a606309e5fa42bef72a2ad1c6c00655c291102cc9483c4169b02fd36e",
+    "Contents/Info.plist": "50a44bbebcd5d4eb66c1b09fbc54d31aef3609c869d0ff6a8e959066179a1292",
+    "Contents/_CodeSignature/CodeResources": "309702bd9d40048409e7240d1688b7c15b745d4e28271978b5a1f8c51b7e46b7",
+    "Contents/MacOS/MacDownQuickLook": "1436f27a342c3b9971fa8cc7e8d52a449111b5a55c5d45e5a209d4ae39052f6d",
+    "Contents/Frameworks/MacDownCore.framework/Versions/A/MacDownCore": "d0cfc6a369f8bf1c9776213fa28240d99bd61d987cf3417e4554e691c79dc273",
     "Contents/Frameworks/MacDownCore.framework/Versions/A/Resources/Info.plist": "889864c0f97ed930f7335e3ffbe970458d55c8141f8163513695fc4e94c7d056",
     "Contents/Frameworks/MacDownCore.framework/Versions/A/Resources/Prism/components.js": "d8ecc21d802fd6cd4ed7cc2810b5ee5f49f880734a21ee79a42c5aca73f71661",
     "Contents/Frameworks/MacDownCore.framework/Versions/A/Resources/Styles/GitHub.css": "50b145c3b6ae27c8c1f0d2907f83eeade0feabbf082ed9827fd423fa02086328",
@@ -340,68 +339,195 @@
   },
   "fixtureEntitlements": "sandbox without real app preferences/assets exceptions",
   "scope": "native default/bundled provider/window evidence; paint requires root inspection of compositor/CUA capture; no proof of preference-sharing entitlements",
-  "cleanupErrors": [
-    "UUID fixture container cleanup failed; retained for recovery"
-  ],
-  "host": {
-    "hostArgs": [
-      "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-0ykmj1ay/Fixture.app/Contents/MacOS/Fixture",
-      "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-0ykmj1ay/fixture.mdaudit14496a2fe7cd45c6837486334c920a0d",
-      "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-0ykmj1ay/window.json",
-      "30.0"
-    ],
-    "hostExit": 0,
-    "observedFixtureExtensionPids": [
-      19963
-    ],
-    "extensionExecutable": "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-0ykmj1ay/Fixture.app/Contents/PlugIns/MacDownQuickLook.appex/Contents/MacOS/MacDownQuickLook",
-    "windowMetadata": "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-0ykmj1ay/window.json",
-    "captureMethod": "screencapture",
-    "compositorCaptures": [
-      "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-0ykmj1ay/compositor-6s.png",
-      "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-0ykmj1ay/compositor-12s.png"
-    ],
-    "paintValidated": false
-  },
-  "window": {
-    "active": true,
-    "frame": "{{648, 227}, {800, 632}}",
-    "timestamp": 1791407389.8165069,
-    "phase": "after6s-app-run",
-    "title": "MacDown native QL surface — fixture.mdaudit14496a2fe7cd45c6837486334c920a0d",
-    "key": true,
-    "windowNumber": 17045,
-    "occlusion": 8194,
-    "visible": true,
-    "displayState": null,
-    "pid": 19949,
-    "accessibility": {
-      "label": null,
-      "value": null,
-      "class": "QLPreviewView",
-      "role": "AXUnknown",
-      "children": [
-        {
-          "class": "NSAccessibilityRemoteUIElement"
-        }
-      ]
-    }
-  },
-  "manual_paint_review": {
-    "reviewer": "root and audit2_render",
-    "validated": true,
-    "observed": "H1, bold paragraph, code block background, bordered table visibly rendered",
-    "image_sha256": "f9d40c6d7a8bfbc6d1044e311c60d562f0e8d06fc9006ae2251ea47f923efc36",
-    "limitation": "Theme code text color contrast checked separately; provider paint success does not certify external distribution."
-  },
-  "registry_cleanup": [
+  "log": [
+    {
+      "args": [
+        "pluginkit",
+        "-m",
+        "-A",
+        "-D",
+        "-i",
+        "org.macdown.audit.ql.3e70a664d8ea429a8a2292cbc6e965bf.QuickLook"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "args": [
+        "clang",
+        "-fobjc-arc",
+        "-framework",
+        "AppKit",
+        "-framework",
+        "Quartz",
+        "/tmp/macdown-ql-native-apprun.m",
+        "-o",
+        "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-oq_4khtc/Fixture.app/Contents/MacOS/Fixture"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "args": [
+        "codesign",
+        "--force",
+        "--sign",
+        "-",
+        "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-oq_4khtc/Fixture.app/Contents/PlugIns/MacDownQuickLook.appex/Contents/Frameworks/MacDownCore.framework"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-oq_4khtc/Fixture.app/Contents/PlugIns/MacDownQuickLook.appex/Contents/Frameworks/MacDownCore.framework: replacing existing signature\n"
+    },
+    {
+      "args": [
+        "codesign",
+        "--force",
+        "--sign",
+        "-",
+        "--entitlements",
+        "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-oq_4khtc/fixture-entitlements.plist",
+        "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-oq_4khtc/Fixture.app/Contents/PlugIns/MacDownQuickLook.appex"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-oq_4khtc/Fixture.app/Contents/PlugIns/MacDownQuickLook.appex: replacing existing signature\n"
+    },
+    {
+      "args": [
+        "codesign",
+        "--force",
+        "--sign",
+        "-",
+        "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-oq_4khtc/Fixture.app"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-oq_4khtc/Fixture.app: replacing existing signature\n"
+    },
+    {
+      "args": [
+        "codesign",
+        "--verify",
+        "--strict",
+        "--deep",
+        "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-oq_4khtc/Fixture.app"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "args": [
+        "codesign",
+        "--display",
+        "--entitlements",
+        ":-",
+        "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-oq_4khtc/Fixture.app/Contents/PlugIns/MacDownQuickLook.appex"
+      ],
+      "exit": 0,
+      "stdout": "<?xml version=\"1.0\" encoding=\"UTF-8\"?><!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"https://www.apple.com/DTDs/PropertyList-1.0.dtd\"><plist version=\"1.0\"><dict><key>com.apple.security.app-sandbox</key><true/><key>com.apple.security.files.user-selected.read-only</key><true/><key>com.apple.security.network.client</key><true/></dict></plist>\n",
+      "stderr": "Executable=/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-oq_4khtc/Fixture.app/Contents/PlugIns/MacDownQuickLook.appex/Contents/MacOS/MacDownQuickLook\nwarning: Specifying ':' in the path is deprecated and will not work in a future release\n"
+    },
+    {
+      "args": [
+        "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister",
+        "-f",
+        "-R",
+        "-trusted",
+        "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-oq_4khtc/Fixture.app"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "args": [
+        "pluginkit",
+        "-a",
+        "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-oq_4khtc/Fixture.app/Contents/PlugIns/MacDownQuickLook.appex"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "args": [
+        "pluginkit",
+        "-e",
+        "use",
+        "-i",
+        "org.macdown.audit.ql.3e70a664d8ea429a8a2292cbc6e965bf.QuickLook"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "args": [
+        "pluginkit",
+        "-m",
+        "-v",
+        "-i",
+        "org.macdown.audit.ql.3e70a664d8ea429a8a2292cbc6e965bf.QuickLook"
+      ],
+      "exit": 0,
+      "stdout": "+    org.macdown.audit.ql.3e70a664d8ea429a8a2292cbc6e965bf.QuickLook(3000.0.7-rc.1.post187)\t3E45CE30-6831-4F6C-93E3-CA3A948C9495\t2026-10-07 21:43:05 +0000\t/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-oq_4khtc/Fixture.app/Contents/PlugIns/MacDownQuickLook.appex\n (1 plug-in)\n",
+      "stderr": ""
+    },
+    {
+      "args": [
+        "/usr/sbin/screencapture",
+        "-x",
+        "-o",
+        "-l17215",
+        "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-oq_4khtc/compositor-6s.png"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "args": [
+        "/usr/sbin/screencapture",
+        "-x",
+        "-o",
+        "-l17215",
+        "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-oq_4khtc/compositor-12s.png"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "hostArgs": [
+        "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-oq_4khtc/Fixture.app/Contents/MacOS/Fixture",
+        "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-oq_4khtc/fixture.mdauditd7646a0681cf40a492b58335ab903f51",
+        "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-oq_4khtc/window.json",
+        "30.0"
+      ],
+      "hostExit": 0,
+      "observedFixtureExtensionPids": [
+        37874
+      ],
+      "extensionExecutable": "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-oq_4khtc/Fixture.app/Contents/PlugIns/MacDownQuickLook.appex/Contents/MacOS/MacDownQuickLook",
+      "windowMetadata": "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-oq_4khtc/window.json",
+      "captureMethod": "screencapture",
+      "compositorCaptures": [
+        "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-oq_4khtc/compositor-6s.png",
+        "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-oq_4khtc/compositor-12s.png"
+      ],
+      "paintValidated": false
+    },
     {
       "args": [
         "pluginkit",
         "-e",
         "default",
         "-i",
-        "org.macdown.audit.ql.5ee8a398ab6446fb8a1009cba1974503.QuickLook"
+        "org.macdown.audit.ql.3e70a664d8ea429a8a2292cbc6e965bf.QuickLook"
       ],
       "exit": 0,
       "stdout": "",
@@ -411,7 +537,7 @@
       "args": [
         "pluginkit",
         "-r",
-        "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-0ykmj1ay/Fixture.app/Contents/PlugIns/MacDownQuickLook.appex"
+        "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-oq_4khtc/Fixture.app/Contents/PlugIns/MacDownQuickLook.appex"
       ],
       "exit": 0,
       "stdout": "",
@@ -421,7 +547,7 @@
       "args": [
         "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister",
         "-u",
-        "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-0ykmj1ay/Fixture.app"
+        "/private/var/folders/sl/qh_kc_kn1r732kw2tsj7z5xh0000gn/T/macdown-native-ql-surface-oq_4khtc/Fixture.app"
       ],
       "exit": 0,
       "stdout": "",
@@ -434,11 +560,25 @@
         "-A",
         "-D",
         "-i",
-        "org.macdown.audit.ql.5ee8a398ab6446fb8a1009cba1974503.QuickLook"
+        "org.macdown.audit.ql.3e70a664d8ea429a8a2292cbc6e965bf.QuickLook"
       ],
       "exit": 0,
       "stdout": "",
       "stderr": ""
     }
-  ]
+  ],
+  "cleanupErrors": [
+    "UUID fixture container cleanup failed; retained for recovery"
+  ],
+  "manualPaintDecision": {
+    "validated": true,
+    "reviewer": "root",
+    "capture": "campagne02-quicklook-native.png",
+    "observation": "Compositor12s inspected: bold heading/paragraph, light code on dark background and bordered table visible. Real NSApplication.run host, UUID provider exact executable observed, host exit0. Probe exit2 limited to protected UUID container metadata cleanup; final registry query empty."
+  },
+  "sourceFiles": {
+    "MacDown/Code/Extension/hoedown_html_patch.c": "fd8a4612729ae01eee3053b4b911ff0ea7303be9922bc2929d0da772a014463e",
+    "MacDownCore/MPQuickLookRenderer.m": "7c14e16770e5db74a81ae65dd069203f1bbdab5fbe98590467c43a4d558aa709",
+    "MacDownQuickLook/PreviewViewController.m": "6fad5f1905f4566f9a6e77c6b4436fcb815669020f8490b14d60f5c02765f76d"
+  }
 }

@@ -36,14 +36,14 @@
     },
     {
       "path": "MacDown/Code/Document/MPDocument.m",
-      "sha256": "a6623063fc819f9c81fbadc9a6f753dc13f387ff055f6b2fd525fcbd260d4939",
+      "sha256": "546d434a262c3d180829842e888ae4dc631808fc192f54bfebf73b838d08b69e",
       "read": true,
       "analyzed": true,
       "validated": true,
-      "evidence": "preuves/campagne02-root.md",
+      "evidence": "preuves/campagne02-root.md ; preuves/A2-D02.md ; preuves/campagne02-pdf-native.json",
       "open_findings": [],
       "pending_gates": [],
-      "validation_decision": "Lecture intégrale de toutes méthodes/JS ; seconde passe contrats fichiers/observers/render/export/print/DOM/scope. 1431 XCTest (lifecycle/export/selection/watchers), 4 XCUITest, régressions indentation et PDF natif courant ; aucun finding confirmé ouvert du document."
+      "validation_decision": "Décision manuelle finale après relecture intégrale5392lignes, contrats et seconde passe : A2-D02 corrigé f5870f5 ;49natifs ciblés +1436suite complète +4UI verts ; PDF natif final compile ses deux constantes JS et injector réels, write/reopenURL/destination/page/point/RGBAavantmutation/DOM-CSSOMrestore réussis ; DebugReleaseuniversels source finale verts. Aucune hypothèse déterminante restante dans les contrats locaux explicités."
     },
     {
       "path": "MacDown/Code/Extension/DOMNode+Text.h",

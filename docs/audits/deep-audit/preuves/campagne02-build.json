@@ -98,12 +98,12 @@
     {
       "path": ".github/workflows/test.yml",
       "sha256_before": "1db3bfbcba1fdda2794c019b14b60c3d7a503844494b47c804a2ded1cbe0af86",
-      "sha256_after": "f30069c70b4da4126b2be8c2f239be51c64ff33e6276531b824e496cb4a69ec6",
+      "sha256_after": "c596922cc088cb22df8c6b534f21c48dccdc83f4f8c303050d9b1fcc4250f77f",
       "read": true,
       "analyzed": true,
       "validated": true,
       "decision": "Décision manuelle finale : lecture intégrale identifiée, analyse de ses fonctions/branches/entrées et consommateurs achevée ; défauts applicables corrigés et contrats vérifiés. Validation limitée à audit code/configuration et contrôles locaux pertinents, distincte de distribution signée externe.",
-      "evidence": "Versionfinal109lignes entièrement relue : sixgates ajoutées root après commandqueue (codeaccessory/toc/quicklook/indent/editorgeometry/plural) ; timeout30job/5standalone/8XCTest/120host, diagnosticsfailure/logartifact ; graphbranches read-only. Logs locaux gates et1431unit/4UI pass, hostedmatrix non revendiquée.",
+      "evidence": "Versionfinal109lignes entièrement relue : sixgates ajoutées root après commandqueue (codeaccessory/toc/quicklook/indent/editorgeometry/plural) ; timeout30job/5standalone/8XCTest/120host, diagnosticsfailure/logartifact ; graphbranches read-only. Logs locaux gates et1431unit/4UI pass, hostedmatrix non revendiquée. Relecture intégrale finale100lignes après ajout du runner print_colors_tests.py R04 ; pas de modification des permissions/matrice/watchdog/diagnostics/upload. Décision statique maintenue après lecture manuelle, sans certifier les nouveaux scénarios natifs MPDocument avant leurs runs root.",
       "sha256_previous_read": "8736c65ee2b6b9ccaccfa696cf312b8f0d8072a752f2444389becd682d4fcf07"
     },
     {
