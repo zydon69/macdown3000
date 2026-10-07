@@ -706,8 +706,8 @@ static NSString * const kMPBlockquoteLinePattern = @"^((?:\\> ?)+).*$";
     NSString *toProcess = [content substringWithRange:lineRange];
     NSArray *lines = [toProcess componentsSeparatedByString:@"\n"];
     NSUInteger lineCount = lines.count;
-    __block NSInteger firstShift = 0;
-    __block NSInteger totalShift = 0;
+    NSMutableArray<NSValue *> *markerRanges = [NSMutableArray array];
+    NSMutableArray<NSNumber *> *insertedLengths = [NSMutableArray array];
     [lines enumerateObjectsUsingBlock:^(id obj, NSUInteger index, BOOL *stop) {
         NSString *line = obj;
         NSTextCheckingResult *result =
@@ -723,6 +723,8 @@ static NSString * const kMPBlockquoteLinePattern = @"^((?:\\> ?)+).*$";
             if (sentinel == line.length)
             {
                 [processedLines addObject:line];
+                [markerRanges addObject:[NSValue valueWithRange:NSMakeRange(0, 0)]];
+                [insertedLengths addObject:@0];
                 return;
             }
         }
@@ -738,16 +740,27 @@ static NSString * const kMPBlockquoteLinePattern = @"^((?:\\> ?)+).*$";
         }
         [processedLines addObject:[header stringByAppendingString:lineContent]];
 
-        NSInteger shift = headerLength - headerRange.length;
-        if (index == 0)
-            firstShift += shift;
-        totalShift += shift;
+        [markerRanges addObject:[NSValue valueWithRange:headerRange]];
+        [insertedLengths addObject:@(headerLength)];
     }];
     NSString *processed = [processedLines componentsJoinedByString:@"\n"];
     [self insertText:processed replacementRange:lineRange];
 
-    selectedRange.location += firstShift;
-    selectedRange.length += totalShift - firstShift;
+    NSUInteger originalStart = selectedRange.location;
+    NSUInteger originalEnd = NSMaxRange(selectedRange);
+    NSUInteger mappedStart = originalStart;
+    NSUInteger mappedEnd = originalEnd;
+    NSUInteger offset = lineRange.location;
+    for (NSUInteger i = 0; i < lines.count; i++) {
+        NSUInteger removed = markerRanges[i].rangeValue.length;
+        NSUInteger added = insertedLengths[i].unsignedIntegerValue;
+        if (originalStart >= offset)
+            mappedStart = mappedStart - MIN(removed, originalStart - offset) + added;
+        if (originalEnd >= offset)
+            mappedEnd = mappedEnd - MIN(removed, originalEnd - offset) + added;
+        offset += [lines[i] length] + 1;
+    }
+    selectedRange = NSMakeRange(mappedStart, mappedEnd - mappedStart);
     self.selectedRange = selectedRange;
 }
 

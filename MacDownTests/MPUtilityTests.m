@@ -759,4 +759,13 @@
     XCTAssertTrue(NSEqualRanges(view.selectedRange, NSMakeRange(0, view.string.length)));
 }
 
+- (void)testHeaderRemovalKeepsCursorInsideMarkerInBounds {
+    NSTextView *view = [[NSTextView alloc] initWithFrame:NSZeroRect];
+    view.string = @"### heading";
+    view.selectedRange = NSMakeRange(0, 0);
+    [view makeHeaderForSelectedLinesWithLevel:0];
+    XCTAssertEqualObjects(view.string, @"heading");
+    XCTAssertTrue(NSEqualRanges(view.selectedRange, NSMakeRange(0, 0)));
+}
+
 @end
