@@ -44,6 +44,8 @@ int main(int argc, const char *argv[])
         if (!CheckBundledPreferenceLabel(app, @"zh-Hant", @"MPHtmlPreferencesViewController",
             @"aWw-Wb-pBl", @"self.preferences.previewZoomRelativeToBaseFontSize",
             @"依編輯器字型大小縮放預覽")) return 1;
+        if (!CheckBundledPreferenceLabel(app, @"is", @"MPMarkdownPreferencesViewController",
+            @"k2n-VN-cKT", @"self.preferences.extensionSuperscript", @"Háletur")) return 1;
         NSDictionary *cases = @{
             @"da": @[@"Indstillinger", @"1 ord", @"2 ord", @"5 ord"],
             @"fi": @[@"Asetukset", @"1 sana", @"2 sanaa", @"5 sanaa"],
