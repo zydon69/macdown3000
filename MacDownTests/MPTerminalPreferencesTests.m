@@ -16,6 +16,8 @@
 - (BOOL)createSymlinkAtPath:(NSString *)linkPath toDestination:(NSString *)destinationPath error:(NSError **)error;
 - (BOOL)isPathInUserPATH:(NSString *)path;
 - (NSString *)userBinPath;
+- (BOOL)isOwnedShellUtilityAtURL:(NSURL *)url;
+- (BOOL)removeOwnedShellUtilityAtURL:(NSURL *)url error:(NSError **)error;
 @end
 
 @interface MPTerminalPreferencesTests : XCTestCase
@@ -349,12 +351,6 @@
 
 #pragma mark - Integration Tests
 
-- (void)testCompleteInstallWorkflow {
-    // This will test the full workflow once implementation is complete
-    // For now, just a placeholder
-    XCTAssertTrue(YES, @"Integration test placeholder");
-}
-
 - (void)testReinstallRepairsDanglingLink
 {
     XCTAssertTrue([self.controller ensureDirectoryExists:self.testBinDirectory error:nil]);
@@ -366,6 +362,51 @@
     XCTAssertNil(error);
     XCTAssertEqualObjects([self.fileManager destinationOfSymbolicLinkAtPath:self.testSymlinkPath error:nil],
                           self.testSourcePath);
+}
+
+- (void)testUninstallPreservesForeignCommandAndDirectory
+{
+    XCTAssertTrue([self.controller ensureDirectoryExists:self.testBinDirectory error:nil]);
+    for (NSNumber *directory in @[@NO, @YES])
+    {
+        if (directory.boolValue)
+            XCTAssertTrue([self.fileManager createDirectoryAtPath:self.testSymlinkPath
+                               withIntermediateDirectories:NO attributes:nil error:nil]);
+        else
+            XCTAssertTrue([@"foreign command" writeToFile:self.testSymlinkPath atomically:YES
+                                              encoding:NSUTF8StringEncoding error:nil]);
+        NSURL *url = [NSURL fileURLWithPath:self.testSymlinkPath];
+        NSError *error = nil;
+        XCTAssertFalse([self.controller isOwnedShellUtilityAtURL:url]);
+        XCTAssertFalse([self.controller removeOwnedShellUtilityAtURL:url error:&error]);
+        XCTAssertNotNil(error);
+        XCTAssertTrue([self.fileManager fileExistsAtPath:self.testSymlinkPath]);
+        XCTAssertTrue([self.fileManager removeItemAtPath:self.testSymlinkPath error:nil]);
+    }
+}
+
+- (void)testUninstallPreservesForeignSymlinkAndTarget
+{
+    XCTAssertTrue([self.controller ensureDirectoryExists:self.testBinDirectory error:nil]);
+    XCTAssertTrue([self.fileManager createSymbolicLinkAtPath:self.testSymlinkPath
+                                   withDestinationPath:self.testSourcePath error:nil]);
+    NSURL *url = [NSURL fileURLWithPath:self.testSymlinkPath];
+    XCTAssertFalse([self.controller removeOwnedShellUtilityAtURL:url error:nil]);
+    XCTAssertNotNil([self.fileManager destinationOfSymbolicLinkAtPath:self.testSymlinkPath error:nil]);
+    XCTAssertTrue([self.fileManager fileExistsAtPath:self.testSourcePath]);
+}
+
+- (void)testUninstallOwnedLinkPreservesBundledUtility
+{
+    XCTAssertTrue([self.controller ensureDirectoryExists:self.testBinDirectory error:nil]);
+    NSString *target = [[NSBundle mainBundle].sharedSupportURL
+                       URLByAppendingPathComponent:@"bin/macdown"].path;
+    XCTAssertTrue([self.fileManager createSymbolicLinkAtPath:self.testSymlinkPath
+                                   withDestinationPath:target error:nil]);
+    NSURL *url = [NSURL fileURLWithPath:self.testSymlinkPath];
+    XCTAssertTrue([self.controller isOwnedShellUtilityAtURL:url]);
+    XCTAssertTrue([self.controller removeOwnedShellUtilityAtURL:url error:nil]);
+    XCTAssertNil([self.fileManager destinationOfSymbolicLinkAtPath:self.testSymlinkPath error:nil]);
 }
 
 @end
