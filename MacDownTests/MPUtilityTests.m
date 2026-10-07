@@ -8,6 +8,7 @@
 
 #import <XCTest/XCTest.h>
 #import "MPUtilities.h"
+#import "NSTextView+Autocomplete.h"
 #import "NSDocumentController+Document.h"
 #import "FileURLInlining.h"
 #import "NSString+Lookup.h"
@@ -738,6 +739,24 @@
     XCTAssertNil(MPWriteDataToUniqueTemporaryFile(first, @"../document.md", NULL));
     [[NSFileManager defaultManager] removeItemAtPath:a.stringByDeletingLastPathComponent error:NULL];
     [[NSFileManager defaultManager] removeItemAtPath:b.stringByDeletingLastPathComponent error:NULL];
+}
+
+- (void)testUnindentPreservesCursorInsideRemovedIndent {
+    NSTextView *view = [[NSTextView alloc] initWithFrame:NSZeroRect];
+    view.string = @"    content";
+    view.selectedRange = NSMakeRange(0, 0);
+    [view unindentSelectedLines];
+    XCTAssertEqualObjects(view.string, @"content");
+    XCTAssertTrue(NSEqualRanges(view.selectedRange, NSMakeRange(0, 0)));
+}
+
+- (void)testUnindentRemovesWhitespaceOnlyLineAndPreservesSelection {
+    NSTextView *view = [[NSTextView alloc] initWithFrame:NSZeroRect];
+    view.string = @"    \n    text";
+    view.selectedRange = NSMakeRange(0, view.string.length);
+    [view unindentSelectedLines];
+    XCTAssertEqualObjects(view.string, @"\ntext");
+    XCTAssertTrue(NSEqualRanges(view.selectedRange, NSMakeRange(0, view.string.length)));
 }
 
 @end

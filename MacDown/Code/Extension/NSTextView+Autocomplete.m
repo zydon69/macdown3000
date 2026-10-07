@@ -473,7 +473,7 @@ static NSString * const kMPBlockquoteLinePattern = @"^((?:\\> ?)+).*$";
         if (index == 0)
             firstShift += shift;
         totalShift += shift;
-        if (shift && shift < lineLength)
+        if (shift)
             line = [line substringFromIndex:shift];
         [modLines addObject:line];
     }];
@@ -484,8 +484,21 @@ static NSString * const kMPBlockquoteLinePattern = @"^((?:\\> ?)+).*$";
 
     // Modify the selection range so that the same text (minus removed spaces)
     // are selected.
-    selectedRange.location -= firstShift;
-    selectedRange.length -= totalShift - firstShift;
+    NSUInteger originalEnd = NSMaxRange(selectedRange);
+    NSUInteger removedBeforeStart = MIN(firstShift, selectedRange.location - lineRange.location);
+    NSUInteger removedBeforeEnd = 0;
+    NSUInteger originalOffset = lineRange.location;
+    for (NSUInteger i = 0; i < lines.count; i++)
+    {
+        NSString *originalLine = lines[i];
+        NSString *modifiedLine = modLines[i];
+        NSUInteger removed = originalLine.length - modifiedLine.length;
+        if (originalEnd > originalOffset)
+            removedBeforeEnd += MIN(removed, originalEnd - originalOffset);
+        originalOffset += originalLine.length + 1;
+    }
+    selectedRange.location -= removedBeforeStart;
+    selectedRange.length = originalEnd - removedBeforeEnd - selectedRange.location;
     self.selectedRange = selectedRange;
 }
 
