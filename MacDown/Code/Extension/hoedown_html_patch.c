@@ -466,7 +466,12 @@ static int is_whitespace_entity(const hoedown_buffer *content, size_t amp,
             else if (is_hex && c >= 'a' && c <= 'f') digit = c - 'a' + 10;
             else if (is_hex && c >= 'A' && c <= 'F') digit = c - 'A' + 10;
             else return 0;
-            value = value * (is_hex ? 16 : 10) + (uint32_t)digit;
+            uint32_t base = is_hex ? 16 : 10;
+            // Invalid oversized references must remain visible content; wrapping
+            // to a whitespace codepoint would discard the whole header row.
+            if (value > (UINT32_MAX - (uint32_t)digit) / base)
+                return 0;
+            value = value * base + (uint32_t)digit;
         }
         return value == 0x00A0 || value == 0x2002 || value == 0x2003 ||
                value == 0x2009;

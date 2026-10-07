@@ -897,6 +897,19 @@
     }
 }
 
+- (void)testOversizedNumericEntitiesDoNotDiscardTableHeader
+{
+    // These overflow uint32_t to NBSP/ENSP. HTML renders invalid references
+    // visibly; they must not make the table header count as empty.
+    for (NSString *entity in @[@"&#4294967456;", @"&#x100002002;"]) {
+        NSString *markdown = [NSString stringWithFormat:@"| %@ |\n|---|\n| body |", entity];
+        NSString *html = [self.renderer renderMarkdown:markdown];
+        XCTAssertTrue([html containsString:@"<thead>"], @"%@", html);
+        XCTAssertTrue([html containsString:entity], @"%@", html);
+        XCTAssertTrue([html containsString:@"<td>body</td>"], @"%@", html);
+    }
+}
+
 @end
 
 #else
@@ -912,6 +925,7 @@
     NSLog(@"Quick Look tests are disabled. To enable, add ENABLE_QUICKLOOK_TESTS=1 to preprocessor macros.");
     NSLog(@"See plans/quick-look-xcode-setup.md for setup instructions.");
 }
+
 
 @end
 
