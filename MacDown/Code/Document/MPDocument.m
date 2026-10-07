@@ -356,6 +356,7 @@ typedef NS_ENUM(NSInteger, MPReferenceKind) {
 @property NSUInteger saveGeneration;
 @property NSUInteger previewRenderGeneration;
 @property BOOL awaitingRequestedRender;
+@property (copy) NSString *currentHeadContent;
 @property (strong) NSURL *currentBaseUrl;
 @property (copy) NSString *currentStyleName;
 @property (copy) NSString *currentHighlightingThemeName;
@@ -2171,6 +2172,13 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     // If either changed, we must do a full reload to update <head> with new CSS links.
     NSString *newStyleName = self.preferences.htmlStyleName;
     NSString *newHighlightingTheme = self.preferences.htmlHighlightingThemeName;
+    NSRange headEnd = [html rangeOfString:@"</head>"];
+    NSString *newHead = headEnd.location == NSNotFound ? nil :
+        [html substringToIndex:NSMaxRange(headEnd)];
+    NSString *headForComparison = [newHead stringByReplacingOccurrencesOfString:
+        [NSString stringWithFormat:@"<meta name=\"macdown-checkbox-token\" content=\"%@\">", renderer.checkboxBridgeToken]
+        withString:@"<meta name=\"macdown-checkbox-token\" content=\"\">"];
+    BOOL scriptsChanged = !MPAreNilableStringsEqual(self.currentHeadContent, headForComparison);
     BOOL stylesChanged = !MPAreNilableStringsEqual(self.currentStyleName, newStyleName) ||
                          !MPAreNilableStringsEqual(self.currentHighlightingThemeName, newHighlightingTheme);
 
@@ -2179,7 +2187,8 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     // the async typesetting correctly. Scroll is restored after typesetting completes.
     // Skip DOM replacement if styles changed, since <head> CSS links need updating.
     // Related to issue #325.
-    if (self.isPreviewReady && [self.currentBaseUrl isEqualTo:baseUrl] && !stylesChanged)
+    if (self.isPreviewReady && [self.currentBaseUrl isEqualTo:baseUrl] && !stylesChanged && !scriptsChanged
+        && !self.preferences.htmlMermaid && !self.preferences.htmlGraphviz)
     {
         DOMDocument *doc = self.preview.mainFrame.DOMDocument;
         DOMNodeList *bodyNodes = [doc getElementsByTagName:@"body"];
@@ -2309,6 +2318,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     // the preview could briefly render at 100% before our preference
     // takes effect.
     [self applyPreviewZoom];
+    self.currentHeadContent = headForComparison;
     self.currentBaseUrl = baseUrl;
     self.currentStyleName = newStyleName;
     self.currentHighlightingThemeName = newHighlightingTheme;
@@ -3299,6 +3309,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     // path instead of body-only DOM replacement.
     self.currentStyleName = nil;
     self.currentHighlightingThemeName = nil;
+    self.currentHeadContent = nil;
 }
 
 /**
