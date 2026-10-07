@@ -49,68 +49,152 @@ static NSString * const kMPDefaultAutosaveName = @"Untitled";
 // commonly write a file in several chunks, and each write arrives separately.
 static const NSTimeInterval kMPExternalChangeCoalesceInterval = 0.25;
 
-// Issue #504: Reads the anchor-link model from the rendered preview DOM for
-// PDF export post-processing. An IIFE evaluated via the same
-// evaluateScript: bridge already proven by -updateHeaderLocations
-// (Issue #436, see :2908 nearby). Enumerates internal fragment links
-// (`a[href^="#"]`) and headings with an id (`h1[id]`..`h6[id]`) in document
-// order through a visible-body traversal, collapsing whitespace and
-// skipping anything with an empty fragment or empty visible text. Returns a
-// JS object (read back via JSValue subscripting — never a JSON string):
-// Each entry includes its zero-based occurrenceIndex and occurrenceCount
-// among all visible body text matches, including ordinary paragraphs.
-static NSString * const kMPAnchorModelJS = @"(function() {\n"
-    "  function normalize(text) { return text.replace(/\\s+/g, ' ').trim(); }\n"
-    "  var raw = '', entries = [];\n"
-    "  function walk(node) {\n"
-    "    if (node.nodeType === 3) { var visibility = window.getComputedStyle(node.parentNode).visibility; if (visibility !== 'hidden' && visibility !== 'collapse') raw += node.nodeValue || ''; return; }\n"
-    "    if (node.nodeType !== 1) return;\n"
-    "    var tag = node.tagName.toLowerCase();\n"
-    "    if (/^(script|style|noscript)$/.test(tag)) return;\n"
-    "    var style = window.getComputedStyle(node);\n"
-    "    if (style.display === 'none') return;\n"
-    "    var block = !/^(inline|inline-block|contents)$/.test(style.display);\n"
-    "    if (block || tag === 'br') raw += '\\n';\n"
-    "    var start = raw.length;\n"
-    "    for (var child = node.firstChild; child; child = child.nextSibling) walk(child);\n"
-    "    var text = normalize(raw.slice(start));\n"
-    "    if (text && style.visibility !== 'hidden' && style.visibility !== 'collapse') {\n"
-    "      if (tag === 'a') {\n"
-    "        var href = node.getAttribute('href') || '';\n"
-    "        if (href.charAt(0) === '#' && href.length > 1) {\n"
-    "          var slug = href.slice(1);\n"
-    "          try { slug = decodeURIComponent(slug); } catch (e) {}\n"
-    "          entries.push({linkText:text, targetSlug:slug, start:start});\n"
+// CSSOM changes do not appear in outerHTML; include stylesheet rules in the
+// print snapshot so asynchronous page scripts cannot silently change a pass.
+static NSString * const kMPPDFSnapshotJS = @"(function(){var sheets=[];for(var i=0;i<document.styleSheets.length;i++){var sheet=document.styleSheets[i];try{sheets.push(Array.prototype.map.call(sheet.cssRules,function(r){return r.cssText}).join('\\n'));}catch(e){sheets.push(null);}}return JSON.stringify([document.documentElement.outerHTML,sheets]);})()";
+
+static NSString * const kMPPreparePDFAnchorsJS = @"(function(args) {\n"
+    "  var session = {links:[], headings:[], attributes:[], markers:[], rules:[], generated:[]};\n"
+    "  function restore() {\n"
+    "    for (var i = session.generated.length - 1; i >= 0; i--) {\n"
+    "      var item = session.generated[i], rules = item.parent.cssRules;\n"
+    "      for (var j = rules.length - 1; j >= 0; j--)\n"
+    "        if (rules[j] === item.rule) { item.parent.deleteRule(j); break; }\n"
+    "    }\n"
+    "    for (var i = session.rules.length - 1; i >= 0; i--)\n"
+    "      session.rules[i].rule.selectorText = session.rules[i].value;\n"
+    "    for (var i = session.markers.length - 1; i >= 0; i--) {\n"
+    "      var marker = session.markers[i];\n"
+    "      if (marker.parentNode) marker.parentNode.removeChild(marker);\n"
+    "    }\n"
+    "    for (var i = session.attributes.length - 1; i >= 0; i--) {\n"
+    "      var item = session.attributes[i];\n"
+    "      if (item.value === null) item.node.removeAttribute(item.name);\n"
+    "      else item.node.setAttribute(item.name, item.value);\n"
+    "    }\n"
+    "    delete window[args.key];\n"
+    "  }\n"
+    "  session.restore = restore;\n"
+    "  window[args.key] = session;\n"
+    "  try {\n"
+    "    var links = document.querySelectorAll('a[href^=\"#\"]');\n"
+    "    var headings = document.querySelectorAll('h1[id],h2[id],h3[id],h4[id],h5[id],h6[id]');\n"
+    "    var nodes = Array.prototype.slice.call(document.querySelectorAll('*'));\n"
+    "    var rules = [], affected = [], originalHrefs = [];\n"
+    "    var attribute = 'data-macdown-pdf-' + args.key.toLowerCase();\n"
+    "    function affect(node) {\n"
+    "      if (nodes.indexOf(node) !== -1 && affected.indexOf(node) === -1) affected.push(node);\n"
+    "    }\n"
+    "    // Split selector lists without splitting commas inside functions/attributes.\n"
+    "    function selectors(text) {\n"
+    "      var result = [], start = 0, depth = 0, quote = '';\n"
+    "      for (var i = 0; i < text.length; i++) {\n"
+    "        var c = text.charAt(i);\n"
+    "        if (c === '\\\\') { i++; continue; }\n"
+    "        if (quote) { if (c === quote) quote = ''; continue; }\n"
+    "        if (c === '\"' || c === \"'\") { quote = c; continue; }\n"
+    "        if (c === '(' || c === '[') depth++;\n"
+    "        else if (c === ')' || c === ']') depth--;\n"
+    "        else if (c === ',' && depth === 0) { result.push(text.slice(start, i).trim()); start = i + 1; }\n"
+    "      }\n"
+    "      result.push(text.slice(start).trim()); return result;\n"
+    "    }\n"
+    "    function collect(parent) {\n"
+    "      var list = parent.cssRules;\n"
+    "      for (var i = 0; i < list.length; i++) {\n"
+    "        var rule = list[i];\n"
+    "        if (rule.type === 1) {\n"
+    "          var parts = selectors(rule.selectorText), components = [];\n"
+    "          for (var j = 0; j < parts.length; j++) {\n"
+    "            var pseudo = parts[j].match(/(::?(?:before|after|first-letter|first-line|selection|marker))$/i);\n"
+    "            var tail = pseudo ? pseudo[0] : '', base = parts[j].slice(0, parts[j].length - tail.length);\n"
+    "            components.push({base:base, tail:tail, before:Array.prototype.slice.call(document.querySelectorAll(base))});\n"
+    "          }\n"
+    "          rules.push({rule:rule, parent:parent, components:components});\n"
+    "        } else if (rule.type === 3 && rule.styleSheet) collect(rule.styleSheet);\n"
+    "        else if (rule.cssRules) collect(rule);\n"
+    "      }\n"
+    "    }\n"
+    "    for (var i = 0; i < document.styleSheets.length; i++) collect(document.styleSheets[i]);\n"
+    "    for (var i = 0; i < links.length; i++) {\n"
+    "      var link = links[i], href = link.getAttribute('href'), target = href.slice(1);\n"
+    "      if (!target) continue;\n"
+    "      try { target = decodeURIComponent(target); } catch (e) {}\n"
+    "      originalHrefs.push({node:link, href:href}); affect(link);\n"
+    "      session.attributes.push({node:link, name:'href', value:href});\n"
+    "      link.setAttribute('href', args.prefix + 'link/' + session.links.length);\n"
+    "      session.links.push(target);\n"
+    "    }\n"
+    "    for (var i = 0; i < headings.length; i++) {\n"
+    "      var heading = headings[i];\n"
+    "      if (!heading.id) continue;\n"
+    "      var marker = document.createElement('a');\n"
+    "      marker.setAttribute('href', args.prefix + 'heading/' + session.headings.length);\n"
+    "      marker.setAttribute('aria-hidden', 'true');\n"
+    "      marker.setAttribute(attribute, 'marker');\n"
+    "      marker.setAttribute('style', 'all:initial!important;position:absolute!important;left:auto!important;top:auto!important;width:1px!important;height:1px!important;display:block!important;border:0!important;padding:0!important;margin:0!important;background:transparent!important;pointer-events:none!important;');\n"
+    "      session.markers.push(marker);\n"
+    "      heading.insertBefore(marker, heading.firstChild);\n"
+    "      session.headings.push(heading.id);\n"
+    "    }\n"
+    "    for (var i = 0; i < rules.length; i++) {\n"
+    "      var components = rules[i].components;\n"
+    "      for (var j = 0; j < components.length; j++) {\n"
+    "        var component = components[j], before = component.before;\n"
+    "        var after = Array.prototype.slice.call(document.querySelectorAll(component.base));\n"
+    "        for (var k = 0; k < before.length; k++) if (after.indexOf(before[k]) === -1) affect(before[k]);\n"
+    "        for (var k = 0; k < after.length; k++) if (before.indexOf(after[k]) === -1) affect(after[k]);\n"
+    "      }\n"
+    "    }\n"
+    "    for (var i = 0; i < affected.length; i++) {\n"
+    "      session.attributes.push({node:affected[i], name:attribute, value:affected[i].getAttribute(attribute)});\n"
+    "      affected[i].setAttribute(attribute, String(i));\n"
+    "    }\n"
+    "    // Copy original selector membership, not computed pixel styles. The :where\n"
+    "    // identity adds zero specificity; :is retains each original selector's\n"
+    "    // specificity. Raw %, calc(), var(), media scopes and cascade order survive.\n"
+    "    function preserveHref(text, href) {\n"
+    "      var result = '', quote = '';\n"
+    "      for (var i = 0; i < text.length; i++) {\n"
+    "        var c = text.charAt(i);\n"
+    "        if (c === '\\\\') { result += c + text.charAt(++i); continue; }\n"
+    "        if (quote) { result += c; if (c === quote) quote = ''; continue; }\n"
+    "        if (c === '\"' || c === \"'\") { quote = c; result += c; continue; }\n"
+    "        var match = text.slice(i).match(/^attr\\(\\s*href\\s*\\)/i);\n"
+    "        if (match) { result += JSON.stringify(href).replace(/\\\\n/g, '\\\\a ').replace(/\\\\r/g, '\\\\d '); i += match[0].length - 1; }\n"
+    "        else result += c;\n"
+    "      }\n"
+    "      return result;\n"
+    "    }\n"
+    "    for (var i = 0; i < rules.length; i++) {\n"
+    "      var item = rules[i], rule = item.rule, components = item.components, excluded = [];\n"
+    "      var originalStyle = rule.style.cssText;\n"
+    "      session.rules.push({rule:rule, value:rule.selectorText});\n"
+    "      for (var j = 0; j < components.length; j++) {\n"
+    "        var component = components[j];\n"
+    "        excluded.push(component.base + ':not(:where([' + attribute + ']))' + component.tail);\n"
+    "      }\n"
+    "      rule.selectorText = excluded.join(',');\n"
+    "      var index = 0;\n"
+    "      while (item.parent.cssRules[index] !== rule) index++;\n"
+    "      for (var j = 0; j < components.length; j++) {\n"
+    "        var component = components[j];\n"
+    "        for (var k = 0; k < component.before.length; k++) {\n"
+    "          var node = component.before[k], id = affected.indexOf(node);\n"
+    "          if (id === -1) continue;\n"
+    "          var identity = '[' + attribute + '=\"' + id + '\"]';\n"
+    "          var selector = ':is(' + component.base + ',:where(' + identity + ')):where(' + identity + ')' + component.tail;\n"
+    "          var style = originalStyle;\n"
+    "          for (var h = 0; h < originalHrefs.length; h++)\n"
+    "            if (originalHrefs[h].node === node) style = preserveHref(style, originalHrefs[h].href);\n"
+    "          item.parent.insertRule(selector + '{' + style + '}', ++index);\n"
+    "          session.generated.push({parent:item.parent, rule:item.parent.cssRules[index]});\n"
     "        }\n"
-    "      } else if (/^h[1-6]$/.test(tag) && node.id) {\n"
-    "        entries.push({headingText:text, slug:node.id, start:start});\n"
     "      }\n"
     "    }\n"
-    "    if (block) raw += '\\n';\n"
-    "  }\n"
-    "  if (!document.body) return {links:[], headings:[]};\n"
-    "  walk(document.body);\n"
-    "  var body = normalize(raw), links = [], headings = [];\n"
-    "  entries.sort(function(a,b) { return a.start - b.start; });\n"
-    "  for (var i = 0; i < entries.length; i++) {\n"
-    "    var entry = entries[i], text = entry.linkText || entry.headingText;\n"
-    "    var offset = normalize(raw.slice(0, entry.start)).length;\n"
-    "    var positions = [], pos = body.indexOf(text);\n"
-    "    while (pos !== -1) { positions.push(pos); pos = body.indexOf(text, pos + text.length); }\n"
-    "    // A match crossing the element boundary is ambiguous: do not annotate it.\n"
-    "    var index = -1;\n"
-    "    for (var j = 0; j < positions.length; j++) {\n"
-    "      if (positions[j] === offset || (positions[j] === offset + 1 && body.charAt(offset) === ' ')) {\n"
-    "        index = j; break;\n"
-    "      }\n"
-    "    }\n"
-    "    if (index < 0) continue;\n"
-    "    entry.occurrenceIndex = index; entry.occurrenceCount = positions.length;\n"
-    "    delete entry.start;\n"
-    "    (entry.linkText ? links : headings).push(entry);\n"
-    "  }\n"
-    "  return {links:links, headings:headings};\n"
-    "})();\n";
+    "    return {links:session.links, headings:session.headings};\n"
+    "  } catch (error) { restore(); throw error; }\n"
+    "})\n";
 
 static const CGFloat kMPMinZoom = 0.5;
 static const CGFloat kMPMaxZoom = 3.0;
@@ -350,6 +434,18 @@ typedef NS_ENUM(NSInteger, MPReferenceKind) {
 // always cleared once the callback fires.
 @property (strong) NSURL *pdfExportURL;
 @property BOOL pdfExportPending;
+@property (strong) NSURL *pdfExportTemporaryURL;
+@property (strong) NSURL *pdfExportMetadataURL;
+@property (copy) NSPrintInfo *pdfExportPrintInfo;
+@property (strong) WebView *pdfExportOriginalPreview;
+@property (strong) JSContext *pdfExportOriginalContext;
+@property (copy) NSString *pdfExportDOMSnapshot;
+@property NSUInteger pdfExportGeneration;
+@property (copy) NSDictionary *pdfExportAnchorSession;
+@property (strong) JSContext *pdfExportJSContext;
+@property (strong) WebView *pdfExportPreview;
+@property (copy) NSString *pdfExportMediaStyle;
+@property (strong) NSError *pdfExportError;
 @property BOOL isPreviewReady;
 @property BOOL documentClosed;
 @property NSUInteger fileWatchGeneration;
@@ -481,8 +577,8 @@ typedef NS_ENUM(NSInteger, MPReferenceKind) {
 // Commit 8 (gap 9): MathJax generation counter accessor (used by tests via category)
 - (NSUInteger)mathJaxRenderGeneration;
 // Issue #504: PDF export post-processing (clickable internal anchor links).
-- (BOOL)readAnchorLinks:(NSArray<MPPDFAnchorLink *> **)outLinks
-               headings:(NSArray<MPPDFAnchorHeading *> **)outHeadings;
+- (BOOL)preparePDFAnchorSession;
+- (void)restorePDFAnchorSession;
 - (void)postProcessExportedPDFAtURL:(NSURL *)url;
 
 @end
@@ -1274,8 +1370,10 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     self.documentClosed = YES;
     [self stopFileWatching];
     [self.renderCompletionHandlers removeAllObjects];
-    self.pdfExportPending = NO;
-    self.pdfExportURL = nil;
+    if (!self.printing) {
+        self.pdfExportPending = NO;
+        self.pdfExportURL = nil;
+    }
     self.renderer.delegate = nil;
     self.renderer.dataSource = nil;
     self.preview.editingDelegate = nil;
@@ -1546,6 +1644,14 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     NSPrintInfo *info = [self.printInfo copy];
     [info.dictionary addEntriesFromDictionary:printSettings];
 
+    if (self.pdfExportURL) {
+        self.pdfExportPrintInfo = info;
+        self.pdfExportOriginalPreview = self.preview;
+        self.pdfExportOriginalContext = self.preview.mainFrame.javaScriptContext;
+        self.pdfExportGeneration = self.previewRenderGeneration;
+        self.pdfExportDOMSnapshot = [[self.pdfExportOriginalContext
+            evaluateScript:kMPPDFSnapshotJS] toString];
+    }
     WebFrameView *view = self.preview.mainFrame.frameView;
     NSPrintOperation *op = [view printOperationWithPrintInfo:info];
     return op;
@@ -1914,8 +2020,10 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     if (frame != sender.mainFrame || self.documentClosed || error.code == NSURLErrorCancelled) return;
     self.alreadyRenderingInWeb = NO;
     [self.renderCompletionHandlers removeAllObjects];
-    self.pdfExportPending = NO;
-    self.pdfExportURL = nil;
+    if (!self.printing) {
+        self.pdfExportPending = NO;
+        self.pdfExportURL = nil;
+    }
     self.awaitingRequestedRender = NO;
     self.renderToWebPending = NO;
     NSWindow *window = sender.window;
@@ -2786,162 +2894,116 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
         // knows this print completion is a save-to-PDF export and which file
         // to post-process with clickable internal anchor links.
         self.pdfExportURL = panel.URL;
+        self.pdfExportError = nil;
+        self.pdfExportTemporaryURL = [panel.URL.URLByDeletingLastPathComponent
+            URLByAppendingPathComponent:[NSString stringWithFormat:@".macdown-print-%@.pdf", NSUUID.UUID.UUIDString]];
 
         // Issue #16: printDocumentWithSettings: already handles render deferral
         NSDictionary *settings = @{
             NSPrintJobDisposition: NSPrintSaveJob,
-            NSPrintJobSavingURL: panel.URL,
+            NSPrintJobSavingURL: self.pdfExportTemporaryURL,
         };
         [self printDocumentWithSettings:settings showPrintPanel:NO delegate:nil
                        didPrintSelector:NULL contextInfo:NULL];
     }];
 }
 
-// Issue #504: Read the anchor-link model (links needing destinations, and the
-// headings that can serve as destinations) from the live preview DOM, using
-// the same evaluateScript: bridge already proven by -updateHeaderLocations
-// (Issue #436) — not -stringByEvaluatingJavaScriptFromString:, which swallows
-// JS errors. Main-thread only; never dispatches. Returns NO (leaving the
-// exported PDF un-annotated) on any failure to read or parse the model.
-- (BOOL)readAnchorLinks:(NSArray<MPPDFAnchorLink *> **)outLinks
-               headings:(NSArray<MPPDFAnchorHeading *> **)outHeadings
+// Native print annotations transport identities through CSS layout and pagination.
+- (BOOL)preparePDFAnchorSession
 {
-    JSContext *ctx = self.preview.mainFrame.javaScriptContext;
-    if (!ctx)
+    if (self.pdfExportAnchorSession) return YES;
+    self.pdfExportPreview = self.preview;
+    self.pdfExportMediaStyle = self.preview.mediaStyle;
+    self.preview.mediaStyle = @"print";
+    self.pdfExportJSContext = self.preview.mainFrame.javaScriptContext;
+    NSString *identifier = [NSUUID.UUID.UUIDString stringByReplacingOccurrencesOfString:@"-" withString:@""];
+    NSDictionary *args = @{@"key": [@"__macdownPDF" stringByAppendingString:identifier],
+        @"prefix": [NSString stringWithFormat:@"https://macdown-pdf.invalid/%@/", identifier]};
+    NSData *JSON = [NSJSONSerialization dataWithJSONObject:args options:0 error:NULL];
+    NSString *argument = [[NSString alloc] initWithData:JSON encoding:NSUTF8StringEncoding];
+    JSContext *context = self.pdfExportJSContext;
+    context.exception = nil;
+    JSValue *result = [context evaluateScript:[NSString stringWithFormat:@"%@(%@)", kMPPreparePDFAnchorsJS, argument]];
+    NSArray *links = [result[@"links"] toArray], *headings = [result[@"headings"] toArray];
+    if (!context || context.exception || ![links isKindOfClass:NSArray.class] || ![headings isKindOfClass:NSArray.class]) {
+        self.pdfExportError = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileWriteUnknownError
+            userInfo:@{NSLocalizedDescriptionKey: NSLocalizedString(@"Could not prepare PDF links.", nil)}];
+        [self restorePDFAnchorSession];
         return NO;
-
-    JSValue *result = [ctx evaluateScript:kMPAnchorModelJS];
-    if (![result isObject])
-        return NO;
-
-    NSArray *linkDicts = [result[@"links"] toArray];
-    NSArray *headDicts = [result[@"headings"] toArray];
-    if (![linkDicts isKindOfClass:[NSArray class]] ||
-        ![headDicts isKindOfClass:[NSArray class]])
-        return NO;
-
-    NSMutableArray<MPPDFAnchorLink *> *links = [NSMutableArray array];
-    for (NSDictionary *dict in linkDicts)
-    {
-        if (![dict isKindOfClass:[NSDictionary class]])
-            continue;
-        NSString *linkText = dict[@"linkText"];
-        NSString *targetSlug = dict[@"targetSlug"];
-        if (![linkText isKindOfClass:[NSString class]] || linkText.length == 0)
-            continue;
-        if (![targetSlug isKindOfClass:[NSString class]] || targetSlug.length == 0)
-            continue;
-        NSNumber *index = dict[@"occurrenceIndex"];
-        NSNumber *count = dict[@"occurrenceCount"];
-        if (![index isKindOfClass:[NSNumber class]] || ![count isKindOfClass:[NSNumber class]]
-            || index.doubleValue < 0 || count.doubleValue < 1
-            || index.doubleValue != index.unsignedIntegerValue
-            || count.doubleValue != count.unsignedIntegerValue
-            || index.unsignedIntegerValue >= count.unsignedIntegerValue)
-            continue;
-        [links addObject:[MPPDFAnchorLink linkWithText:linkText slug:targetSlug
-                                     occurrenceIndex:index.unsignedIntegerValue
-                                     occurrenceCount:count.unsignedIntegerValue]];
     }
-
-    NSMutableArray<MPPDFAnchorHeading *> *headings = [NSMutableArray array];
-    for (NSDictionary *dict in headDicts)
-    {
-        if (![dict isKindOfClass:[NSDictionary class]])
-            continue;
-        NSString *slug = dict[@"slug"];
-        NSString *headingText = dict[@"headingText"];
-        if (![slug isKindOfClass:[NSString class]] || slug.length == 0)
-            continue;
-        if (![headingText isKindOfClass:[NSString class]] || headingText.length == 0)
-            continue;
-        NSNumber *index = dict[@"occurrenceIndex"];
-        NSNumber *count = dict[@"occurrenceCount"];
-        if (![index isKindOfClass:[NSNumber class]] || ![count isKindOfClass:[NSNumber class]]
-            || index.doubleValue < 0 || count.doubleValue < 1
-            || index.doubleValue != index.unsignedIntegerValue
-            || count.doubleValue != count.unsignedIntegerValue
-            || index.unsignedIntegerValue >= count.unsignedIntegerValue)
-            continue;
-        [headings addObject:[MPPDFAnchorHeading headingWithSlug:slug text:headingText
-                                               occurrenceIndex:index.unsignedIntegerValue
-                                               occurrenceCount:count.unsignedIntegerValue]];
-    }
-
-    if (outLinks)
-        *outLinks = links;
-    if (outHeadings)
-        *outHeadings = headings;
+    self.pdfExportAnchorSession = @{@"key": args[@"key"], @"prefix": args[@"prefix"],
+        @"links": links, @"headings": headings};
     return YES;
 }
 
-// Issue #504: Best-effort post-processing of a just-exported PDF: read the
-// anchor-link model from the (still-loaded) preview DOM and inject clickable
-// internal-link annotations into the written file. The export has already
-// succeeded by the time this runs, so any failure here is silently logged —
-// never surfaced to the user — and leaves the exported PDF exactly as
-// written. Write-back is atomic: annotate a sibling temp copy, then swap it
-// in, so a crash or error mid-write can never corrupt the exported file.
+- (void)restorePDFAnchorSession
+{
+    NSString *key = self.pdfExportAnchorSession[@"key"];
+    if (key.length && self.pdfExportJSContext) {
+        NSData *JSON = [NSJSONSerialization dataWithJSONObject:@[key] options:0 error:NULL];
+        NSString *argument = [[NSString alloc] initWithData:JSON encoding:NSUTF8StringEncoding];
+        [self.pdfExportJSContext evaluateScript:[NSString stringWithFormat:
+            @"(function(a){var s=window[a[0]];if(s)s.restore();})(%@)", argument]];
+    }
+    if (self.pdfExportPreview) self.pdfExportPreview.mediaStyle = self.pdfExportMediaStyle;
+    self.pdfExportAnchorSession = nil;
+    self.pdfExportJSContext = nil;
+    self.pdfExportPreview = nil;
+    self.pdfExportMediaStyle = nil;
+}
+
+// The original carries the exact printed appearance. A second private print
+// supplies native annotation identities, preserving CSS layout through CSSOM.
+- (BOOL)PDFExportSnapshotIsCurrent
+{
+    return !self.documentClosed && self.preview == self.pdfExportOriginalPreview
+        && self.preview.mainFrame.javaScriptContext == self.pdfExportOriginalContext
+        && self.previewRenderGeneration == self.pdfExportGeneration
+        && [self.pdfExportDOMSnapshot isEqualToString:[[self.pdfExportOriginalContext
+            evaluateScript:kMPPDFSnapshotJS] toString]];
+}
+
 - (void)postProcessExportedPDFAtURL:(NSURL *)url
 {
+    PDFDocument *original = [[PDFDocument alloc] initWithURL:self.pdfExportTemporaryURL];
+    if (!original || ![self PDFExportSnapshotIsCurrent]) {
+        self.pdfExportError = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileWriteUnknownError
+            userInfo:@{NSLocalizedDescriptionKey: NSLocalizedString(@"The preview changed during PDF export.", nil)}];
+        return;
+    }
+    self.pdfExportMetadataURL = [self.pdfExportTemporaryURL.URLByDeletingLastPathComponent
+        URLByAppendingPathComponent:[NSString stringWithFormat:@".macdown-anchors-%@.pdf", NSUUID.UUID.UUIDString]];
+    NSDictionary *session = nil;
+    BOOL printed = NO;
+    BOOL metadataUnchanged = NO;
     @try {
-        NSArray<MPPDFAnchorLink *> *links = nil;
-        NSArray<MPPDFAnchorHeading *> *headings = nil;
-        if (![self readAnchorLinks:&links headings:&headings])
-            return;
-        if (links.count == 0)
-            return;
-
-        PDFDocument *pdf = [[PDFDocument alloc] initWithURL:url];
-        if (!pdf)
-        {
-            // Issue #504: Reopening the just-exported PDF failed; leave the
-            // valid, un-annotated export in place.
-            NSLog(@"[Issue #504] PDF anchor post-processing failed: "
-                  @"could not reopen exported PDF at %@", url);
-            return;
-        }
-
-        NSUInteger added = [MPPDFAnchorInjector injectLinksIntoDocument:pdf
-                                                                    links:links
-                                                                 headings:headings];
-        if (added == 0)
-            return;
-
-        NSString *tmpName =
-            [[NSUUID UUID].UUIDString stringByAppendingPathExtension:@"pdf"];
-        NSURL *tmpURL = [url.URLByDeletingLastPathComponent
-                             URLByAppendingPathComponent:tmpName];
-        if (![pdf writeToURL:tmpURL])
-        {
-            // Issue #504: Failed to write the annotated copy; clean up any
-            // partial temp file and leave the original export untouched.
-            NSLog(@"[Issue #504] PDF anchor post-processing failed: "
-                  @"could not write annotated copy to %@", tmpURL);
-            [[NSFileManager defaultManager] removeItemAtURL:tmpURL error:NULL];
-            return;
-        }
-
-        NSError *replaceError = nil;
-        BOOL replaced = [[NSFileManager defaultManager] replaceItemAtURL:url
-                                                            withItemAtURL:tmpURL
-                                                           backupItemName:nil
-                                                                  options:0
-                                                         resultingItemURL:NULL
-                                                                    error:&replaceError];
-        if (!replaced)
-        {
-            // Issue #504: The atomic swap failed; the original export is
-            // untouched, but the temp copy is now an orphaned stray file.
-            NSLog(@"[Issue #504] PDF anchor post-processing failed: "
-                  @"could not replace %@ with annotated copy: %@",
-                  url, replaceError);
-            [[NSFileManager defaultManager] removeItemAtURL:tmpURL error:NULL];
-        }
+        if (![self preparePDFAnchorSession]) return;
+        session = self.pdfExportAnchorSession;
+        NSString *preparedSnapshot = [[self.pdfExportOriginalContext evaluateScript:kMPPDFSnapshotJS] toString];
+        NSPrintInfo *info = [self.pdfExportPrintInfo copy];
+        info.dictionary[NSPrintJobSavingURL] = self.pdfExportMetadataURL;
+        NSPrintOperation *operation = [self.preview.mainFrame.frameView printOperationWithPrintInfo:info];
+        operation.showsPrintPanel = NO;
+        operation.showsProgressPanel = NO;
+        printed = [operation runOperation];
+        metadataUnchanged = [preparedSnapshot isEqualToString:
+            [[self.pdfExportOriginalContext evaluateScript:kMPPDFSnapshotJS] toString]];
+    } @finally {
+        [self restorePDFAnchorSession];
     }
-    @catch (NSException *ex) {
-        NSLog(@"[Issue #504] PDF anchor post-processing failed: %@", ex);
+    PDFDocument *metadata = printed ? [[PDFDocument alloc] initWithURL:self.pdfExportMetadataURL] : nil;
+    if (!metadata || !metadataUnchanged || ![self PDFExportSnapshotIsCurrent]) {
+        self.pdfExportError = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileWriteUnknownError
+            userInfo:@{NSLocalizedDescriptionKey: NSLocalizedString(@"The preview changed during PDF export.", nil)}];
+        return;
     }
+    NSError *error = nil;
+    [MPPDFAnchorInjector resolveNativeLinksInDocument:original metadataDocument:metadata
+        markerPrefix:session[@"prefix"] linkTargets:session[@"links"] headingSlugs:session[@"headings"] error:&error];
+    if (error) { self.pdfExportError = error; return; }
+    NSData *data = original.dataRepresentation;
+    if (!data || ![data writeToURL:url options:NSDataWritingAtomic error:&error])
+        self.pdfExportError = error ?: [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileWriteUnknownError userInfo:nil];
 }
 
 - (IBAction)convertToH1:(id)sender
@@ -4832,15 +4894,11 @@ to link outside that scope.", \
 
 - (void)document:(NSDocument *)doc didPrint:(BOOL)ok context:(void *)context
 {
-    if ([doc respondsToSelector:@selector(setPrinting:)])
-        ((MPDocument *)doc).printing = NO;
-
     // Issue #504: If this print completion was a save-to-PDF export, post-
     // process the exported file to inject clickable internal anchor links.
     // Gate on the stash, NOT on `context`: a normal Cmd-P print also has nil
     // context, but never sets pdfExportURL, so it is correctly excluded here.
-    // Best-effort — annotation failures are never surfaced to the user, and
-    // the single-slot stash is always cleared once consumed.
+    // Both private prints must succeed before atomic publication.
     MPDocument *mpDoc = (MPDocument *)doc;
     if (mpDoc.pdfExportURL)
     {
@@ -4848,12 +4906,32 @@ to link outside that scope.", \
         @try {
             if (ok)
                 [mpDoc postProcessExportedPDFAtURL:exportURL];
+        } @catch (NSException *exception) {
+            mpDoc.pdfExportError = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileWriteUnknownError
+                userInfo:@{NSLocalizedDescriptionKey: exception.reason ?: @"PDF export failed."}];
         } @finally {
+            [mpDoc restorePDFAnchorSession];
+            if (mpDoc.pdfExportTemporaryURL)
+                [[NSFileManager defaultManager] removeItemAtURL:mpDoc.pdfExportTemporaryURL error:NULL];
+            if (mpDoc.pdfExportMetadataURL)
+                [[NSFileManager defaultManager] removeItemAtURL:mpDoc.pdfExportMetadataURL error:NULL];
+            mpDoc.pdfExportTemporaryURL = nil;
+            mpDoc.pdfExportMetadataURL = nil;
+            mpDoc.pdfExportPrintInfo = nil;
+            mpDoc.pdfExportOriginalPreview = nil;
+            mpDoc.pdfExportOriginalContext = nil;
+            mpDoc.pdfExportDOMSnapshot = nil;
             mpDoc.pdfExportURL = nil;
             mpDoc.pdfExportPending = NO;
         }
+        if (mpDoc.pdfExportError) {
+            ok = NO;
+            [mpDoc presentError:mpDoc.pdfExportError];
+            mpDoc.pdfExportError = nil;
+        }
     }
 
+    if ([doc respondsToSelector:@selector(setPrinting:)]) mpDoc.printing = NO;
     if (context)
     {
         NSInvocation *invocation = (__bridge_transfer NSInvocation *)context;
