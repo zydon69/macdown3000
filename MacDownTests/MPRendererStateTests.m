@@ -541,4 +541,22 @@
     XCTAssertFalse([self.renderer.currentHtml containsString:@"id=\"repeat-1\""]);
 }
 
+- (void)testFenceBoundariesPreserveCodeAndOutsideReferences
+{
+    self.delegate.extensions = HOEDOWN_EXT_FENCED_CODE;
+    NSArray<NSArray<NSString *> *> *cases = @[
+        @[@"> ```\n> code\n\n[id]: https://example.com\n\n[id]", @"<a href=\"https://example.com\">id</a>"],
+        @[@"```lang`\n[id]: https://example.com\n```", @"[id]: https://example.com</code>"],
+        @[@"~~~lang~~~\n\n[id]: https://example.com\n\n[id]", @"<a href=\"https://example.com\">id</a>"],
+        @[@"   ```\ncode\n```\n[id]: https://example.com", @"code\n```\n[id]: https://example.com</code>"],
+        @[@"> > ```\n> > code\n>\n> [id]: https://example.com\n>\n> [id]", @"<p>[id]: https://example.com</p>"],
+        @[@"`inline\n[a] [b]\n`", @"<code>inline\n[a] [b]\n</code>"],
+    ];
+    for (NSArray<NSString *> *testCase in cases) {
+        [self.renderer parseMarkdown:testCase[0]];
+        XCTAssertTrue([self.renderer.currentHtml containsString:testCase[1]], @"%@", testCase[0]);
+        XCTAssertFalse([self.renderer.currentHtml containsString:@"macdown-code-"], @"%@", testCase[0]);
+    }
+}
+
 @end

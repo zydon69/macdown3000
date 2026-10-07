@@ -85,6 +85,23 @@ NS_INLINE NSString *MPPreprocessProse(NSString *text)
     return MPReplaceMarkdownProse(text, shortcuts, @"[$1][]$2");
 }
 
+NS_INLINE NSUInteger MPMarkdownQuoteDepth(NSString *line, NSUInteger *contentStart)
+{
+    NSUInteger offset = 0, depth = 0;
+    while (offset < line.length) {
+        NSUInteger prefix = offset;
+        for (NSUInteger spaces = 0; spaces < 3 && offset < line.length && [line characterAtIndex:offset] == ' '; spaces++) offset++;
+        if (offset >= line.length || [line characterAtIndex:offset] != '>') {
+            offset = prefix;
+            break;
+        }
+        offset++; depth++;
+        if (offset < line.length && [line characterAtIndex:offset] == ' ') offset++;
+    }
+    if (contentStart) *contentStart = offset;
+    return depth;
+}
+
 // Hoedown extracts reference definitions before parsing fenced code. Protect
 // only those definitions with a per-parse marker, removed by the blockcode
 // callback before escaping. Unlike a zero-width character, this cannot alter
@@ -119,6 +136,9 @@ NS_INLINE NSDictionary<NSString *, NSString *> *MPPreprocessMarkdown(NSString *t
     NSMutableString *result = [NSMutableString string];
     NSMutableString *prose = [NSMutableString string];
     NSString *fence = nil;
+    NSUInteger fenceQuoteDepth = 0;
+    NSUInteger fenceIndent = 0;
+    BOOL fenceInList = NO;
     BOOL listContext = NO;
     NSRegularExpression *listPattern = [NSRegularExpression regularExpressionWithPattern:
         @"^[ \\t]*(?:>[ \\t]*)*(?:[-*+]|\\d+[.)])[ \\t]+" options:0 error:NULL];
@@ -126,6 +146,25 @@ NS_INLINE NSDictionary<NSString *, NSString *> *MPPreprocessMarkdown(NSString *t
     for (NSUInteger index = 0; index < lines.count; index++) {
         NSString *line = lines[index];
         BOOL newline = index + 1 < lines.count;
+        NSUInteger contentStart = 0;
+        NSUInteger quoteDepth = MPMarkdownQuoteDepth(line, &contentStart);
+        BOOL blank = ![[line substringFromIndex:contentStart]
+            stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet].length;
+        if (fence && blank && newline) {
+            NSString *next = lines[index + 1];
+            NSUInteger nextStart = 0;
+            NSUInteger nextDepth = MPMarkdownQuoteDepth(next, &nextStart);
+            BOOL nextBlank = ![[next substringFromIndex:nextStart]
+                stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet].length;
+            BOOL quoteEnded = fenceQuoteDepth && quoteDepth < fenceQuoteDepth && nextDepth < fenceQuoteDepth && !nextBlank;
+            BOOL listEnded = fenceInList && next.length && [next characterAtIndex:0] != ' ' && [next characterAtIndex:0] != '\t';
+            if (quoteEnded || listEnded) {
+                // Hoedown closes the enclosing container here even when its
+                // code fence was never explicitly closed.
+                fence = nil;
+                listContext = NO;
+            }
+        }
         NSTextCheckingResult *match = [fencePattern firstMatchInString:line options:0
             range:NSMakeRange(0, line.length)];
         NSString *candidate = match ? [line substringWithRange:[match rangeAtIndex:1]] : nil;
@@ -137,14 +176,21 @@ NS_INLINE NSDictionary<NSString *, NSString *> *MPPreprocessMarkdown(NSString *t
             [[line substringToIndex:[match rangeAtIndex:1].location] containsString:@">"] || listContext);
         if (!fence && !listLine && unindented && !candidate) listContext = NO;
         if (!fence && candidate && containerFence &&
-            (![candidate hasPrefix:@"`"] || ![suffix containsString:@"`"])) {
+            ![suffix containsString:[candidate substringToIndex:3]]) {
             [result appendString:MPPreprocessProse(prose)];
             if (prose.length && ![prose hasSuffix:@"\n\n"]) [result appendString:@"\n"];
             [prose setString:@""];
             fence = candidate;
+            fenceQuoteDepth = quoteDepth;
+            fenceInList = listContext && (listLine ||
+                ([match rangeAtIndex:1].location > 0 && !quoteDepth));
+            NSUInteger column = [match rangeAtIndex:1].location - contentStart;
+            fenceIndent = fenceInList ? (listLine ? 0 : (column > 4 ? column - 4 : 0)) : column;
             [result appendString:line];
         } else if (fence) {
-            if ([candidate isEqualToString:fence] &&
+            NSUInteger column = match ? [match rangeAtIndex:1].location - contentStart : NSNotFound;
+            NSUInteger indent = fenceInList && column != NSNotFound ? (column > 4 ? column - 4 : 0) : column;
+            if ([candidate isEqualToString:fence] && indent == fenceIndent &&
                 ![suffix stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet].length) {
                 fence = nil;
                 [result appendString:line];

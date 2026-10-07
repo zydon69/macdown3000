@@ -878,6 +878,25 @@
     XCTAssertTrue([html containsString:@"type=\"checkbox\" checked data-checkbox-index=\"1\" disabled"]);
 }
 
+- (void)testQuickLookFenceBoundariesMatchApplicationCodeAndReferenceRules
+{
+    NSArray<NSArray<NSString *> *> *cases = @[
+        @[@"> ```\n> code\n\n[id]: https://example.com\n\n[id]", @"<a href=\"https://example.com\">id</a>"],
+        @[@"```lang`\n[id]: https://example.com\n```", @"[id]: https://example.com</code>"],
+        @[@"~~~lang~~~\n\n[id]: https://example.com\n\n[id]", @"<a href=\"https://example.com\">id</a>"],
+        @[@"   ```\ncode\n```\n[id]: https://example.com", @"code\n```\n[id]: https://example.com</code>"],
+        // Quick Look enables autolinks: the URL becomes an <a>, while the
+        // outer quote's reference-looking text remains visible prose.
+        @[@"> > ```\n> > code\n>\n> [id]: https://example.com\n>\n> [id]", @"<p>[id]: "],
+        @[@"`inline\n[a] [b]\n`", @"<code>inline\n[a] [b]\n</code>"],
+    ];
+    for (NSArray<NSString *> *testCase in cases) {
+        NSString *html = [self.renderer renderMarkdown:testCase[0]];
+        XCTAssertTrue([html containsString:testCase[1]], @"%@", testCase[0]);
+        XCTAssertFalse([html containsString:@"macdown-code-"], @"%@", testCase[0]);
+    }
+}
+
 @end
 
 #else
