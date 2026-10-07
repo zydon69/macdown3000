@@ -47,7 +47,6 @@ Projet MacDown, Objective-C/C, AppKit/WebKit, JavaScript, Xcode/CocoaPods. Aucun
 | `.github/workflows/update-website.yml` | — | ☐ | ☐ | ☐ | à lire | — |
 | `.gitignore` | — | ☐ | ☐ | ☐ | à lire | — |
 | `.gitmodules` | — | ☐ | ☐ | ☐ | à lire | — |
-| `.markdownlint.json` | — | ☐ | ☐ | ☐ | à lire | — |
 | `Dependency/YAML-framework/YAMLSerialization.h` | — | ☐ | ☐ | ☐ | à lire | — |
 | `Dependency/YAML-framework/YAMLSerialization.m` | — | ☐ | ☐ | ☐ | à lire | — |
 | `Dependency/peg-markdown-highlight/HGMarkdownHighlighter.h` | — | ☐ | ☐ | ☐ | à lire | — |
@@ -84,40 +83,40 @@ Projet MacDown, Objective-C/C, AppKit/WebKit, JavaScript, Xcode/CocoaPods. Aucun
 | `MacDown 3000.xcworkspace/xcshareddata/WorkspaceSettings.xcsettings` | — | ☐ | ☐ | ☐ | à lire | — |
 | `MacDown/Code/Application/MPExportPanelAccessoryViewController.h` | — | ☐ | ☐ | ☐ | à lire | — |
 | `MacDown/Code/Application/MPExportPanelAccessoryViewController.m` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Application/MPMainController.h` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Application/MPMainController.m` | — | ☐ | ☐ | ☐ | à lire | — |
+| `MacDown/Code/Application/MPMainController.h` | `243032702a66` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Application/MPMainController.m` | `fee700c0ec78` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
 | `MacDown/Code/Application/MPToolbarController.h` | — | ☐ | ☐ | ☐ | à lire | — |
 | `MacDown/Code/Application/MPToolbarController.m` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Document/MPAsset.h` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Document/MPAsset.m` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Document/MPDocument.h` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Document/MPDocument.m` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Document/MPPDFAnchorInjector.h` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Document/MPPDFAnchorInjector.m` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Document/MPRenderer.h` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Document/MPRenderer.m` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Extension/DOMNode+Text.h` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Extension/DOMNode+Text.m` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Extension/NSColor+HTML.h` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Extension/NSColor+HTML.m` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Extension/NSDocumentController+Document.h` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Extension/NSDocumentController+Document.m` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Extension/NSJSONSerialization+File.h` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Extension/NSJSONSerialization+File.m` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Extension/NSObject+HTMLTabularize.h` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Extension/NSObject+HTMLTabularize.m` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Extension/NSPasteboard+Types.h` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Extension/NSPasteboard+Types.m` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Extension/NSString+Lookup.h` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Extension/NSString+Lookup.m` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Extension/NSTextView+Autocomplete.h` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Extension/NSTextView+Autocomplete.m` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Extension/NSUserDefaults+Suite.h` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Extension/NSUserDefaults+Suite.m` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Extension/WebView+WebViewPrivateHeaders.h` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Extension/hoedown_html_patch.c` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Extension/hoedown_html_patch.h` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/MacDown-Prefix.pch` | — | ☐ | ☐ | ☐ | à lire | — |
+| `MacDown/Code/Document/MPAsset.h` | `c1a03ae5c84d` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Code/Document/MPAsset.m` | `a4e260bd0ab2` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Code/Document/MPDocument.h` | `f70d0155da47` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Document/MPDocument.m` | `a6623063fc81` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Document/MPPDFAnchorInjector.h` | `7dbaa29df89e` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Code/Document/MPPDFAnchorInjector.m` | `902c57b2cb63` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Code/Document/MPRenderer.h` | `45e93c4fd1c0` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Code/Document/MPRenderer.m` | `a939696a43b8` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Code/Extension/DOMNode+Text.h` | `748eb6ded390` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Extension/DOMNode+Text.m` | `4005d622d14d` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Extension/NSColor+HTML.h` | `ed1b5feb51f0` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Extension/NSColor+HTML.m` | `c97b507bf33b` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Extension/NSDocumentController+Document.h` | `502d752bb8dc` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Extension/NSDocumentController+Document.m` | `4af8a68681d5` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Extension/NSJSONSerialization+File.h` | `93948eae8346` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Extension/NSJSONSerialization+File.m` | `2408f3ab942a` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Extension/NSObject+HTMLTabularize.h` | `1849ce0e2b22` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Extension/NSObject+HTMLTabularize.m` | `1d87c68ca646` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Extension/NSPasteboard+Types.h` | `6d27da2a53fa` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Extension/NSPasteboard+Types.m` | `d61025bbf8f5` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Extension/NSString+Lookup.h` | `8fcb13267c19` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Extension/NSString+Lookup.m` | `9e18ee26f0cf` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Extension/NSTextView+Autocomplete.h` | `ea69f917e5a7` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Extension/NSTextView+Autocomplete.m` | `948afe284ee3` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Extension/NSUserDefaults+Suite.h` | `cac0f676b540` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Extension/NSUserDefaults+Suite.m` | `e0b928949e2a` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Extension/WebView+WebViewPrivateHeaders.h` | `f537f69c38a0` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Extension/hoedown_html_patch.c` | `40ac164f2e75` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Code/Extension/hoedown_html_patch.h` | `763870f5ef85` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Code/MacDown-Prefix.pch` | `d68c3773ffcf` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
 | `MacDown/Code/Preferences/MPEditorPreferencesViewController.h` | — | ☐ | ☐ | ☐ | à lire | — |
 | `MacDown/Code/Preferences/MPEditorPreferencesViewController.m` | — | ☐ | ☐ | ☐ | à lire | — |
 | `MacDown/Code/Preferences/MPGeneralPreferencesViewController.h` | — | ☐ | ☐ | ☐ | à lire | — |
@@ -142,29 +141,29 @@ Projet MacDown, Objective-C/C, AppKit/WebKit, JavaScript, Xcode/CocoaPods. Aucun
 | `MacDown/Code/Sidebar/MPSidebarSplitView.m` | — | ☐ | ☐ | ☐ | à lire | — |
 | `MacDown/Code/Sidebar/MPSidebarSyncCoordinator.h` | — | ☐ | ☐ | ☐ | à lire | — |
 | `MacDown/Code/Sidebar/MPSidebarSyncCoordinator.m` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Utility/FileURLInlining.h` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Utility/FileURLInlining.m` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Utility/MPAutosaving.h` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Utility/MPFileWatcher.h` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Utility/MPFileWatcher.m` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Utility/MPGlobals.h` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Utility/MPHTMLResourceURLs.h` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Utility/MPHTMLResourceURLs.m` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Utility/MPHomebrewSubprocessController.h` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Utility/MPHomebrewSubprocessController.m` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Utility/MPMathJaxListener.h` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Utility/MPMathJaxListener.m` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Utility/MPResourceWatcherSet.h` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Utility/MPResourceWatcherSet.m` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Utility/MPURLSecurityPolicy.h` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Utility/MPURLSecurityPolicy.m` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Utility/MPUtilities.h` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/Utility/MPUtilities.m` | — | ☐ | ☐ | ☐ | à lire | — |
+| `MacDown/Code/Utility/FileURLInlining.h` | `c1696072c1ee` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Utility/FileURLInlining.m` | `8b6cab69f85d` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Utility/MPAutosaving.h` | `798fb7bd3f3a` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Utility/MPFileWatcher.h` | `07689eb11b45` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Utility/MPFileWatcher.m` | `ee5059ab5cd7` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Utility/MPGlobals.h` | `8ed8632ca58c` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Utility/MPHTMLResourceURLs.h` | `59696bfe884e` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Utility/MPHTMLResourceURLs.m` | `ead2d9ccec8a` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Utility/MPHomebrewSubprocessController.h` | `eb1e9070b3fe` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Utility/MPHomebrewSubprocessController.m` | `0e7450785408` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Utility/MPMathJaxListener.h` | `91ae4785b093` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Utility/MPMathJaxListener.m` | `818553ca0a3a` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Utility/MPResourceWatcherSet.h` | `db6f55e8e1ba` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Utility/MPResourceWatcherSet.m` | `d4663a4990d8` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Utility/MPURLSecurityPolicy.h` | `cff58c6ee4f0` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Utility/MPURLSecurityPolicy.m` | `ae6111380d3d` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Utility/MPUtilities.h` | `583fb5ceb495` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Code/Utility/MPUtilities.m` | `3e05f9cc43cf` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
 | `MacDown/Code/View/MPDocumentSplitView.h` | — | ☐ | ☐ | ☐ | à lire | — |
 | `MacDown/Code/View/MPDocumentSplitView.m` | — | ☐ | ☐ | ☐ | à lire | — |
 | `MacDown/Code/View/MPEditorView.h` | — | ☐ | ☐ | ☐ | à lire | — |
 | `MacDown/Code/View/MPEditorView.m` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Code/main.m` | — | ☐ | ☐ | ☐ | à lire | — |
+| `MacDown/Code/main.m` | `d806c4913d7b` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
 | `MacDown/Images.xcassets/AppIcon.appiconset/Contents.json` | — | ☐ | ☐ | ☐ | à lire | — |
 | `MacDown/Images.xcassets/Contents.json` | — | ☐ | ☐ | ☐ | à lire | — |
 | `MacDown/Images.xcassets/Preferences Icons/Contents.json` | — | ☐ | ☐ | ☐ | à lire | — |
@@ -437,60 +436,59 @@ Projet MacDown, Objective-C/C, AppKit/WebKit, JavaScript, Xcode/CocoaPods. Aucun
 | `MacDown/Localization/zh-Hant.lproj/MPMarkdownPreferencesViewController.strings` | — | ☐ | ☐ | ☐ | à lire | — |
 | `MacDown/Localization/zh-Hant.lproj/MPTerminalPreferencesViewController.strings` | — | ☐ | ☐ | ☐ | à lire | — |
 | `MacDown/Localization/zh-Hant.lproj/MainMenu.strings` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/MacDown-Info.plist` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/MacDown.entitlements` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Extensions/export.css` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Extensions/mermaid.forest.css` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Extensions/mermaid.init.js` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Extensions/print.css` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Extensions/show-information.css` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Extensions/table-resize.js` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Extensions/tasklist.js` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Extensions/viz.init.js` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/MacDown.sdef` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/MathJax/init.js` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Styles/Clearness Dark.css` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Styles/Clearness.css` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Styles/GitHub Tomorrow.css` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Styles/GitHub-2020.css` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Styles/GitHub.css` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Styles/GitHub2.css` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Styles/Github2 (dark).css` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Styles/Gmail.css` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Styles/Google Docs.css` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Styles/Solarized (Dark).css` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Styles/Solarized (Light).css` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Templates/Default.handlebars` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Themes/GitHub Dark Default+.style` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Themes/GitHub Dark Default.style` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Themes/Mou Fresh Air+.style` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Themes/Mou Fresh Air.style` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Themes/Mou Night+.style` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Themes/Mou Night.style` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Themes/Mou Paper+.style` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Themes/Mou Paper.style` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Themes/Solarized (Dark)+.style` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Themes/Solarized (Dark).style` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Themes/Solarized (Light)+.style` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Themes/Solarized (Light).style` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Themes/Tomorrow Blue.style` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Themes/Tomorrow+.style` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Themes/Tomorrow.style` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Themes/Writer+.style` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/Themes/Writer.style` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/syntax_highlighting.json` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDown/Resources/updateHeaderLocations.js` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDownCore/Info.plist` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDownCore/MPMarkdownPreprocessor.h` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDownCore/MPQuickLookPreferences.h` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDownCore/MPQuickLookPreferences.m` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDownCore/MPQuickLookRenderer.h` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDownCore/MPQuickLookRenderer.m` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDownCore/MacDownCore.h` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDownQuickLook/Info.plist` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDownQuickLook/MacDownQuickLook.entitlements` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDownQuickLook/PreviewViewController.h` | — | ☐ | ☐ | ☐ | à lire | — |
-| `MacDownQuickLook/PreviewViewController.m` | — | ☐ | ☐ | ☐ | à lire | — |
+| `MacDown/MacDown-Info.plist` | `681500c51779` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/MacDown.entitlements` | `62eb40b798da` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-root.md |
+| `MacDown/Resources/Extensions/export.css` | `401a13f7ec85` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Extensions/mermaid.forest.css` | `30f7a6778b2c` | ☑ | ☑ | ☑ | validé | preuves/campagne02-render.md |
+| `MacDown/Resources/Extensions/mermaid.init.js` | `51e9477dfd47` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Extensions/print.css` | `da10026e3d91` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Extensions/show-information.css` | `b6264623da8f` | ☑ | ☑ | ☑ | validé | preuves/campagne02-render.md |
+| `MacDown/Resources/Extensions/table-resize.js` | `bdd2edb6f2e2` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Extensions/tasklist.js` | `baaec190711e` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Extensions/viz.init.js` | `4284c2771c20` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/MacDown.sdef` | `5643f7986c7f` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/MathJax/init.js` | `c1dba6dd3930` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Styles/Clearness Dark.css` | `f5e84a44a4eb` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Styles/Clearness.css` | `fc407d712394` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Styles/GitHub Tomorrow.css` | `d274836c4802` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Styles/GitHub-2020.css` | `8a193080ed45` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Styles/GitHub.css` | `50b145c3b6ae` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Styles/GitHub2.css` | `d526e3d22730` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Styles/Github2 (dark).css` | `d437fa41d152` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Styles/Gmail.css` | `cf2f35839c87` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Styles/Google Docs.css` | `7305f1bbf768` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Styles/Solarized (Dark).css` | `831c8a7c4159` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Styles/Solarized (Light).css` | `66385e7e1266` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Templates/Default.handlebars` | `3911974b1f3b` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Themes/GitHub Dark Default+.style` | `1c871c959cdd` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Themes/GitHub Dark Default.style` | `7ddc20007c5b` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Themes/Mou Fresh Air+.style` | `9c7b5281bc57` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Themes/Mou Fresh Air.style` | `7cf14e229256` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Themes/Mou Night+.style` | `29ac097ec816` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Themes/Mou Night.style` | `5f07cfb769df` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Themes/Mou Paper+.style` | `8d2350b0042a` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Themes/Mou Paper.style` | `f91490c350a9` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Themes/Solarized (Dark)+.style` | `2fc489c15373` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Themes/Solarized (Dark).style` | `b087429dda9c` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Themes/Solarized (Light)+.style` | `807de1062aad` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Themes/Solarized (Light).style` | `1e62c3734ef4` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Themes/Tomorrow Blue.style` | `090ad9ac160c` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Themes/Tomorrow+.style` | `ed759e275d7a` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Themes/Tomorrow.style` | `75c8dc06b2f4` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Themes/Writer+.style` | `732b282bb992` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/Themes/Writer.style` | `1f9c437258f2` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/syntax_highlighting.json` | `048275f9e5a6` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDown/Resources/updateHeaderLocations.js` | `e15be78acc0b` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDownCore/Info.plist` | `9c444ac2cdac` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDownCore/MPQuickLookPreferences.h` | `26d4c0091d14` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDownCore/MPQuickLookPreferences.m` | `e269e6e827ef` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDownCore/MPQuickLookRenderer.h` | `8624df9faeb3` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDownCore/MPQuickLookRenderer.m` | `7c14e16770e5` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDownCore/MacDownCore.h` | `903651853151` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDownQuickLook/Info.plist` | `59e4ab4e6df8` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDownQuickLook/MacDownQuickLook.entitlements` | `2c615c485eaf` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDownQuickLook/PreviewViewController.h` | `638953029363` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `MacDownQuickLook/PreviewViewController.m` | `6fad5f1905f4` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
 | `Podfile` | — | ☐ | ☐ | ☐ | à lire | — |
 | `Podfile.lock` | — | ☐ | ☐ | ☐ | à lire | — |
 | `Tools/GitHub-style-generator/.gitignore` | — | ☐ | ☐ | ☐ | à lire | — |
@@ -509,10 +507,12 @@ Projet MacDown, Objective-C/C, AppKit/WebKit, JavaScript, Xcode/CocoaPods. Aucun
 | `Tools/verify_sparkle_signature.sh` | — | ☐ | ☐ | ☐ | à lire | — |
 | `macdown-cmd/MPArgumentProcessor.h` | — | ☐ | ☐ | ☐ | à lire | — |
 | `macdown-cmd/MPArgumentProcessor.m` | — | ☐ | ☐ | ☐ | à lire | — |
-| `macdown-cmd/MPCommandInput.h` | — | ☐ | ☐ | ☐ | à lire | — |
 | `macdown-cmd/main.m` | — | ☐ | ☐ | ☐ | à lire | — |
 | `scripts/regenerate-golden-files.sh` | — | ☐ | ☐ | ☐ | à lire | — |
 | `setup.sh` | — | ☐ | ☐ | ☐ | à lire | — |
+| `MacDownCore/MPMarkdownPreprocessor.h` | `ed5e8e88ac2b` | ☑ | ☑ | ☐ | à vérifier | preuves/campagne02-render.md |
+| `macdown-cmd/MPCommandInput.h` | — | ☐ | ☐ | ☐ | à lire | — |
+| `.markdownlint.json` | — | ☐ | ☐ | ☐ | à lire | — |
 
 ## Parcours et invariants
 
