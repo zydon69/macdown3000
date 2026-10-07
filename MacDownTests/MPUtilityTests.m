@@ -963,4 +963,10 @@
     }
 }
 
+- (void)testEditorGeometryAcceptsTrailingWhitespaceAfterSurrogatePairs {
+    MPEditorView *view = [[MPEditorView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)];
+    view.string = @"😀👨‍👩‍👧‍👦\n\n\n";
+    XCTAssertNoThrow([view performSelector:NSSelectorFromString(@"updateContentGeometry")]);
+}
+
 @end

@@ -279,7 +279,9 @@ NS_INLINE BOOL MPAreRectsEqual(NSRect r1, NSRect r2)
         NSUInteger firstJunkLocation = lastRange.location + lastRange.length;
         NSRange junkRange = NSMakeRange(firstJunkLocation,
                                         contentLength - firstJunkLocation);
-        junkRect = [manager boundingRectForGlyphRange:junkRange
+        NSRange junkGlyphRange = [manager glyphRangeForCharacterRange:junkRange
+                                                   actualCharacterRange:NULL];
+        junkRect = [manager boundingRectForGlyphRange:junkGlyphRange
                                       inTextContainer:container];
     }
     self.trailingHeight = junkRect.size.height;
