@@ -53,7 +53,12 @@ Dir.mktmpdir('macdown-workflow-contracts') do |directory|
   assert(arguments.include?('MARKETING_VERSION=1.0.0 with spaces'), 'Build settings were split into arguments')
   assert(arguments.include?('CURRENT_PROJECT_VERSION=42'), 'Build number lost')
 
-
+  generator = File.join(ROOT, 'Dependency/peg-markdown-highlight/greg/greg')
+  grammar = File.join(directory, 'long.leg')
+  rule = 'r' * 2048
+  File.write(grammar, "start = #{rule}\n#{rule} = 'a' { $$ = 1; }\n")
+  parser, error, status = Open3.capture3(generator, grammar)
+  assert(status.success? && parser.include?("_1_#{rule}"), "Long grammar identifier failed: #{error}")
 end
 
 _, error, status = Open3.capture3({ 'GITHUB_ACTIONS' => nil }, 'bash', 'Tools/smoke_launch.sh')
