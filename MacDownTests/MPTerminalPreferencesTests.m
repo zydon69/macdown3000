@@ -45,6 +45,9 @@
     self.testBinDirectory = [self.testDirectory stringByAppendingPathComponent:@".local/bin"];
     self.testSymlinkPath = [self.testBinDirectory stringByAppendingPathComponent:@"macdown"];
 
+    XCTAssertTrue([self.fileManager createDirectoryAtPath:self.testDirectory
+                    withIntermediateDirectories:YES attributes:nil error:nil]);
+
     // Create a dummy source file to symlink to
     self.testSourcePath = [self.testDirectory stringByAppendingPathComponent:@"macdown-source"];
     [@"#!/bin/bash\necho 'test'" writeToFile:self.testSourcePath
@@ -350,6 +353,19 @@
     // This will test the full workflow once implementation is complete
     // For now, just a placeholder
     XCTAssertTrue(YES, @"Integration test placeholder");
+}
+
+- (void)testReinstallRepairsDanglingLink
+{
+    XCTAssertTrue([self.controller ensureDirectoryExists:self.testBinDirectory error:nil]);
+    XCTAssertTrue([self.fileManager createSymbolicLinkAtPath:self.testSymlinkPath
+          withDestinationPath:[self.testDirectory stringByAppendingPathComponent:@"gone"] error:nil]);
+    NSError *error = nil;
+    XCTAssertTrue([self.controller createSymlinkAtPath:self.testSymlinkPath
+                                  toDestination:self.testSourcePath error:&error]);
+    XCTAssertNil(error);
+    XCTAssertEqualObjects([self.fileManager destinationOfSymbolicLinkAtPath:self.testSymlinkPath error:nil],
+                          self.testSourcePath);
 }
 
 @end

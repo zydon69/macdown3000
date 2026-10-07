@@ -7,6 +7,8 @@
 //
 
 #import "MPGlobals.h"
+#import <unistd.h>
+#import <errno.h>
 #import "MPHomebrewSubprocessController.h"
 #import "MPPreferences.h"
 #import "MPTerminalPreferencesViewController.h"
@@ -187,12 +189,11 @@ NS_INLINE NSColor *MPGetInstallationIndicatorColor(BOOL installed)
     }
 
     // Check if something already exists at link path
-    BOOL isDirectory = NO;
-    if ([fm fileExistsAtPath:linkPath isDirectory:&isDirectory])
+    NSDictionary *attributes = [fm attributesOfItemAtPath:linkPath error:nil];
+    if (attributes)
     {
         // Check if it's a symlink
-        NSDictionary *attributes = [fm attributesOfItemAtPath:linkPath error:nil];
-        if ([attributes fileType] == NSFileTypeSymbolicLink)
+        if ([[attributes fileType] isEqualToString:NSFileTypeSymbolicLink])
         {
             // It's a symlink - check if it points to the right place
             NSString *existingDestination = [fm destinationOfSymbolicLinkAtPath:linkPath error:nil];
@@ -203,12 +204,11 @@ NS_INLINE NSColor *MPGetInstallationIndicatorColor(BOOL installed)
             }
 
             // Symlink exists but points to wrong place - remove and recreate
-            NSError *removeError = nil;
-            if (![fm removeItemAtPath:linkPath error:&removeError])
+            if (unlink(linkPath.fileSystemRepresentation) != 0)
             {
                 if (error)
                 {
-                    *error = removeError;
+                    *error = [NSError errorWithDomain:NSPOSIXErrorDomain code:errno userInfo:nil];
                 }
                 return NO;
             }
