@@ -1,0 +1,13 @@
+{
+  "exit": 0,
+  "assertions": [
+    "two native NSPrint operations succeed",
+    "one native internal link resolved",
+    "immutable original page pixels captured BEFORE mutation identical to persisted result",
+    "DOM and CSSOM snapshot restored"
+  ],
+  "sourceHashes": {
+    "MacDown/Code/Document/MPDocument.m": "a6623063fc819f9c81fbadc9a6f753dc13f387ff055f6b2fd525fcbd260d4939",
+    "MacDown/Code/Document/MPPDFAnchorInjector.m": "902c57b2cb6354a651e0b981a49bfee390ae89fc1e003d0d1a71bd343c2ed5a0"
+  }
+}
