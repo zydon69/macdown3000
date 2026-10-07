@@ -38,6 +38,12 @@ jobs:
         python3 MacDownTests/BuildTools/peg_contracts.py
         python3 MacDownTests/BuildTools/yaml_graph_tests.py
         python3 MacDownTests/BuildTools/command_queue_tests.py
+        python3 MacDownTests/BuildTools/code_accessory_tests.py
+        python3 MacDownTests/BuildTools/toc_hierarchy_tests.py
+        python3 MacDownTests/BuildTools/quicklook_theme_tests.py
+        python3 MacDownTests/BuildTools/indent_selection_tests.py
+        bash MacDownTests/UI/test_editor_geometry.sh
+        bash MacDownTests/Localization/test_plural_rules.sh
         python3 MacDownTests/BuildTools/print_colors_tests.py
         python3 MacDownTests/Sandbox/preferences_tests.py
         python3 MacDownTests/Sandbox/assets_tests.py
