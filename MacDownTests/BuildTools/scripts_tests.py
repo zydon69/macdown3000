@@ -47,6 +47,31 @@ exit 65
             assert (repo / 'MacDownTests' / name).read_text() == DISABLED
         print('PASS', stage, 'restores source definitions and reports status')
 
+
+def test_css_generation():
+    with tempfile.TemporaryDirectory() as directory:
+        repo = Path(directory)
+        (repo / 'node_modules/.bin').mkdir(parents=True)
+        for name in ['index.sass', 'package-lock.json']:
+            (repo / name).touch()
+        (repo / 'Makefile').write_text(
+            (ROOT / 'Tools/GitHub-style-generator/Makefile').read_text())
+        sass = repo / 'node_modules/.bin/sass'
+        sass.write_text('#!/bin/sh\necho bad\nexit 42\n')
+        sass.chmod(0o755)
+        output = repo / 'existing.css'
+        output.write_text('good')
+        cmd = ['make', '-B', 'target=existing.css']
+        result = subprocess.run(cmd, cwd=repo, capture_output=True)
+        assert result.returncode and output.read_text() == 'good'
+        sass.write_text('#!/bin/sh\necho ".markdown-body {color:red;}"\n')
+        result = subprocess.run(cmd, cwd=repo, capture_output=True)
+        assert result.returncode == 0
+        assert output.read_text() == 'body {color:red;}\n'
+        assert not list(repo.glob('*.sass.*')) and not list(repo.glob('*.css.*'))
+        print('PASS CSS failure preserves artifact; success replaces it atomically')
+
 if __name__ == '__main__':
     for scenario in ['regeneration-failure', 'verification-failure', 'success']:
         test_regeneration(scenario)
+    test_css_generation()
