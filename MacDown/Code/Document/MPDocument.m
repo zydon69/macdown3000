@@ -350,6 +350,8 @@ typedef NS_ENUM(NSInteger, MPReferenceKind) {
 // always cleared once the callback fires.
 @property (strong) NSURL *pdfExportURL;
 @property BOOL isPreviewReady;
+@property BOOL documentClosed;
+@property NSUInteger fileWatchGeneration;
 @property (strong) NSURL *currentBaseUrl;
 @property (copy) NSString *currentStyleName;
 @property (copy) NSString *currentHighlightingThemeName;
@@ -848,6 +850,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     // can have the correct dimention for size-limiting and stuff. See
     // https://github.com/uranusjr/macdown/issues/236
     [[NSOperationQueue mainQueue] addOperationWithBlock:^{
+        if (self.documentClosed) return;
         [self setupEditor:nil];
         [self redrawDivider];
         [self reloadFromLoadedString];
@@ -1260,6 +1263,14 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 
 - (void)close
 {
+    self.documentClosed = YES;
+    [self stopFileWatching];
+    [self.renderCompletionHandlers removeAllObjects];
+    self.pdfExportURL = nil;
+    self.renderer.delegate = nil;
+    self.renderer.dataSource = nil;
+    self.preview.editingDelegate = nil;
+    self.preview.resourceLoadDelegate = nil;
     if (self.needsToUnregister)
     {
         // Close can be called multiple times, but this can only be done once.
@@ -2117,6 +2128,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 
 - (void)renderer:(MPRenderer *)renderer didProduceHTMLOutput:(NSString *)html
 {
+    if (self.documentClosed) return;
     // Issue #358: Only gate on alreadyRenderingInWeb when the preview has
     // completed its first load (isPreviewReady == YES).  Before the first
     // successful load, WebView frame-load delegate callbacks may not fire,
@@ -4875,12 +4887,13 @@ to link outside that scope.", \
     // watcher for an old session. Related to #478.
     [self stopFileWatching];
 
-    if (!self.fileURL || !self.fileURL.isFileURL)
+    if (self.documentClosed || !self.fileURL || !self.fileURL.isFileURL)
         return;
 
     if (![MPFileWatcher canWatchPath:self.fileURL.path])
         return;
 
+    NSUInteger generation = self.fileWatchGeneration;
     __weak MPDocument *weakSelf = self;
     self.fileWatcher = [[MPFileWatcher alloc]
         initWithPath:self.fileURL.path
@@ -4895,7 +4908,7 @@ to link outside that scope.", \
                      dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)),
                      dispatch_get_main_queue(), ^{
                      MPDocument *s = weakSelf;
-                     if (!s) return;                                       // document closed
+                     if (!s || s.documentClosed || s.fileWatchGeneration != generation) return;
                      if (![s.fileURL.path isEqualToString:path]) return;  // Save As changed URL
                      if (s.fileWatcher.isWatching) return;                // already restarted
                      if (![[NSFileManager defaultManager] fileExistsAtPath:path]) return;
@@ -4914,6 +4927,8 @@ to link outside that scope.", \
 
 - (void)stopFileWatching
 {
+    self.fileWatchGeneration++;
+    self.externalChangeCoalescePending = NO;
     [self.fileWatcher stopWatching];
     self.fileWatcher = nil;
     [self.resourceWatcherSet stopAll];
@@ -4925,7 +4940,7 @@ to link outside that scope.", \
 - (void)handleExternalFileChange
 {
     // Ignore if this was our own save
-    if (self.isSelfSaving)
+    if (self.documentClosed || self.isSelfSaving)
         return;
 
     // Issue #543: While the keep/discard sheet is up, drop further
@@ -4947,13 +4962,14 @@ to link outside that scope.", \
         return;
     self.externalChangeCoalescePending = YES;
 
+    NSUInteger generation = self.fileWatchGeneration;
     __weak MPDocument *weakSelf = self;
     dispatch_after(
         dispatch_time(DISPATCH_TIME_NOW,
                       (int64_t)(self.externalChangeCoalesceInterval * NSEC_PER_SEC)),
         dispatch_get_main_queue(), ^{
             MPDocument *strongSelf = weakSelf;
-            if (!strongSelf)
+            if (!strongSelf || strongSelf.documentClosed || strongSelf.fileWatchGeneration != generation)
                 return;
             strongSelf.externalChangeCoalescePending = NO;
             [strongSelf processExternalFileChange];
@@ -4964,10 +4980,10 @@ to link outside that scope.", \
 {
     // Re-checked here as well as on the way in: the coalescing window can
     // straddle the start of one of our own saves.
-    if (self.isSelfSaving)
+    if (self.documentClosed || self.isSelfSaving)
         return;
 
-    if (!self.fileURL || !self.fileURL.isFileURL)
+    if (self.documentClosed || !self.fileURL || !self.fileURL.isFileURL)
         return;
 
     // Verify the file actually changed by checking modification date
@@ -5017,13 +5033,14 @@ to link outside that scope.", \
         return;
     self.externalChangePromptVisible = YES;
 
+    NSURL *promptURL = self.fileURL;
     __weak MPDocument *weakSelf = self;
     void (^completion)(BOOL) = ^(BOOL shouldReload) {
         MPDocument *strongSelf = weakSelf;
         if (!strongSelf)
             return;
         strongSelf.externalChangePromptVisible = NO;
-        if (shouldReload)
+        if (shouldReload && !strongSelf.documentClosed && [strongSelf.fileURL isEqual:promptURL])
             [strongSelf reloadFromDisk];
     };
 
@@ -5069,6 +5086,9 @@ to link outside that scope.", \
 
 - (void)reloadFromDisk
 {
+    if (self.documentClosed) return;
+    NSDictionary *attrs = [[NSFileManager defaultManager]
+        attributesOfItemAtPath:self.fileURL.path error:nil];
     NSError *error = nil;
     NSData *data = [NSData dataWithContentsOfURL:self.fileURL options:0 error:&error];
     if (error || !data)
@@ -5079,8 +5099,6 @@ to link outside that scope.", \
         return;
 
     // Update fileModificationDate to reflect the reloaded content
-    NSDictionary *attrs = [[NSFileManager defaultManager]
-        attributesOfItemAtPath:self.fileURL.path error:nil];
     if (attrs[NSFileModificationDate])
         self.fileModificationDate = attrs[NSFileModificationDate];
 

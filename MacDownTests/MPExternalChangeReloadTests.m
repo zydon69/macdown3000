@@ -334,6 +334,7 @@
 - (void)testDiscardReloadsFromDisk
 {
     MPPromptSpyDocument *doc = [[MPPromptSpyDocument alloc] init];
+    doc.fileURL = [self writeTempFileWithContents:@"on disk\n"];
     doc.externalChangePromptPresenter = ^(void (^completion)(BOOL)) {
         completion(YES);
     };
@@ -344,6 +345,36 @@
                    @"Choosing Discard must reload the file from disk");
     XCTAssertFalse(doc.externalChangePromptVisible,
                    @"The guard must be cleared once the dialog is answered");
+}
+
+- (void)testDiscardAfterSaveAsDoesNotReloadTheNewFile
+{
+    MPPromptSpyDocument *doc = [[MPPromptSpyDocument alloc] init];
+    doc.fileURL = [self writeTempFileWithContents:@"original file\n"];
+    __block void (^pendingCompletion)(BOOL);
+    doc.externalChangePromptPresenter = ^(void (^completion)(BOOL)) {
+        pendingCompletion = [completion copy];
+    };
+    [doc promptForReloadWithExternalChanges];
+    doc.fileURL = [self writeTempFileWithContents:@"new file\n"];
+    pendingCompletion(YES);
+    XCTAssertEqual(doc.reloadCount, 0u);
+    XCTAssertFalse(doc.externalChangePromptVisible);
+}
+
+- (void)testDiscardAfterCloseDoesNotReload
+{
+    MPPromptSpyDocument *doc = [[MPPromptSpyDocument alloc] init];
+    doc.fileURL = [self writeTempFileWithContents:@"on disk\n"];
+    __block void (^pendingCompletion)(BOOL);
+    doc.externalChangePromptPresenter = ^(void (^completion)(BOOL)) {
+        pendingCompletion = [completion copy];
+    };
+    [doc promptForReloadWithExternalChanges];
+    [doc close];
+    pendingCompletion(YES);
+    XCTAssertEqual(doc.reloadCount, 0u);
+    XCTAssertFalse(doc.externalChangePromptVisible);
 }
 
 - (void)testKeepLeavesTheEditorAlone
