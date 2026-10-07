@@ -278,6 +278,18 @@
     XCTAssertEqual(self.delegate.activated.count, 0u);
 }
 
+- (void)testReturnKeyWithMarkdownNamedDirectoryDoesNotActivate
+{
+    NSURL *directory = [self.root URLByAppendingPathComponent:@"folder.md" isDirectory:YES];
+    XCTAssertTrue([[NSFileManager defaultManager] createDirectoryAtURL:directory
+                       withIntermediateDirectories:NO attributes:nil error:nil]);
+    [self.vc reload];
+    self.outline.stubSelectedRow = [self.vc rowForURL:directory resolvingLinks:NO];
+    XCTAssertGreaterThanOrEqual(self.outline.stubSelectedRow, 0);
+    XCTAssertNoThrow([self.outline keyDown:[self returnKeyEvent]]);
+    XCTAssertEqual(self.delegate.activated.count, 0u);
+}
+
 - (void)testReturnKeyWithNothingSelectedDoesNotActivate
 {
     self.outline.stubSelectedRow = -1;
