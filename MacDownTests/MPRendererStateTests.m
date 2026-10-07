@@ -505,4 +505,14 @@
     XCTAssertFalse([self.delegate.lastHTML containsString:@"MathJax.js"]);
 }
 
+- (void)testCodeFenceInformationCannotInjectHTMLAttributes
+{
+    self.delegate.extensions = HOEDOWN_EXT_FENCED_CODE;
+    self.renderer.rendererFlags = (1 << 6);
+    [self.renderer parseMarkdown:@"```js:\"/><img/src=x/onerror=alert(1)>\ncontent\n```"];
+    NSString *html = [self.renderer HTMLForExportWithStyles:NO highlighting:NO];
+    XCTAssertFalse([html containsString:@"<img/src"]);
+    XCTAssertTrue([html containsString:@"data-information=\"&quot;/&gt;&lt;img/src"]);
+}
+
 @end

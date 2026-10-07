@@ -90,7 +90,7 @@ void hoedown_patch_render_blockcode(
     if (back && back->size)
     {
         HOEDOWN_BUFPUTSL(ob, " data-information=\"");
-        hoedown_buffer_put(ob, back->data, back->size);
+        hoedown_escape_html(ob, back->data, back->size, 0);
         HOEDOWN_BUFPUTSL(ob, "\"");
     }
     HOEDOWN_BUFPUTSL(ob, "><code class=\"language-");
