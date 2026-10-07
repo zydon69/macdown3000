@@ -266,10 +266,11 @@
     XCTAssertNoThrow(self.document.markdown = @"# Test",
                      @"Setting markdown should not throw");
 
-    // After setting, still returns nil because editor is not loaded
+    // Scripted/background edits must survive lazy window loading.
     markdown = self.document.markdown;
-    XCTAssertNil(markdown,
-                 @"Markdown should still be nil after setting when editor is not loaded");
+    XCTAssertEqualObjects(markdown, @"# Test");
+    XCTAssertEqualObjects([self.document dataOfType:@"net.daringfireball.markdown" error:NULL],
+        [@"# Test" dataUsingEncoding:NSUTF8StringEncoding]);
 
     // Test setting to nil
     self.document.markdown = nil;
@@ -706,5 +707,14 @@
 // "changed by another application" dialog and the "couldn't be saved in
 // folder tmp" failure, which require manual verification against a real
 // SSHFS/SMB/NFS mount. Related to #371.
+
+- (void)testReadBeforeWindowLoadingCanBeSerializedWithoutDataLoss
+{
+    NSString *source = @"# Loaded before its window\n\nÉ漢😀\n";
+    NSData *data = [source dataUsingEncoding:NSUTF8StringEncoding];
+    XCTAssertTrue([self.document readFromData:data ofType:@"net.daringfireball.markdown" error:NULL]);
+    XCTAssertEqualObjects(self.document.markdown, source);
+    XCTAssertEqualObjects([self.document dataOfType:@"net.daringfireball.markdown" error:NULL], data);
+}
 
 @end
