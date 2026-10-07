@@ -8,6 +8,7 @@
 
 #import <XCTest/XCTest.h>
 #import "MPUtilities.h"
+#import "NSPasteboard+Types.h"
 
 @interface MPUtilityTests : XCTestCase
 @property (strong) NSString *tempDir;
@@ -671,6 +672,13 @@
     NSArray *sorted = [themes sortedArrayUsingSelector:@selector(compare:)];
     XCTAssertEqualObjects(themes, sorted,
                           @"Themes should be sorted alphabetically");
+}
+
+- (void)testEmptyPasteboardDoesNotProduceURL {
+    NSPasteboard *pasteboard = [NSPasteboard pasteboardWithUniqueName];
+    [pasteboard clearContents];
+    XCTAssertNil([pasteboard URLForType:NSPasteboardTypeString]);
+    [pasteboard releaseGlobally];
 }
 
 @end
