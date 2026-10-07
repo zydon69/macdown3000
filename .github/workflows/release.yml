@@ -30,10 +30,10 @@ jobs:
       - name: Verify tag is on main or release branch
         if: github.ref_type == 'tag'
         run: |
-          echo "🔍 Verifying that tag ${{ github.ref_name }} is on an allowed branch..."
+          echo "🔍 Verifying that tag $GITHUB_REF_NAME is on an allowed branch..."
 
           # Get the commit hash of the tag
-          TAG_COMMIT=$(git rev-parse ${{ github.ref_name }})
+          TAG_COMMIT=$(git rev-parse --verify "refs/tags/$GITHUB_REF_NAME^{commit}")
 
           # Check if this commit is reachable from main or a release/* branch.
           # Under the release branch model, RC and final release tags are created
@@ -53,7 +53,7 @@ jobs:
           fi
 
           if [ "$FOUND" = false ]; then
-            echo "::error::Tag ${{ github.ref_name }} is NOT on main or any release/* branch!"
+            echo "::error::Tag $GITHUB_REF_NAME is NOT on main or any release/* branch!"
             echo "::error::Release tags must be created from main or a release/* branch."
             exit 1
           fi
@@ -101,6 +101,7 @@ jobs:
       - name: Extract version from tag or input
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PROVIDED_VERSION: ${{ github.event.inputs.version }}
         run: |
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             # Triggered by tag push
@@ -109,7 +110,6 @@ jobs:
             echo "📌 Using tag version: $VERSION"
           else
             # Triggered by workflow_dispatch
-            PROVIDED_VERSION="${{ github.event.inputs.version }}"
             if [[ -n "$PROVIDED_VERSION" ]]; then
               VERSION="$PROVIDED_VERSION"
               echo "📌 Using provided version: $VERSION"
@@ -124,6 +124,10 @@ jobs:
               VERSION=${LATEST_TAG#v}  # Remove 'v' prefix
               echo "📌 Auto-detected version: $VERSION"
             fi
+          fi
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
+            echo "::error::Invalid release version: $VERSION"
+            exit 1
           fi
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "📦 Building version: $VERSION"
