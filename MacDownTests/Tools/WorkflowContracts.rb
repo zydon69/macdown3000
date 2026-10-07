@@ -56,4 +56,6 @@ Dir.mktmpdir('macdown-workflow-contracts') do |directory|
 
 end
 
-puts "#{paths.length} YAML files, #{blocks} shell syntax blocks; version and structured argument contracts passed"
+_, error, status = Open3.capture3({ 'GITHUB_ACTIONS' => nil }, 'bash', 'Tools/smoke_launch.sh')
+assert(!status.success? && error.include?('isolated GitHub Actions runner'), 'Smoke helper permits local preference reset')
+puts "#{paths.length} YAML files, #{blocks} shell syntax blocks; version, structured arguments, generator and CI guard contracts passed"
