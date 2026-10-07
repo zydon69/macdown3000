@@ -296,7 +296,12 @@ NS_INLINE BOOL MPAreRectsEqual(NSRect r1, NSRect r2)
     r.size.height += 2 * inset.height;
     self.contentRect = r;
 
-    [self setFrameSize:self.frame.size];    // Force size update.
+    // Rebuild the natural height from content and viewport. self.frame already
+    // includes the past-end padding added by setFrameSize:, so using it again
+    // would accumulate that padding on every content update.
+    NSSize size = self.frame.size;
+    size.height = MAX(r.size.height, self.enclosingScrollView.contentSize.height);
+    [self setFrameSize:size];
 }
 
 #pragma mark - Text Substitution Overrides (Issue #263)
