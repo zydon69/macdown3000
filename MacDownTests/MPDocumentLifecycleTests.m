@@ -1236,6 +1236,52 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
     }
 }
 
+- (void)testResourceWatcherBurstPublishesOnceAndAnOldWatcherSetCannotPublish
+{
+    MPDocumentExportAuditProbe *document = [MPDocumentExportAuditProbe new];
+    document.fileURL = self.testFileURL;
+    MPEditorView *editor = [[MPEditorView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)];
+    document.editor = editor;
+    NSString *one = [self.testDirectory stringByAppendingPathComponent:@"one.svg"];
+    NSString *two = [self.testDirectory stringByAppendingPathComponent:@"two.svg"];
+    NSString *svg = @"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1\" height=\"1\"></svg>";
+    XCTAssertTrue([svg writeToFile:one atomically:YES encoding:NSUTF8StringEncoding error:NULL]);
+    XCTAssertTrue([svg writeToFile:two atomically:YES encoding:NSUTF8StringEncoding error:NULL]);
+    editor.string = @"![one](one.svg)\n![two](two.svg)";
+    MPRenderer *renderer = [MPRenderer new];
+    renderer.dataSource = (id<MPRendererDataSource>)document;
+    renderer.delegate = (id<MPRendererDelegate>)document;
+    document.renderer = renderer;
+    [renderer parseMarkdown:editor.string];
+    [renderer render];
+    NSString *initialHTML = document.publishedHTML.lastObject;
+    NSSet *resourcePaths = MPLocalFilePathsInHTML(initialHTML,
+        [(id<MPRendererDelegate>)document rendererBaseURL:renderer]);
+    [document.publishedHTML removeAllObjects];
+    MPResourceWatcherSet *current = [MPResourceWatcherSet new];
+    current.delegate = (id<MPResourceWatcherSetDelegate>)document;
+    document.resourceWatcherSet = current;
+    @try {
+        [current updateWatchedPaths:resourcePaths];
+        XCTAssertTrue([current.watchedPaths containsObject:one]);
+        XCTAssertTrue([current.watchedPaths containsObject:two]);
+        XCTestExpectation *published = [self expectationWithDescription:@"Coalesced real renderer publication"];
+        dispatch_async(dispatch_get_main_queue(), ^{ [published fulfill]; });
+        [self waitForExpectations:@[published] timeout:5.0];
+        XCTAssertEqual(document.publishedHTML.count, 1u);
+        NSString *html = document.publishedHTML.lastObject;
+        XCTAssertTrue([html containsString:@"one.svg?t="]);
+        XCTAssertTrue([html containsString:@"two.svg?t="]);
+        MPResourceWatcherSet *old = [MPResourceWatcherSet new];
+        [document resourceWatcherSet:old didDetectChangeAtPath:one];
+        XCTestExpectation *idle = [self expectationWithDescription:@"Stale event has no publication"];
+        dispatch_async(dispatch_get_main_queue(), ^{ [idle fulfill]; });
+        [self waitForExpectations:@[idle] timeout:5.0];
+        XCTAssertEqual(document.publishedHTML.count, 1u);
+    } @finally {
+        [document close];
+    }
+}
 
 
 @end
