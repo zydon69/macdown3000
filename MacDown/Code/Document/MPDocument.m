@@ -396,6 +396,7 @@ typedef NS_ENUM(NSInteger, MPReferenceKind) {
 // and the presenter are injection seams, so tests can exercise this without
 // real timing or a real modal session.
 @property (nonatomic) BOOL externalChangeCoalescePending;
+@property (nonatomic) BOOL resourceRenderPending;
 @property (nonatomic) BOOL externalChangePromptVisible;
 @property (nonatomic) NSTimeInterval externalChangeCoalesceInterval;
 @property (nonatomic, copy) void (^externalChangePromptPresenter)(void (^)(BOOL));
@@ -2367,9 +2368,24 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 - (void)resourceWatcherSet:(MPResourceWatcherSet *)set
      didDetectChangeAtPath:(NSString *)path
 {
+    if (self.documentClosed || set != self.resourceWatcherSet)
+        return;
     [self.renderer setTimestamp:[[NSDate date] timeIntervalSince1970]
                forResourcePath:path];
-    [self.renderer render];
+    if (self.resourceRenderPending)
+        return;
+    self.resourceRenderPending = YES;
+    // Adding a watcher reports its initial state synchronously during rendering.
+    // Coalesce those callbacks after the current HTML publication completes.
+    __weak MPDocument *weakSelf = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        MPDocument *strongSelf = weakSelf;
+        if (!strongSelf)
+            return;
+        strongSelf.resourceRenderPending = NO;
+        if (!strongSelf.documentClosed)
+            [strongSelf.renderer render];
+    });
 }
 
 #pragma mark - Window Controller
