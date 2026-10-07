@@ -354,6 +354,8 @@ typedef NS_ENUM(NSInteger, MPReferenceKind) {
 @property BOOL documentClosed;
 @property NSUInteger fileWatchGeneration;
 @property NSUInteger saveGeneration;
+@property NSUInteger previewRenderGeneration;
+@property BOOL awaitingRequestedRender;
 @property (strong) NSURL *currentBaseUrl;
 @property (copy) NSString *currentStyleName;
 @property (copy) NSString *currentHighlightingThemeName;
@@ -454,6 +456,7 @@ typedef NS_ENUM(NSInteger, MPReferenceKind) {
       alignedEditorYs:(NSArray<NSNumber *> **)outEditorYs
      alignedPreviewYs:(NSArray<NSNumber *> **)outPreviewYs;
 - (void)invokeRenderCompletionHandlers;
+- (void)finishPreviewRender;
 + (NSInvocation *)printCompletionForDelegate:(id)delegate selector:(SEL)selector context:(void *)context;
 - (void)willStartPreviewLiveScroll:(NSNotification *)notification;
 - (void)didEndPreviewLiveScroll:(NSNotification *)notification;
@@ -492,12 +495,13 @@ typedef NS_ENUM(NSInteger, MPReferenceKind) {
 
 static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
 {
+    NSUInteger generation = doc.previewRenderGeneration;
     __weak MPDocument *weakObj = doc;
     return ^{
         // Gap 8: weak→strong dance to avoid repeated weakObj dereferences and
         // to ensure the object is not released mid-block.
         __strong MPDocument *strongObj = weakObj;
-        if (!strongObj) return;
+        if (!strongObj || strongObj.documentClosed || strongObj.previewRenderGeneration != generation) return;
 
         WebView *webView = strongObj.preview;
         NSWindow *window = webView.window;
@@ -542,7 +546,7 @@ static void (^MPGetPreviewLoadingCompletionHandler(MPDocument *doc))()
 
         // Issue #16: Invoke deferred operation handlers after render completes
         // (This is called for MathJax rendering completion path)
-        [strongObj invokeRenderCompletionHandlers];
+        [strongObj finishPreviewRender];
     };
 }
 
@@ -1858,6 +1862,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 
 - (void)webView:(WebView *)sender didCommitLoadForFrame:(WebFrame *)frame
 {
+    if (frame != sender.mainFrame || self.documentClosed) return;
     NSWindow *window = sender.window;
 
     @synchronized(window) {
@@ -1880,51 +1885,42 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 
 - (void)webView:(WebView *)sender didFinishLoadForFrame:(WebFrame *)frame
 {
-    // If MathJax is on, the on-completion callback will be invoked by the
-    // JavaScript handler injected in -webView:didCommitLoadForFrame:.
+    if (frame != sender.mainFrame || self.documentClosed) return;
+    [self applyPreviewZoom];
     if (!self.preferences.htmlMathJax)
-    {
-        id callback = MPGetPreviewLoadingCompletionHandler(self);
-        NSOperationQueue *queue = [NSOperationQueue mainQueue];
-        [queue addOperationWithBlock:callback];
-    }
+        [[NSOperationQueue mainQueue] addOperationWithBlock:MPGetPreviewLoadingCompletionHandler(self)];
+}
 
+- (void)finishPreviewRender
+{
+    if (self.documentClosed) return;
     self.isPreviewReady = YES;
-
-    // Update word count
-    if (self.preferences.editorShowWordCount)
-        [self updateWordCount];
-
     self.alreadyRenderingInWeb = NO;
-
+    if (self.preferences.editorShowWordCount) [self updateWordCount];
     if (self.renderToWebPending)
+    {
+        self.renderToWebPending = NO;
         [self.renderer parseAndRenderNow];
-
-    self.renderToWebPending = NO;
-
-    // Issue #16: Invoke deferred operation handlers after render completes
-    [self invokeRenderCompletionHandlers];
-
-    // Re-apply the preview pane page-size multiplier. WebKit resets the
-    // multiplier when a new document loads, so each finished mainFrame load
-    // needs to restore the user's preference. Restrict to mainFrame so
-    // subframe (e.g. iframe) loads do not stomp the top-level zoom.
-    if (frame == sender.mainFrame)
-        [self applyPreviewZoom];
+        return;
+    }
+    if (!self.awaitingRequestedRender) [self invokeRenderCompletionHandlers];
 }
 
 - (void)webView:(WebView *)sender didFailLoadWithError:(NSError *)error
        forFrame:(WebFrame *)frame
 {
-    [self webView:sender didFinishLoadForFrame:frame];
-    
+    if (frame != sender.mainFrame || self.documentClosed || error.code == NSURLErrorCancelled) return;
     self.alreadyRenderingInWeb = NO;
-
-    if (self.renderToWebPending)
-        [self.renderer parseAndRenderNow];
-
+    [self.renderCompletionHandlers removeAllObjects];
+    self.pdfExportPending = NO;
+    self.pdfExportURL = nil;
+    self.awaitingRequestedRender = NO;
     self.renderToWebPending = NO;
+    NSWindow *window = sender.window;
+    if (window.isFlushWindowDisabled) [window enableFlushWindow];
+    if (error.code != NSURLErrorCancelled) [self presentError:error];
 }
+
 
 
 #pragma mark - WebPolicyDelegate
@@ -2150,6 +2146,8 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     if (self.printing)
         return;
 
+    self.awaitingRequestedRender = NO;
+    self.previewRenderGeneration++;
     self.alreadyRenderingInWeb = YES;
 
     NSURL *baseUrl = self.fileURL;
@@ -2262,6 +2260,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
                             [strongSelf syncScrollers];
                         }
                         strongSelf->_scrollOwner = MPScrollOwnerNeither;
+                        [strongSelf finishPreviewRender];
                     } forKey:@"DOMReplacementDone"];
                     [self.preview.windowScriptObject setValue:listener
                                                       forKey:@"MathJaxListener"];
@@ -2281,10 +2280,8 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
                         [self syncScrollers];
                     }
                     _scrollOwner = MPScrollOwnerNeither;
+                    [self finishPreviewRender];
                 }
-
-                // Mark rendering as complete so next edit will be processed
-                self.alreadyRenderingInWeb = NO;
 
                 // Issue #294: Update word count during DOM replacement
                 [self scheduleWordCountUpdate];
@@ -3294,22 +3291,13 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
  * would use stale content. This method queues the handler and triggers
  * a render if needed, executing the handler once rendering completes.
  *
- * If preview is visible (needsHtml = YES), the handler executes immediately.
- * If preview is hidden (needsHtml = NO), the handler is queued and render triggered.
+ * Visibility does not imply freshness: always request a render and await completion.
  */
 - (void)performAfterRender:(void (^)(void))handler
 {
-    if (!handler)
+    if (!handler || self.documentClosed)
         return;
 
-    // If preview is visible, HTML is already up-to-date. Execute immediately.
-    if (self.needsHtml)
-    {
-        handler();
-        return;
-    }
-
-    // Preview is hidden. Queue handler and trigger render.
     if (!self.renderCompletionHandlers)
         self.renderCompletionHandlers = [NSMutableArray array];
 
@@ -3318,7 +3306,10 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     // Only trigger render if this is the first queued handler
     // (subsequent handlers will be executed when the render completes)
     if (self.renderCompletionHandlers.count == 1)
+    {
+        self.awaitingRequestedRender = YES;
         [self.renderer parseAndRenderNow];
+    }
 }
 
 /**
