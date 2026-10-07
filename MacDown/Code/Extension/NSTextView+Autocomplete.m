@@ -383,25 +383,25 @@ static NSString * const kMPBlockquoteLinePattern = @"^((?:\\> ?)+).*$";
     NSMutableArray *modLines = [NSMutableArray arrayWithCapacity:lines.count];
     NSUInteger paddingLength = padding.length;
 
-    __block NSUInteger totalShift = 0;
-    [lines enumerateObjectsUsingBlock:^(id obj, NSUInteger index, BOOL *stop) {
-        NSString *line = obj;
-        if (line.length)
-            totalShift += paddingLength;
-        [modLines addObject:[padding stringByAppendingString:line]];
-    }];
-    if ([modLines.lastObject isEqualToString:padding])
-    {
-        [modLines removeLastObject];
-        [modLines addObject:@""];
+    NSUInteger originalStart = selectedRange.location;
+    NSUInteger originalEnd = NSMaxRange(selectedRange);
+    NSUInteger mappedStart = originalStart;
+    NSUInteger mappedEnd = originalEnd;
+    NSUInteger offset = lineRange.location;
+    for (NSUInteger i = 0; i < lines.count; i++) {
+        NSString *line = lines[i];
+        // The trailing empty component after a newline is outside this block.
+        // Every other line receives padding, including an empty interior line.
+        NSUInteger added = (i == lines.count - 1 && !line.length) ? 0 : paddingLength;
+        [modLines addObject:added ? [padding stringByAppendingString:line] : line];
+        if (originalStart >= offset) mappedStart += added;
+        if (originalEnd >= offset) mappedEnd += added;
+        offset += line.length + 1;
     }
     NSString *processed = [modLines componentsJoinedByString:@"\n"];
     [self insertText:processed replacementRange:lineRange];
 
-    selectedRange.location += paddingLength;
-    selectedRange.length +=
-        (totalShift > paddingLength) ? totalShift - paddingLength : 0;
-    self.selectedRange = selectedRange;
+    self.selectedRange = NSMakeRange(mappedStart, mappedEnd - mappedStart);
 }
 
 - (void)unindentSelectedLines
