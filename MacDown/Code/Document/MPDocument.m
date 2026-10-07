@@ -349,6 +349,7 @@ typedef NS_ENUM(NSInteger, MPReferenceKind) {
 // stash/clear convention above: set right before printing is dispatched,
 // always cleared once the callback fires.
 @property (strong) NSURL *pdfExportURL;
+@property BOOL pdfExportPending;
 @property BOOL isPreviewReady;
 @property BOOL documentClosed;
 @property NSUInteger fileWatchGeneration;
@@ -1266,6 +1267,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     self.documentClosed = YES;
     [self stopFileWatching];
     [self.renderCompletionHandlers removeAllObjects];
+    self.pdfExportPending = NO;
     self.pdfExportURL = nil;
     self.renderer.delegate = nil;
     self.renderer.dataSource = nil;
@@ -2732,8 +2734,9 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     // or print/write hasn't completed yet (document:didPrint:context: clears
     // it in @finally); starting a second export here would clobber the stash
     // and corrupt both exports' post-processing. Make it a safe no-op.
-    if (self.pdfExportURL)
+    if (self.pdfExportPending || self.pdfExportURL)
         return;
+    self.pdfExportPending = YES;
 
     NSSavePanel *panel = [NSSavePanel savePanel];
     panel.allowedFileTypes = @[@"pdf"];
@@ -2746,8 +2749,11 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
         w = [windowControllers[0] window];
 
     [panel beginSheetModalForWindow:w completionHandler:^(NSInteger result) {
-        if (result != NSFileHandlingPanelOKButton)
+        if (result != NSFileHandlingPanelOKButton || self.documentClosed)
+        {
+            self.pdfExportPending = NO;
             return;
+        }
 
         // Issue #504: Stash the destination URL so -document:didPrint:context:
         // knows this print completion is a save-to-PDF export and which file
@@ -4782,6 +4788,7 @@ to link outside that scope.", \
                 [mpDoc postProcessExportedPDFAtURL:exportURL];
         } @finally {
             mpDoc.pdfExportURL = nil;
+            mpDoc.pdfExportPending = NO;
         }
     }
 
