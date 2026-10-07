@@ -3429,9 +3429,9 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
             || [changedKey isEqualToString:@"htmlMathJax"]
             || [changedKey isEqualToString:@"htmlMathJaxInlineDollar"])
     {
-        int extensions = pmh_EXT_NOTES;
+        int extensions = pmh_EXT_NONE;
         if (self.preferences.extensionFootnotes)
-            extensions = pmh_EXT_NONE;
+            extensions |= pmh_EXT_NOTES;
         if (self.preferences.htmlMathJax && self.preferences.htmlMathJaxInlineDollar)
             extensions |= pmh_EXT_MATH;
         self.highlighter.extensions = extensions;
@@ -4812,6 +4812,7 @@ to link outside that scope.", \
 }
 
 
+// NSDocument's completion convention is (document, success, context), after self/_cmd.
 + (NSInvocation *)printCompletionForDelegate:(id)delegate selector:(SEL)selector context:(void *)context
 {
     if (!delegate || !selector) return nil;

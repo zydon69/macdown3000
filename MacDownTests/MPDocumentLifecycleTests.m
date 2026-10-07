@@ -15,6 +15,7 @@
 #import "MPRenderer.h"
 #import "MPEditorView.h"
 #import "HGMarkdownHighlighter.h"
+#import "pmh_parser.h"
 #import <sys/stat.h>
 
 
@@ -27,6 +28,7 @@
 @property (weak) MPEditorView *editor;
 @property (copy) NSString *loadedString;
 - (void)reloadFromLoadedString;
+- (void)setupEditor:(NSString *)changedKey;
 - (IBAction)toggleUnderline:(id)sender;
 - (BOOL)textViewShouldMoveToLeftEndOfLine:(NSTextView *)textView;
 @property (nonatomic) BOOL isPreviewReady;
@@ -38,6 +40,10 @@
 
 @interface MPRenderer (DocumentActionTesting)
 - (void)parseMarkdown:(NSString *)markdown;
+@end
+
+@interface HGMarkdownHighlighter (DocumentFootnoteTesting)
+- (pmh_element **)parseText:(NSString *)markdown;
 @end
 
 // Spy renderer: records whether parseAndRenderNow was called without
@@ -977,6 +983,43 @@
     XCTAssertEqual(probe.document, self.document);
     XCTAssertTrue(probe.success);
     XCTAssertEqual(probe.context, expectedContext);
+}
+
+- (void)testEditorFootnoteParsingFollowsPreferenceAndPreservesMath
+{
+    MPPreferences *preferences = self.document.preferences;
+    BOOL originalNotes = preferences.extensionFootnotes;
+    BOOL originalMath = preferences.htmlMathJax;
+    BOOL originalDollar = preferences.htmlMathJaxInlineDollar;
+    HGMarkdownHighlighter *highlighter = [[HGMarkdownHighlighter alloc] init];
+    self.document.highlighter = highlighter;
+    @try {
+        for (NSNumber *notes in @[@NO, @YES]) {
+            for (NSNumber *math in @[@NO, @YES]) {
+                for (NSNumber *dollar in @[@NO, @YES]) {
+                    preferences.extensionFootnotes = notes.boolValue;
+                    preferences.htmlMathJax = math.boolValue;
+                    preferences.htmlMathJaxInlineDollar = dollar.boolValue;
+                    [self.document setupEditor:@"extensionFootnotes"];
+                    pmh_element **elements = [highlighter parseText:@"Text[^*note*].\n"];
+                    XCTAssertNotEqual(elements, NULL);
+                    if (elements) {
+                        // A footnote reference is opaque when enabled. With notes disabled,
+                        // its asterisks remain ordinary Markdown emphasis.
+                        XCTAssertEqual(elements[pmh_EMPH] != NULL, !notes.boolValue);
+                        pmh_free_elements(elements);
+                    }
+                    XCTAssertEqual((highlighter.extensions & pmh_EXT_MATH) != 0,
+                                   math.boolValue && dollar.boolValue);
+                }
+            }
+        }
+    } @finally {
+        [highlighter deactivate];
+        preferences.extensionFootnotes = originalNotes;
+        preferences.htmlMathJax = originalMath;
+        preferences.htmlMathJaxInlineDollar = originalDollar;
+    }
 }
 
 
