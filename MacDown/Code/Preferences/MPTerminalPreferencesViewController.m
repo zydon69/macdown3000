@@ -270,6 +270,9 @@ NS_INLINE NSColor *MPGetInstallationIndicatorColor(BOOL installed)
 {
     __weak MPTerminalPreferencesViewController *weakSelf = self;
     MPDetectHomebrewPrefixWithCompletionhandler(^(NSString *output) {
+        MPTerminalPreferencesViewController *controller = weakSelf;
+        if (!controller)
+            return;
         NSString *macdownPath = MPCommandInstallationPath;
         if (output)
         {
@@ -280,16 +283,16 @@ NS_INLINE NSColor *MPGetInstallationIndicatorColor(BOOL installed)
                 [prefix stringByAppendingPathComponent:@"bin/macdown"];
         }
 
-        if ([weakSelf isOwnedShellUtilityAtURL:[NSURL fileURLWithPath:macdownPath]])
-            weakSelf.shellUtilityURL = [NSURL fileURLWithPath:macdownPath];
+        if ([controller isOwnedShellUtilityAtURL:[NSURL fileURLWithPath:macdownPath]])
+            controller.shellUtilityURL = [NSURL fileURLWithPath:macdownPath];
         else
         {
             // Also check user-local installation
-            NSString *userLocalPath = [[weakSelf userBinPath] stringByAppendingPathComponent:@"macdown"];
-            if ([weakSelf isOwnedShellUtilityAtURL:[NSURL fileURLWithPath:userLocalPath]])
-                weakSelf.shellUtilityURL = [NSURL fileURLWithPath:userLocalPath];
+            NSString *userLocalPath = [[controller userBinPath] stringByAppendingPathComponent:@"macdown"];
+            if ([controller isOwnedShellUtilityAtURL:[NSURL fileURLWithPath:userLocalPath]])
+                controller.shellUtilityURL = [NSURL fileURLWithPath:userLocalPath];
             else
-                weakSelf.shellUtilityURL = nil;  // Utility not found in any location
+                controller.shellUtilityURL = nil;  // Utility not found in any location
         }
     });
 }
