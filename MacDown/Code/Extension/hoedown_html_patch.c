@@ -195,7 +195,7 @@ void hoedown_patch_render_listitem(
             offset = 0;
         }
 		size_t size = text->size;
-		while (size && text->data[size - offset - 1] == '\n')
+		while (size > offset && text->data[size - 1] == '\n')
 			size--;
 
 		hoedown_buffer_put(ob, text->data + offset, size - offset);

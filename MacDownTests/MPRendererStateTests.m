@@ -515,4 +515,14 @@
     XCTAssertTrue([html containsString:@"data-information=\"&quot;/&gt;&lt;img/src"]);
 }
 
+- (void)testTaskListParagraphRetainsItsClosingMarkup
+{
+    self.renderer.rendererFlags = (1 << 4);
+    [self.renderer parseMarkdown:@"- [ ] First\n\n  continuation\n\n- [x] Second"];
+    NSString *html = [self.renderer HTMLForExportWithStyles:NO highlighting:NO];
+    XCTAssertTrue([html containsString:@"continuation</p>"]);
+    XCTAssertTrue([html containsString:@"data-checkbox-index=\"0\""]);
+    XCTAssertTrue([html containsString:@"data-checkbox-index=\"1\""]);
+}
+
 @end
