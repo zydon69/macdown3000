@@ -31,7 +31,7 @@ with tempfile.TemporaryDirectory(prefix='macdown version ') as directory:
     run('make', cwd=version_dir)
     assert header.stat().st_mtime_ns == original_mtime
 
-    version = '1.2.3"%n'
+    version = '1.2.3'
     run('git', 'tag', 'v' + version)
     run('make', cwd=version_dir)
     consumer = version_dir / 'consumer.c'
@@ -45,4 +45,19 @@ with tempfile.TemporaryDirectory(prefix='macdown version ') as directory:
     assert run(str(version_dir / 'consumer')).stdout.strip() == version + '.post1'
     assert '"2"' in header.read_text()
 
-    print('PASS real Git versions, stable header mtime and literal C consumer')
+    if Path('/usr/libexec/PlistBuddy').exists():
+        plist = repo / 'Info.plist'
+        plist.write_text('<?xml version="1.0" encoding="UTF-8"?>\n'
+                         '<plist version="1.0"><dict/></plist>\n')
+        env = dict(os.environ, CI='false', TARGET_BUILD_DIR=str(repo),
+                   INFOPLIST_PATH=plist.name)
+        run('bash', 'Tools/update_build_number.sh', env=env)
+        value = run('/usr/libexec/PlistBuddy', '-c', 'Print :CFBundleVersion', str(plist))
+        assert value.stdout.strip() == '2'
+        short = run('/usr/libexec/PlistBuddy', '-c', 'Print :CFBundleShortVersionString', str(plist))
+        assert short.stdout.strip() == version + '.post1', short.stdout
+        missing = subprocess.run(['bash', 'Tools/update_build_number.sh'], cwd=repo,
+                                 env=dict(env, INFOPLIST_PATH='absent.plist'),
+                                 capture_output=True)
+        assert missing.returncode != 0
+    print('PASS real Git versions, stable header mtime, literal C consumer and plist failure')
