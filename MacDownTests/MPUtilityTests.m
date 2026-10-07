@@ -728,4 +728,16 @@
     XCTAssertNotNil(error);
 }
 
+- (void)testUniqueTemporaryFilesDoNotOverwriteAndRejectTraversal {
+    NSData *first = [@"first" dataUsingEncoding:NSUTF8StringEncoding];
+    NSString *a = MPWriteDataToUniqueTemporaryFile(first, @"document.md", NULL);
+    NSString *b = MPWriteDataToUniqueTemporaryFile([@"second" dataUsingEncoding:NSUTF8StringEncoding], @"document.md", NULL);
+    XCTAssertNotNil(a);
+    XCTAssertNotEqualObjects(a, b);
+    XCTAssertEqualObjects([NSData dataWithContentsOfFile:a], first);
+    XCTAssertNil(MPWriteDataToUniqueTemporaryFile(first, @"../document.md", NULL));
+    [[NSFileManager defaultManager] removeItemAtPath:a.stringByDeletingLastPathComponent error:NULL];
+    [[NSFileManager defaultManager] removeItemAtPath:b.stringByDeletingLastPathComponent error:NULL];
+}
+
 @end
