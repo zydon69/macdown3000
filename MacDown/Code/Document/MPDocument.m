@@ -4213,6 +4213,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     CGFloat editorVisibleHeight = ceilf(NSHeight(self.editor.enclosingScrollView.contentView.bounds));
     CGFloat previewContentHeight = ceilf(NSHeight(self.preview.enclosingScrollView.documentView.bounds));
     CGFloat previewVisibleHeight = ceilf(NSHeight(self.preview.enclosingScrollView.contentView.bounds));
+    if (editorVisibleHeight <= 0 || previewVisibleHeight <= 0) return;
     NSInteger relativeHeaderIndex = -1; // -1 is start of document, before any other header
     CGFloat currY = NSMinY(self.editor.enclosingScrollView.contentView.bounds);
     CGFloat minY = 0;
@@ -4274,7 +4275,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     CGFloat bottomHeaderY = previewContentHeight - previewVisibleHeight;
     
     // Find the Y positions in the preview window that we're scrolling between
-    if ([_webViewHeaderLocations count] > relativeHeaderIndex)
+    if (relativeHeaderIndex >= 0 && [_webViewHeaderLocations count] > (NSUInteger)relativeHeaderIndex)
     {
         topHeaderY = floorf([_webViewHeaderLocations[relativeHeaderIndex] doubleValue]) - adjustmentForScroll;
     }
@@ -4287,6 +4288,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     // Now we scroll percentScrolledBetweenHeaders percent between those two positions in the webview
     CGFloat previewY = topHeaderY + (bottomHeaderY - topHeaderY) * percentScrolledBetweenHeaders;
     NSRect contentBounds = self.preview.enclosingScrollView.contentView.bounds;
+    previewY = MAX(0, MIN(previewY, MAX(0, NSHeight(self.preview.enclosingScrollView.documentView.bounds) - NSHeight(contentBounds))));
     contentBounds.origin.y = previewY;
 
     // Issue #342: No flag toggles needed — previewBoundsDidChange: is guarded
@@ -4356,6 +4358,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
                                   webViewHeaderLocations:_webViewHeaderLocations];
 
     NSRect contentBounds = self.preview.enclosingScrollView.contentView.bounds;
+    previewY = MAX(0, MIN(previewY, MAX(0, NSHeight(self.preview.enclosingScrollView.documentView.bounds) - NSHeight(contentBounds))));
     contentBounds.origin.y = previewY;
 
     // Issue #342: No flag toggles needed — previewBoundsDidChange: is guarded
@@ -4427,7 +4430,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     CGFloat topHeaderY = 0;
     CGFloat bottomHeaderY = previewContentHeight;
 
-    if ([webViewHeaderLocations count] > relativeHeaderIndex)
+    if (relativeHeaderIndex >= 0 && [webViewHeaderLocations count] > (NSUInteger)relativeHeaderIndex)
     {
         topHeaderY = floorf([webViewHeaderLocations[relativeHeaderIndex] doubleValue]);
     }
@@ -4473,6 +4476,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     CGFloat previewVisibleHeight = ceilf(NSHeight(self.preview.enclosingScrollView.contentView.bounds));
     CGFloat editorContentHeight = ceilf(NSHeight(self.editor.enclosingScrollView.documentView.bounds));
     CGFloat editorVisibleHeight = ceilf(NSHeight(self.editor.enclosingScrollView.contentView.bounds));
+    if (editorVisibleHeight <= 0 || previewVisibleHeight <= 0) return;
     NSInteger relativeHeaderIndex = -1; // -1 is start of document, before any other header
     CGFloat currY = NSMinY(self.preview.enclosingScrollView.contentView.bounds);
     CGFloat minY = 0;
@@ -4533,7 +4537,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     CGFloat bottomHeaderY = editorContentHeight - editorVisibleHeight;
 
     // Find the Y positions in the editor that we're scrolling between
-    if ([_editorHeaderLocations count] > relativeHeaderIndex)
+    if (relativeHeaderIndex >= 0 && [_editorHeaderLocations count] > (NSUInteger)relativeHeaderIndex)
     {
         topHeaderY = floorf([_editorHeaderLocations[relativeHeaderIndex] doubleValue]) - adjustmentForScroll;
     }
@@ -4546,6 +4550,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     // Now we scroll percentScrolledBetweenHeaders percent between those two positions in the editor
     CGFloat editorY = topHeaderY + (bottomHeaderY - topHeaderY) * percentScrolledBetweenHeaders;
     NSRect contentBounds = self.editor.enclosingScrollView.contentView.bounds;
+    editorY = MAX(0, MIN(editorY, MAX(0, editorContentHeight - editorVisibleHeight)));
     contentBounds.origin.y = editorY;
 
     // Issue #342: No flag toggles needed — editorBoundsDidChange: is guarded

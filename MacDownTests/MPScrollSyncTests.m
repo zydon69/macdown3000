@@ -1805,9 +1805,8 @@ static const NSUInteger MPScrollOwnerNeither = 2;
 
     [doc syncScrollers];
 
-    // With no scroll view, syncScrollers writes 0.0 — the point is it overwrites the stale value
-    XCTAssertEqualWithAccuracy(doc.lastPreviewScrollTop, 0.0, 0.01,
-                               @"syncScrollers should overwrite stale lastPreviewScrollTop with computed value");
+    // A missing/hidden viewport has no usable geometry. Preserve its last position.
+    XCTAssertEqualWithAccuracy(doc.lastPreviewScrollTop, 999.0, 0.01);
 }
 
 #pragma mark - Issue #342: Group F — Handler Method Existence
