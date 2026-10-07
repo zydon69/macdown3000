@@ -13,41 +13,31 @@
 // and href="..." or href='...' on <link> elements.
 // Group 1: the element name, Group 2: the URL value
 static NSString * const kResourcePattern =
-    @"<(img|video|audio|source|iframe)\\b[^>]*\\bsrc=[\"']([^\"']+)[\"']"
-    @"|<(link)\\b[^>]*\\bhref=[\"']([^\"']+)[\"']";
+    @"<(img|video|audio|source|iframe)\\b[^>]*\\ssrc\\s*=\\s*[\"']([^\"']+)[\"']"
+    @"|<(link)\\b[^>]*\\shref\\s*=\\s*[\"']([^\"']+)[\"']";
 
-static BOOL MPIsRemoteURL(NSString *url)
+static NSString *MPDecodeHTMLURL(NSString *url)
 {
-    return [url hasPrefix:@"http://"]
-        || [url hasPrefix:@"https://"]
-        || [url hasPrefix:@"data:"]
-        || [url hasPrefix:@"#"];
+    return [[[[url stringByReplacingOccurrencesOfString:@"&quot;" withString:@"\""]
+        stringByReplacingOccurrencesOfString:@"&#39;" withString:@"'"]
+        stringByReplacingOccurrencesOfString:@"&apos;" withString:@"'"]
+        stringByReplacingOccurrencesOfString:@"&amp;" withString:@"&"];
 }
 
 static NSString *MPResolveLocalPath(NSString *url, NSURL *baseURL)
 {
-    // Handle file:// protocol
-    if ([url hasPrefix:@"file://"])
-    {
-        NSURL *fileURL = [NSURL URLWithString:url];
-        return fileURL.path;
+    url = MPDecodeHTMLURL(url);
+    if ([url hasPrefix:@"#"] || [url hasPrefix:@"//"] || !baseURL.isFileURL)
+        return nil;
+    NSURL *baseDir = baseURL.hasDirectoryPath ? baseURL : baseURL.URLByDeletingLastPathComponent;
+    NSURL *resolved = [NSURL URLWithString:url relativeToURL:baseDir];
+    if (!resolved) {
+        NSMutableCharacterSet *allowed = [[NSCharacterSet URLFragmentAllowedCharacterSet] mutableCopy];
+        [allowed addCharactersInString:@"%?#"];
+        resolved = [NSURL URLWithString:[url stringByAddingPercentEncodingWithAllowedCharacters:allowed]
+                         relativeToURL:baseDir];
     }
-
-    // Absolute path
-    if ([url hasPrefix:@"/"])
-        return url;
-
-    // Relative path — resolve against base directory.
-    // If baseURL is already a directory (e.g., unsaved document default),
-    // use it directly; otherwise strip the filename component.
-    NSURL *baseDir = baseURL.hasDirectoryPath
-        ? baseURL
-        : [baseURL URLByDeletingLastPathComponent];
-    NSURL *resolved = [NSURL URLWithString:
-        [url stringByAddingPercentEncodingWithAllowedCharacters:
-            [NSCharacterSet URLPathAllowedCharacterSet]]
-                             relativeToURL:baseDir];
-    return resolved.path.stringByStandardizingPath;
+    return resolved.isFileURL ? resolved.path.stringByStandardizingPath : nil;
 }
 
 NSSet<NSString *> *MPLocalFilePathsInHTML(NSString *html, NSURL *baseURL)
@@ -76,16 +66,10 @@ NSSet<NSString *> *MPLocalFilePathsInHTML(NSString *html, NSURL *baseURL)
         else if ([match rangeAtIndex:4].location != NSNotFound)
             url = [html substringWithRange:[match rangeAtIndex:4]];
 
-        if (!url || MPIsRemoteURL(url))
+        if (!url)
             continue;
 
-        // Strip any existing query string for path resolution
-        NSRange queryRange = [url rangeOfString:@"?"];
-        NSString *cleanUrl = (queryRange.location != NSNotFound)
-            ? [url substringToIndex:queryRange.location]
-            : url;
-
-        NSString *path = MPResolveLocalPath(cleanUrl, baseURL);
+        NSString *path = MPResolveLocalPath(url, baseURL);
         if (path)
             [paths addObject:path];
     }
@@ -124,16 +108,8 @@ NSString *MPApplyCacheBusting(NSString *html, NSDictionary<NSString *, NSNumber 
             continue;
 
         NSString *url = [html substringWithRange:urlRange];
-        if (MPIsRemoteURL(url))
-            continue;
 
-        // Strip existing ?t= for clean path resolution
-        NSRange queryRange = [url rangeOfString:@"?"];
-        NSString *cleanUrl = (queryRange.location != NSNotFound)
-            ? [url substringToIndex:queryRange.location]
-            : url;
-
-        NSString *path = MPResolveLocalPath(cleanUrl, baseURL);
+        NSString *path = MPResolveLocalPath(url, baseURL);
         if (!path)
             continue;
 
@@ -141,8 +117,17 @@ NSString *MPApplyCacheBusting(NSString *html, NSDictionary<NSString *, NSNumber 
         if (!timestamp)
             continue;
 
-        NSString *busted = [NSString stringWithFormat:@"%@?t=%ld",
-                            cleanUrl, (long)timestamp.doubleValue];
+        NSURLComponents *components = [NSURLComponents componentsWithString:MPDecodeHTMLURL(url)];
+        if (!components)
+            continue;
+        NSMutableArray<NSURLQueryItem *> *items = [NSMutableArray array];
+        for (NSURLQueryItem *item in components.queryItems)
+            if (![item.name isEqualToString:@"t"])
+                [items addObject:item];
+        [items addObject:[NSURLQueryItem queryItemWithName:@"t"
+            value:[NSString stringWithFormat:@"%ld", (long)timestamp.doubleValue]]];
+        components.queryItems = items;
+        NSString *busted = [components.string stringByReplacingOccurrencesOfString:@"&" withString:@"&amp;"];
         [result replaceCharactersInRange:urlRange withString:busted];
     }
 

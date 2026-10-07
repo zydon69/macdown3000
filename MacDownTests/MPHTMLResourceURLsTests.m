@@ -273,4 +273,20 @@
                   @"Untracked stylesheets must remain unchanged");
 }
 
+- (void)testEncodedResourcesResolveWithoutDoubleEncodingOrFragment {
+    NSSet *paths = MPLocalFilePathsInHTML(@"<img src = 'my%20photo.png#frame'>", self.baseURL);
+    XCTAssertEqualObjects(paths, [NSSet setWithObject:@"/Users/test/docs/my photo.png"]);
+}
+
+- (void)testOnlyLocalSchemesAndRealResourceAttributesAreWatched {
+    NSString *html = @"<img src='HTTPS://host/image.png'><img src='//host/image.png'><img data-src='lazy.png'>";
+    XCTAssertEqual(MPLocalFilePathsInHTML(html, self.baseURL).count, 0u);
+}
+
+- (void)testCacheBustingPreservesOtherQueryItemsAndSVGFragment {
+    NSString *html = @"<img src='icons.svg?variant=dark&amp;t=old#logo'>";
+    NSString *result = MPApplyCacheBusting(html, @{@"/Users/test/docs/icons.svg": @1234}, self.baseURL);
+    XCTAssertTrue([result containsString:@"variant=dark&amp;t=1234#logo"]);
+}
+
 @end
