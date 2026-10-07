@@ -2747,8 +2747,9 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
             if (!strongSelf) return;
             NSString *html = [strongSelf.renderer HTMLForExportWithStyles:styles
                                                              highlighting:highlighting];
-            [html writeToURL:url atomically:NO encoding:NSUTF8StringEncoding
-                       error:NULL];
+            NSError *error = nil;
+            if (![html writeToURL:url atomically:YES encoding:NSUTF8StringEncoding error:&error])
+                [strongSelf presentError:error];
         }];
     }];
 }
