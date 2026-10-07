@@ -17,6 +17,11 @@
 #import "HGMarkdownHighlighter.h"
 #import "pmh_parser.h"
 #import <sys/stat.h>
+#import <objc/runtime.h>
+#import <WebKit/WebKit.h>
+#import <JavaScriptCore/JavaScriptCore.h>
+#import "MPResourceWatcherSet.h"
+#import "MPHTMLResourceURLs.h"
 
 
 #pragma mark - Test Infrastructure for Issue #358
@@ -34,6 +39,13 @@
 @property (nonatomic) BOOL isPreviewReady;
 @property (nonatomic) BOOL alreadyRenderingInWeb;
 @property (nonatomic) BOOL renderToWebPending;
+@property (weak) WebView *preview;
+@property (strong) MPResourceWatcherSet *resourceWatcherSet;
+- (void)processExternalFileChange;
+- (void)renderer:(MPRenderer *)renderer didProduceHTMLOutput:(NSString *)html;
+- (void)resourceWatcherSet:(MPResourceWatcherSet *)set didDetectChangeAtPath:(NSString *)path;
+- (IBAction)exportPdf:(id)sender;
+- (IBAction)exportHtml:(id)sender;
 + (NSInvocation *)printCompletionForDelegate:(id)delegate selector:(SEL)selector context:(void *)context;
 - (void)document:(NSDocument *)doc didPrint:(BOOL)ok context:(void *)context;
 @end
@@ -93,6 +105,53 @@
     self.document = document; self.success = success; self.context = context; self.calls++;
 }
 @end
+
+// Observe publication and alert output; leave the document, renderer and file
+// writes real. Presenting an error sheet is an external UI boundary.
+@interface MPDocumentExportAuditProbe : MPDocument
+@property (strong) NSMutableArray<NSString *> *publishedHTML;
+@property (strong) NSError *presentedError;
+@end
+@implementation MPDocumentExportAuditProbe
+- (instancetype)init
+{
+    if ((self = [super init])) self.publishedHTML = [NSMutableArray array];
+    return self;
+}
+- (void)renderer:(MPRenderer *)renderer didProduceHTMLOutput:(NSString *)html
+{
+    [self.publishedHTML addObject:html];
+    [super renderer:renderer didProduceHTMLOutput:html];
+}
+- (BOOL)presentError:(NSError *)error
+{
+    self.presentedError = error;
+    return NO;
+}
+@end
+
+// Save-panel interaction alone is substituted. The export action, render
+// completion, pending-operation rule and filesystem failure remain production.
+@interface MPControlledExportPanel : NSObject
+@property (copy) NSArray *allowedFileTypes;
+@property (copy) NSString *nameFieldStringValue;
+@property (strong) NSView *accessoryView;
+@property (strong) NSURL *URL;
+@property (copy) void (^completion)(NSInteger);
+@property NSUInteger presentations;
+@end
+@implementation MPControlledExportPanel
+- (void)beginSheetModalForWindow:(NSWindow *)window completionHandler:(void (^)(NSInteger))completion
+{
+    self.presentations++;
+    self.completion = completion;
+}
+@end
+static MPControlledExportPanel *MPCurrentControlledExportPanel;
+static id MPControlledExportPanelFactory(id receiver, SEL selector)
+{
+    return MPCurrentControlledExportPanel;
+}
 
 @interface MPDocumentLifecycleTests : XCTestCase
 @property (strong) MPDocument *document;
@@ -1083,6 +1142,32 @@
         preferences.editorSmartHome = original;
     }
 }
+
+
+- (void)testPDFExportAllowsOnePendingPanelAndCanRetryAfterCancellation
+{
+    MPControlledExportPanel *panel = [MPControlledExportPanel new];
+    MPCurrentControlledExportPanel = panel;
+    Method factory = class_getClassMethod(NSSavePanel.class, @selector(savePanel));
+    IMP original = method_setImplementation(factory, (IMP)MPControlledExportPanelFactory);
+    @try {
+        [self.document exportPdf:nil];
+        XCTAssertEqual(panel.presentations, 1u);
+        [self.document exportPdf:nil];
+        XCTAssertEqual(panel.presentations, 1u, @"A second export must not open another save panel");
+        XCTAssertNotNil(panel.completion);
+        panel.completion(NSFileHandlingPanelCancelButton);
+        [self.document exportPdf:nil];
+        XCTAssertEqual(panel.presentations, 2u, @"Cancellation must release the export slot");
+        panel.completion(NSFileHandlingPanelCancelButton);
+    } @finally {
+        method_setImplementation(factory, original);
+        MPCurrentControlledExportPanel = nil;
+    }
+}
+
+
+
 
 
 @end
