@@ -571,4 +571,12 @@
     XCTAssertTrue([self.renderer.currentHtml containsString:@"Last paragraph</p>"]);
 }
 
+- (void)testTOCLabelsKeepLiteralDollarsAndBackslashes
+{
+    self.delegate.renderTOC = YES;
+    [self.renderer parseMarkdown:@"[TOC]\n\n# Cost $5 and C:\\path"];
+    XCTAssertEqual([self.renderer.currentHtml componentsSeparatedByString:@"Cost $5 and C:\\path"].count, 3U);
+    XCTAssertTrue([self.renderer.currentHtml containsString:@"href=\"#cost-5-and-cpath\""]);
+}
+
 @end

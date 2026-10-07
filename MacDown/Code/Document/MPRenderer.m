@@ -146,7 +146,7 @@ NS_INLINE NSString *MPHTMLFromMarkdown(
         NSRange replaceRange = NSMakeRange(0, result.length);
         result = [tocRegex stringByReplacingMatchesInString:result options:0
                                                       range:replaceRange
-                                               withTemplate:toc];
+                                               withTemplate:[NSRegularExpression escapedTemplateForString:toc]];
         hoedown_document_free(document);
         hoedown_buffer_free(ob);
     }
