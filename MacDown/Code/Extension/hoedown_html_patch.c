@@ -569,7 +569,10 @@ void hoedown_patch_render_toc_header(
     if (level <= state->toc_data.nesting_level) {
         /* set the level offset if this is the first header
          * we're parsing for the document */
-        if (state->toc_data.current_level == 0)
+        // A later heading may precede the initial heading in the hierarchy.
+        // Keep it at the root instead of normalizing it to zero or below,
+        // which would close the outer list and emit orphan list items.
+        if (state->toc_data.current_level == 0 || level <= state->toc_data.level_offset)
             state->toc_data.level_offset = level - 1;
 
         level -= state->toc_data.level_offset;
