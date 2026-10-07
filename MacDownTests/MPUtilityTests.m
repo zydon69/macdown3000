@@ -8,11 +8,24 @@
 
 #import <XCTest/XCTest.h>
 #import "MPUtilities.h"
+#import "YAMLSerialization.h"
 #import "NSTextView+Autocomplete.h"
 #import "NSDocumentController+Document.h"
 #import "FileURLInlining.h"
 #import "NSString+Lookup.h"
 #import "NSPasteboard+Types.h"
+
+@interface MPAuditOutputStream : NSOutputStream
+@property (strong) NSOutputStream *backingStream;
+@property BOOL didClose;
+@end
+@implementation MPAuditOutputStream
+- (void)open { [self.backingStream open]; }
+- (void)close { self.didClose = YES; [self.backingStream close]; }
+- (NSInteger)write:(const uint8_t *)buffer maxLength:(NSUInteger)length {
+    return [self.backingStream write:buffer maxLength:length];
+}
+@end
 
 @interface MPUtilityTests : XCTestCase
 @property (strong) NSString *tempDir;
@@ -784,6 +797,80 @@
     [view toggleBlockWithPattern:@"^[0-9]+\\.[ \t]+" prefix:@"1. "];
     XCTAssertEqualObjects(view.string, @"");
     XCTAssertTrue(NSEqualRanges(view.selectedRange, NSMakeRange(0, 0)));
+}
+
+- (void)testYAMLRejectsRecursiveAliasesAndClosesStream {
+    NSInputStream *stream = [NSInputStream inputStreamWithData:
+        [@"value: &value [*value]" dataUsingEncoding:NSUTF8StringEncoding]];
+    NSError *error = nil;
+    XCTAssertNil([YAMLSerialization objectsWithYAMLStream:stream
+        options:kYAMLReadOptionStringScalars error:&error]);
+    XCTAssertNotNil(error);
+    XCTAssertEqual(stream.streamStatus, NSStreamStatusClosed);
+}
+
+- (void)testYAMLParseErrorsCloseStreamAndValidAliasesRemainReadable {
+    NSInputStream *stream = [NSInputStream inputStreamWithData:
+        [@"value: [" dataUsingEncoding:NSUTF8StringEncoding]];
+    XCTAssertNil([YAMLSerialization objectsWithYAMLStream:stream
+        options:kYAMLReadOptionStringScalars error:NULL]);
+    XCTAssertEqual(stream.streamStatus, NSStreamStatusClosed);
+    NSArray *objects = [YAMLSerialization objectsWithYAMLString:@"one: &one [é]\ntwo: *one"
+        options:kYAMLReadOptionStringScalars error:NULL];
+    XCTAssertEqualObjects([objects.firstObject objectForKey:@"two"], (@[@"é"]));
+    XCTAssertNil([YAMLSerialization objectWithYAMLString:@""
+        options:kYAMLReadOptionStringScalars error:NULL]);
+}
+
+- (void)testYAMLWriterPreservesUnicodeAndEmitsEachDocument {
+    NSError *error = nil;
+    NSArray *documents = @[@{@"title": @"é漢😀"}, @{@"title": @"second"}];
+    NSData *yaml = [YAMLSerialization YAMLDataWithObject:documents
+        options:kYAMLWriteOptionMultipleDocuments error:&error];
+    XCTAssertNotNil(yaml);
+    XCTAssertNil(error);
+    NSArray *decoded = [YAMLSerialization objectsWithYAMLData:yaml
+        options:kYAMLReadOptionStringScalars error:&error];
+    XCTAssertEqual(decoded.count, 2u);
+    XCTAssertEqualObjects([decoded[0] objectForKey:@"title"], @"é漢😀");
+    XCTAssertEqualObjects([decoded[1] objectForKey:@"title"], @"second");
+}
+
+- (void)testYAMLWriterRejectsRecursiveAndUnsupportedObjects {
+    NSMutableArray *recursive = [NSMutableArray array];
+    [recursive addObject:recursive];
+    NSError *error = nil;
+    XCTAssertNil([YAMLSerialization YAMLDataWithObject:recursive
+        options:kYAMLWriteOptionSingleDocument error:&error]);
+    XCTAssertNotNil(error);
+    [recursive removeAllObjects];
+    XCTAssertNil([YAMLSerialization YAMLDataWithObject:NSObject.new
+        options:kYAMLWriteOptionSingleDocument error:NULL]);
+}
+
+- (void)testYAMLWriterReportsOutputStreamFailure {
+    MPAuditOutputStream *stream = [[MPAuditOutputStream alloc] init];
+    stream.backingStream = [NSOutputStream outputStreamToFileAtPath:
+        [self.tempDir stringByAppendingPathComponent:@"missing/output.yaml"] append:NO];
+    NSError *error = nil;
+    XCTAssertFalse([YAMLSerialization writeObject:@{@"title": @"sample"}
+        toYAMLStream:stream options:kYAMLWriteOptionSingleDocument error:&error]);
+    XCTAssertNotNil(error);
+    XCTAssertTrue(stream.didClose);
+}
+
+- (void)testYAMLMutabilityOptionsAreIndependent {
+    id immutable = [YAMLSerialization objectWithYAMLString:@"[hello, [world]]"
+        options:kYAMLReadOptionStringScalars error:NULL];
+    XCTAssertFalse([immutable isKindOfClass:NSMutableArray.class]);
+    XCTAssertFalse([immutable[1] isKindOfClass:NSMutableArray.class]);
+    id containers = [YAMLSerialization objectWithYAMLString:@"[hello]"
+        options:kYAMLReadOptionStringScalars | kYAMLReadOptionMutableContainers error:NULL];
+    XCTAssertTrue([containers isKindOfClass:NSMutableArray.class]);
+    XCTAssertFalse([containers[0] isKindOfClass:NSMutableString.class]);
+    id leaves = [YAMLSerialization objectWithYAMLString:@"[hello]"
+        options:kYAMLReadOptionStringScalars | kYAMLReadOptionMutableContainersAndLeaves error:NULL];
+    XCTAssertTrue([leaves[0] isKindOfClass:NSMutableString.class]);
 }
 
 @end

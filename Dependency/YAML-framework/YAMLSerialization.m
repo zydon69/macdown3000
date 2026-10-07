@@ -38,7 +38,54 @@ __YAMLSerializationParserInputReadHandler (void *data, unsigned char *buffer, si
     }
 }
 
+// Validate aliases before creating Foundation containers. Cyclic graphs cannot
+// be represented safely by the recursive front-matter HTML consumer.
+static BOOL YAMLNodeIsAcyclic(yaml_document_t *document, int index,
+                              unsigned char *states, NSUInteger depth) {
+    if (depth > 256 || states[index - 1] == 1)
+        return NO;
+    if (states[index - 1] == 2)
+        return YES;
+    states[index - 1] = 1;
+    yaml_node_t *node = yaml_document_get_node(document, index);
+    if (node->type == YAML_SEQUENCE_NODE) {
+        for (yaml_node_item_t *item = node->data.sequence.items.start;
+             item < node->data.sequence.items.top; item++)
+            if (!YAMLNodeIsAcyclic(document, *item, states, depth + 1))
+                return NO;
+    } else if (node->type == YAML_MAPPING_NODE) {
+        for (yaml_node_pair_t *pair = node->data.mapping.pairs.start;
+             pair < node->data.mapping.pairs.top; pair++)
+            if (!YAMLNodeIsAcyclic(document, pair->key, states, depth + 1)
+                || !YAMLNodeIsAcyclic(document, pair->value, states, depth + 1))
+                return NO;
+    }
+    states[index - 1] = 2;
+    return YES;
+}
+
 // Serialize single, parsed document. Does not destroy the document.
+static id YAMLImmutableObject(id object, NSMapTable *copies) {
+    id existing = [copies objectForKey:object];
+    if (existing)
+        return existing;
+    id result = object;
+    if ([object isKindOfClass:[NSArray class]]) {
+        NSMutableArray *items = [NSMutableArray array];
+        for (id item in object)
+            [items addObject:YAMLImmutableObject(item, copies)];
+        result = [[items copy] autorelease];
+    } else if ([object isKindOfClass:[M13OrderedDictionary class]]) {
+        M13MutableOrderedDictionary *items = [[[M13MutableOrderedDictionary alloc] init] autorelease];
+        for (id key in object)
+            [items setObject:YAMLImmutableObject([object objectForKey:key], copies)
+                      forKey:YAMLImmutableObject(key, copies)];
+        result = [[items copy] autorelease];
+    }
+    [copies setObject:result forKey:object];
+    return result;
+}
+
 static id
 __YAMLSerializationObjectWithYAMLDocument (yaml_document_t *document, YAMLReadOptions opt, NSError **error) {
 
@@ -52,7 +99,7 @@ __YAMLSerializationObjectWithYAMLDocument (yaml_document_t *document, YAMLReadOp
     if (opt & kYAMLReadOptionMutableContainers) {
         arrayClass = [NSMutableArray class];
         dictionaryClass = [M13MutableOrderedDictionary class];
-        if (opt & kYAMLReadOptionMutableContainersAndLeaves) {
+        if ((opt & kYAMLReadOptionMutableContainersAndLeaves) == kYAMLReadOptionMutableContainersAndLeaves) {
             stringClass = [NSMutableString class];
         }
     }
@@ -76,11 +123,24 @@ __YAMLSerializationObjectWithYAMLDocument (yaml_document_t *document, YAMLReadOp
         return nil;
     }
 
+    unsigned char *states = calloc(document->nodes.top - document->nodes.start, 1);
+    BOOL acyclic = states && YAMLNodeIsAcyclic(document, 1, states, 0);
+    free(states);
+    if (!acyclic) {
+        free(objects);
+        YAML_SET_ERROR(kYAMLErrorInvalidYamlObject,
+                       @"Cyclic or excessively nested YAML document",
+                       @"Remove recursive aliases or reduce nesting");
+        return nil;
+    }
+
     // Create all objects, don't fill containers yet...
     for (node = document->nodes.start, i = 0; node < document->nodes.top; node++, i++) {
         switch (node->type) {
             case YAML_SCALAR_NODE:
-                objects[i] = [[stringClass alloc] initWithUTF8String: (const char *)node->data.scalar.value];
+                objects[i] = [[stringClass alloc] initWithBytes:node->data.scalar.value
+                                                         length:node->data.scalar.length
+                                                       encoding:NSUTF8StringEncoding];
                 if (!root) root = objects[i];
                 break;
 
@@ -120,6 +180,11 @@ __YAMLSerializationObjectWithYAMLDocument (yaml_document_t *document, YAMLReadOp
 
     // Retain the root object
     if (root != nil) {
+        if (!(opt & kYAMLReadOptionMutableContainers)) {
+            NSMapTable *copies = [NSMapTable mapTableWithKeyOptions:NSPointerFunctionsObjectPointerPersonality
+                                                     valueOptions:NSPointerFunctionsStrongMemory];
+            root = YAMLImmutableObject(root, copies);
+        }
         [root retain];
     }
 
@@ -140,54 +205,50 @@ __YAMLSerializationObjectWithYAMLDocument (yaml_document_t *document, YAMLReadOp
                                    options: (YAMLReadOptions) opt
                                      error: (NSError **) error
 {
-    NSMutableArray *documents = [NSMutableArray array];
-    id documentObject = nil;
-
-    yaml_parser_t parser;
-    yaml_document_t document;
-    BOOL done = NO;
-
-    // Open input stream
-    [stream open];
-
-    memset(&parser, 0, sizeof(yaml_parser_t));
-    if (!yaml_parser_initialize(&parser)) {
-        YAML_SET_ERROR(kYAMLErrorCodeParserInitializationFailed, @"Error in yaml_parser_initialize(&parser)", @"Internal error, please let us know about this error");
+    if (error)
+        *error = nil;
+    if (!stream) {
+        YAML_SET_ERROR(kYAMLErrorCodeParseError, @"Missing YAML stream", @"Provide a readable stream");
         return nil;
     }
-
+    NSMutableArray *documents = [NSMutableArray array];
+    yaml_parser_t parser;
+    memset(&parser, 0, sizeof(parser));
+    if (!yaml_parser_initialize(&parser)) {
+        YAML_SET_ERROR(kYAMLErrorCodeParserInitializationFailed, @"Cannot initialize YAML parser", @"Retry parsing");
+        return nil;
+    }
+    [stream open];
     yaml_parser_set_input(&parser, __YAMLSerializationParserInputReadHandler, (void *)stream);
-
-    while (!done) {
-
+    BOOL succeeded = YES;
+    for (;;) {
+        yaml_document_t document;
         if (!yaml_parser_load(&parser, &document)) {
             YAML_SET_ERROR(kYAMLErrorCodeParseError, @"Parse error", @"Make sure YAML file is well formed");
-            return nil;
+            succeeded = NO;
+            break;
         }
-
-        done = !yaml_document_get_root_node(&document);
-
+        BOOL done = !yaml_document_get_root_node(&document);
         if (!done) {
-            documentObject = __YAMLSerializationObjectWithYAMLDocument(&document, opt, error);
-            if (error && *error) {
-                yaml_document_delete(&document);
+            id object = __YAMLSerializationObjectWithYAMLDocument(&document, opt, error);
+            if (object) {
+                [documents addObject:object];
+                [object release];
             } else {
-                [documents addObject: documentObject];
-                [documentObject release];
+                succeeded = NO;
             }
         }
-
-        // TODO: Check if aliases to previous documents are allowed by the specs
         yaml_document_delete(&document);
+        if (done || !succeeded)
+            break;
     }
-
     yaml_parser_delete(&parser);
-
-    return documents;
+    [stream close];
+    return succeeded ? documents : nil;
 }
 
 + (id) objectWithYAMLStream: (NSInputStream *) stream options: (YAMLReadOptions) opt error: (NSError **) error {
-    return [[self objectsWithYAMLStream: stream options: opt error: error] objectAtIndex: 0];
+    return [[self objectsWithYAMLStream: stream options: opt error: error] firstObject];
 }
 
 + (NSMutableArray *) objectsWithYAMLData: (NSData *) data
@@ -204,7 +265,7 @@ __YAMLSerializationObjectWithYAMLDocument (yaml_document_t *document, YAMLReadOp
 }
 
 + (id) objectWithYAMLData: (NSData *) data options: (YAMLReadOptions) opt error: (NSError **) error {
-    return [[self objectsWithYAMLData: data options: opt error: error] objectAtIndex: 0];
+    return [[self objectsWithYAMLData: data options: opt error: error] firstObject];
 }
 
 + (NSMutableArray *) objectsWithYAMLString: (NSString *) string
@@ -217,61 +278,97 @@ __YAMLSerializationObjectWithYAMLDocument (yaml_document_t *document, YAMLReadOp
 }
 
 + (id) objectWithYAMLString: (NSString *) string options: (YAMLReadOptions) opt error: (NSError **) error {
-    return [[self objectsWithYAMLString: string options: opt error: error] objectAtIndex: 0];
+    return [[self objectsWithYAMLString: string options: opt error: error] firstObject];
 }
 
 #pragma mark Writing YAML
 
 static int
 __YAMLSerializationEmitterOutputWriteHandler (void *data, unsigned char *buffer, size_t size) {
-    return ([((NSOutputStream *) data) write: buffer maxLength: size] > 0);
+    size_t offset = 0;
+    while (offset < size) {
+        NSInteger written = [((NSOutputStream *)data) write:buffer + offset maxLength:size - offset];
+        if (written <= 0)
+            return NO;
+        offset += written;
+    }
+    return YES;
+}
+
+static BOOL YAMLObjectCanBeWritten(id object, NSHashTable *ancestors, NSUInteger depth) {
+    if (!object || depth > 256)
+        return NO;
+    if ([object isKindOfClass:[NSString class]] || [object isKindOfClass:[NSNumber class]]
+            || object == [NSNull null])
+        return YES;
+    BOOL dictionary = [object isKindOfClass:[NSDictionary class]]
+        || [object isKindOfClass:[M13OrderedDictionary class]];
+    if (!dictionary && ![object isKindOfClass:[NSArray class]])
+        return NO;
+    if ([ancestors containsObject:object])
+        return NO;
+    [ancestors addObject:object];
+    BOOL valid = YES;
+    for (id child in object) {
+        if (!YAMLObjectCanBeWritten(child, ancestors, depth + 1)
+                || (dictionary && !YAMLObjectCanBeWritten([object objectForKey:child], ancestors, depth + 1))) {
+            valid = NO;
+            break;
+        }
+    }
+    [ancestors removeObject:object];
+    return valid;
 }
 
 static int
 __YAMLSerializationAddObject (yaml_document_t *document, id value) {
     int result = 0;
-    if ([value isKindOfClass: [NSDictionary class]] ) {
+    if ([value isKindOfClass:[NSDictionary class]]
+            || [value isKindOfClass:[M13OrderedDictionary class]]) {
         result = yaml_document_add_mapping(document, NULL, YAML_BLOCK_MAPPING_STYLE);
         for (id key in [value allKeys]) {
             int keyIndex = __YAMLSerializationAddObject(document, key);
             int valueIndex = __YAMLSerializationAddObject(document, [value objectForKey: key]);
-            yaml_document_append_mapping_pair(document, result, keyIndex, valueIndex);
+            if (!result || !keyIndex || !valueIndex
+                || !yaml_document_append_mapping_pair(document, result, keyIndex, valueIndex))
+                return 0;
         }
     }
     else if ([value isKindOfClass: [NSArray class]]) {
         result = yaml_document_add_sequence(document, NULL, YAML_BLOCK_SEQUENCE_STYLE);
         for (id element in value) {
             int elementIndex = __YAMLSerializationAddObject(document, element);
-            yaml_document_append_sequence_item(document, result, elementIndex);
+            if (!result || !elementIndex
+                || !yaml_document_append_sequence_item(document, result, elementIndex))
+                return 0;
         }
     }
     else {
         NSString *string = nil;
         if ([value isKindOfClass: [NSString class]]) {
             string = value;
+        } else if (value == [NSNull null]) {
+            string = @"null";
         } else {
             string = [value stringValue];
         }
-        result = yaml_document_add_scalar(document, NULL, (yaml_char_t *)[string UTF8String], (int) [string length], YAML_PLAIN_SCALAR_STYLE);
+        NSData *utf8 = [string dataUsingEncoding:NSUTF8StringEncoding];
+        result = yaml_document_add_scalar(document, NULL, (yaml_char_t *)utf8.bytes, (int)utf8.length, YAML_PLAIN_SCALAR_STYLE);
     }
     return (int) result;
 }
 
 + (BOOL) __YAMLSerializationAddRootObjectAndEmit: (id) object emitter: (yaml_emitter_t *) emitter {
-    BOOL result = YES;
     yaml_document_t document;
-    memset(&document, 0, sizeof(yaml_document_t));
-    if (yaml_document_initialize(&document, NULL, NULL, NULL, 0, 0)) {
-        __YAMLSerializationAddObject(&document, object);
-
-        // TODO: check result code.
-        yaml_emitter_dump(emitter, &document);
+    memset(&document, 0, sizeof(document));
+    if (!yaml_document_initialize(&document, NULL, NULL, NULL, 0, 0))
+        return NO;
+    if (!__YAMLSerializationAddObject(&document, object)) {
         yaml_document_delete(&document);
-    } else {
-        //        YAML_SET_ERROR(kYAMLErrorInvalidYamlObject, @"Failed to initialize yaml document", @"Underlying data structure failed to initalize");
-        result = NO;
+        return NO;
     }
-    return result;
+    // yaml_emitter_dump owns and deletes the document even on failure.
+    return yaml_emitter_dump(emitter, &document);
 }
 
 + (BOOL) writeObject: (id) object
@@ -279,47 +376,49 @@ __YAMLSerializationAddObject (yaml_document_t *document, id value) {
              options: (YAMLWriteOptions) opt
                error: (NSError **) error
 {
-    BOOL result = YES;
-    yaml_emitter_t emitter;
-    memset(&emitter, 0, sizeof(yaml_emitter_t));
-
-    if (!yaml_emitter_initialize(&emitter)) {
-        YAML_SET_ERROR(kYAMLErrorCodeEmitterError, @"Error in yaml_emitter_initialize(&emitter)", @"Internal error, please let us know about this error");
+    if (error)
+        *error = nil;
+    NSHashTable *ancestors = [NSHashTable hashTableWithOptions:NSPointerFunctionsObjectPointerPersonality];
+    BOOL multiple = (opt & kYAMLWriteOptionMultipleDocuments) != 0;
+    if (!stream || (multiple && ![object isKindOfClass:[NSArray class]])
+            || !YAMLObjectCanBeWritten(object, ancestors, 0)) {
+        YAML_SET_ERROR(kYAMLErrorInvalidYamlObject, @"Unsupported or recursive YAML object", @"Provide strings, numbers, arrays and dictionaries");
         return NO;
     }
-
+    yaml_emitter_t emitter;
+    memset(&emitter, 0, sizeof(emitter));
+    if (!yaml_emitter_initialize(&emitter)) {
+        YAML_SET_ERROR(kYAMLErrorCodeEmitterError, @"Cannot initialize YAML emitter", @"Retry writing");
+        return NO;
+    }
     yaml_emitter_set_encoding(&emitter, YAML_UTF8_ENCODING);
     yaml_emitter_set_output(&emitter, __YAMLSerializationEmitterOutputWriteHandler, (void *)stream);
-
-    // Open output stream.
     [stream open];
-
-    if (kYAMLWriteOptionMultipleDocuments & opt) {
-
-        // YAML is an array of documents.
-        for (id child in object) {
-
-            // TODO: Check result code.
-            [self __YAMLSerializationAddRootObjectAndEmit: object emitter: &emitter];
-        }
+    BOOL result = yaml_emitter_open(&emitter);
+    if (result && multiple) {
+        for (id child in object)
+            if (![self __YAMLSerializationAddRootObjectAndEmit:child emitter:&emitter]) {
+                result = NO;
+                break;
+            }
+    } else if (result) {
+        result = [self __YAMLSerializationAddRootObjectAndEmit:object emitter:&emitter];
     }
-    else {
-
-        // YAML is a single document.
-        [self __YAMLSerializationAddRootObjectAndEmit: object emitter: &emitter];
+    if (result)
+        result = yaml_emitter_close(&emitter);
+    if (!result) {
+        YAML_SET_ERROR(kYAMLErrorCodeEmitterError, @"Cannot write YAML stream", @"Check stream permissions and available storage");
     }
-
     [stream close];
     yaml_emitter_delete(&emitter);
-
     return result;
 }
 
 + (NSData *) createYAMLDataWithObject: (id) object options: (YAMLWriteOptions) opt error: (NSError **) error {
     NSData *result = nil;
     NSOutputStream *stream = [[NSOutputStream alloc] initToMemory];
-    [self writeObject: object toYAMLStream: stream options: opt error: error];
-    result = [[stream propertyForKey: NSStreamDataWrittenToMemoryStreamKey] retain];
+    if ([self writeObject: object toYAMLStream: stream options: opt error: error])
+        result = [[stream propertyForKey: NSStreamDataWrittenToMemoryStreamKey] retain];
     [stream release];
     return result;
 }
