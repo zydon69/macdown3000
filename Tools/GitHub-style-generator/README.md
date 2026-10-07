@@ -1,6 +1,11 @@
 # GitHub Style Generator
 
 Generates the MacDown GitHub stylesheet from the pinned `@primer/css` package.
+Primitive dimensions, light color tokens and base styles are included so the
+standalone HTML template resolves the Markdown stylesheet’s CSS variables.
+The template selects the light theme with `data-color-mode` and
+`data-light-theme` attributes.
+
 Node.js 20.19 or newer and npm are required by the pinned Sass compiler.
 
 From this directory:
