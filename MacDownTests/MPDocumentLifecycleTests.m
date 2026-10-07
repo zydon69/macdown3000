@@ -42,6 +42,7 @@
 @property (weak) WebView *preview;
 @property (strong) MPResourceWatcherSet *resourceWatcherSet;
 - (void)processExternalFileChange;
+- (void)performAfterRender:(void (^)(void))handler;
 - (void)renderer:(MPRenderer *)renderer didProduceHTMLOutput:(NSString *)html;
 - (void)resourceWatcherSet:(MPResourceWatcherSet *)set didDetectChangeAtPath:(NSString *)path;
 - (IBAction)exportPdf:(id)sender;
@@ -1326,6 +1327,61 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
         preview.frameLoadDelegate = nil;
         [document close];
         preferences.htmlMathJax = math;
+    }
+}
+
+
+- (void)testDeferredConsumerSeesCompletedRealMermaidDiagrams
+{
+    MPDocument *document = [MPDocument new];
+    MPPreferences *preferences = document.preferences;
+    BOOL math = preferences.htmlMathJax, mermaid = preferences.htmlMermaid;
+    BOOL graphviz = preferences.htmlGraphviz, fenced = preferences.extensionFencedCode;
+    MPEditorView *editor = [[MPEditorView alloc] initWithFrame:NSMakeRect(0, 0, 900, 700)];
+    editor.string = @"```mermaid\ngraph TD; A-->B; B-->C;\n```\n\n"
+        @"```mermaid\nsequenceDiagram\nAlice->>Bob: Hello\n```\n\n"
+        @"```mermaid\nstateDiagram-v2\n[*] --> Active\nActive --> [*]\n```\n\n"
+        @"```mermaid\nclassDiagram\nAnimal <|-- Duck\n```\n\n"
+        @"```mermaid\ngantt\ntitle Schedule\ndateFormat YYYY-MM-DD\nsection Work\nTask :a1, 2024-01-01, 2d\n```\n\n"
+        @"```mermaid\npie title Pets\n\"Dogs\" : 3\n\"Cats\" : 2\n```\n\n"
+        @"```mermaid\njourney\ntitle Work\nsection Day\nCode: 5: Me\n```\n\n"
+        @"```mermaid\nmindmap\n  root((Plan))\n    Code\n    Test\n```";
+    document.editor = editor;
+    WebView *preview = [[WebView alloc] initWithFrame:NSMakeRect(0, 0, 900, 700)];
+    document.preview = preview;
+    preview.frameLoadDelegate = (id<WebFrameLoadDelegate>)document;
+    preview.resourceLoadDelegate = (id<WebResourceLoadDelegate>)document;
+    MPRenderer *renderer = [MPRenderer new];
+    renderer.dataSource = (id<MPRendererDataSource>)document;
+    renderer.delegate = (id<MPRendererDelegate>)document;
+    document.renderer = renderer;
+    @try {
+        preferences.htmlMermaid = YES;
+        preferences.htmlGraphviz = NO;
+        preferences.extensionFencedCode = YES;
+        for (NSNumber *mathEnabled in @[@NO, @YES]) {
+            preferences.htmlMathJax = mathEnabled.boolValue;
+            XCTestExpectation *consumed = [self expectationWithDescription:
+                [NSString stringWithFormat:@"Actual deferred consumption, MathJax %@", mathEnabled]];
+            [document performAfterRender:^{
+                JSContext *context = preview.mainFrame.javaScriptContext;
+                XCTAssertEqual([[context evaluateScript:@"document.querySelectorAll('.language-mermaid').length"] toUInt32], 0u);
+                // Mermaid replaces each pre inside Hoedown’s existing div wrapper.
+                // Exclude the library’s temporary rendering divs from the count.
+                XCTAssertEqual([[context evaluateScript:@"Array.from(document.querySelectorAll('svg[id^=\"mermaid_\"]')).filter(function(svg){return !svg.closest('div[id^=\"dmermaid_\"]');}).length"] toUInt32], 8u);
+                XCTAssertFalse([[[context evaluateScript:@"document.body.textContent"] toString] containsString:@"Mermaid Error:"]);
+                [consumed fulfill];
+            }];
+            [self waitForExpectations:@[consumed] timeout:20.0];
+        }
+    } @finally {
+        preview.frameLoadDelegate = nil;
+        preview.resourceLoadDelegate = nil;
+        [document close];
+        preferences.htmlMathJax = math;
+        preferences.htmlMermaid = mermaid;
+        preferences.htmlGraphviz = graphviz;
+        preferences.extensionFencedCode = fenced;
     }
 }
 
