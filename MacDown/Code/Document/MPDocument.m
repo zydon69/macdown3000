@@ -4095,41 +4095,71 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
         return 1; // any header level h1-h6
     };
 
-    // LCS over the coarse class sequences. dp[i][j] = LCS length of editor[i..] / preview[j..].
     NSUInteger m = editorCount, n = previewCount;
-    NSUInteger **dp = calloc(m + 1, sizeof(NSUInteger *));
-    for (NSUInteger i = 0; i <= m; i++)
-        dp[i] = calloc(n + 1, sizeof(NSUInteger));
-
-    for (NSInteger i = (NSInteger)m - 1; i >= 0; i--) {
-        for (NSInteger j = (NSInteger)n - 1; j >= 0; j--) {
-            if (classOf(editorTypes[i]) == classOf(previewTypes[j]))
-                dp[i][j] = dp[i + 1][j + 1] + 1;
-            else
-                dp[i][j] = MAX(dp[i + 1][j], dp[i][j + 1]);
-        }
-    }
-
     NSMutableArray<NSNumber *> *alignedEditor = [NSMutableArray array];
     NSMutableArray<NSNumber *> *alignedPreview = [NSMutableArray array];
-    NSUInteger i = 0, j = 0;
-    while (i < m && j < n) {
-        if (classOf(editorTypes[i]) == classOf(previewTypes[j])) {
-            [alignedEditor addObject:editorYs[i]];
-            [alignedPreview addObject:previewYs[j]];
-            i++; j++;
-        } else if (dp[i + 1][j] >= dp[i][j + 1]) {
-            // Drop the editor point (no preview counterpart).
-            i++;
-        } else {
-            // Drop the preview point (no editor counterpart).
-            j++;
-        }
+
+    // Most edits preserve the type sequence. Avoid building a quadratic matrix.
+    BOOL identical = m == n;
+    for (NSUInteger k = 0; identical && k < m; k++)
+        identical = classOf(editorTypes[k]) == classOf(previewTypes[k]);
+    if (identical)
+    {
+        if (outEditorYs) *outEditorYs = [editorYs copy];
+        if (outPreviewYs) *outPreviewYs = [previewYs copy];
+        return;
     }
 
-    for (NSUInteger k = 0; k <= m; k++)
-        free(dp[k]);
-    free(dp);
+    // Bound main-thread work and memory (at most 8 MiB). For larger documents,
+    // retain monotonic, class-compatible anchors with a linear greedy fallback.
+    const NSUInteger maxCells = 1024 * 1024;
+    NSUInteger *dp = NULL;
+    if (m < maxCells && n < maxCells && (m + 1) <= maxCells / (n + 1))
+        dp = calloc((m + 1) * (n + 1), sizeof(NSUInteger));
+    if (dp)
+    {
+        NSUInteger stride = n + 1;
+        for (NSUInteger ii = m; ii > 0; ii--)
+            for (NSUInteger jj = n; jj > 0; jj--)
+            {
+                NSUInteger i = ii - 1, j = jj - 1;
+                dp[i * stride + j] = classOf(editorTypes[i]) == classOf(previewTypes[j]) ?
+                    dp[(i + 1) * stride + j + 1] + 1 :
+                    MAX(dp[(i + 1) * stride + j], dp[i * stride + j + 1]);
+            }
+        NSUInteger i = 0, j = 0;
+        while (i < m && j < n)
+        {
+            if (classOf(editorTypes[i]) == classOf(previewTypes[j]))
+            {
+                [alignedEditor addObject:editorYs[i++]];
+                [alignedPreview addObject:previewYs[j++]];
+            }
+            else if (dp[(i + 1) * stride + j] >= dp[i * stride + j + 1]) i++;
+            else j++;
+        }
+        free(dp);
+    }
+    else
+    {
+        NSMutableArray<NSMutableArray<NSNumber *> *> *positions = [NSMutableArray array];
+        for (NSUInteger k = 0; k < 4; k++) [positions addObject:[NSMutableArray array]];
+        for (NSUInteger j = 0; j < n; j++) [positions[classOf(previewTypes[j])] addObject:@(j)];
+        NSUInteger cursors[4] = {0};
+        NSUInteger nextPreview = 0;
+        for (NSUInteger i = 0; i < m; i++)
+        {
+            NSUInteger kind = (NSUInteger)classOf(editorTypes[i]);
+            NSArray<NSNumber *> *candidates = positions[kind];
+            while (cursors[kind] < candidates.count && candidates[cursors[kind]].unsignedIntegerValue < nextPreview)
+                cursors[kind]++;
+            if (cursors[kind] == candidates.count) continue;
+            NSUInteger j = candidates[cursors[kind]++].unsignedIntegerValue;
+            [alignedEditor addObject:editorYs[i]];
+            [alignedPreview addObject:previewYs[j]];
+            nextPreview = j + 1;
+        }
+    }
 
     if (outEditorYs) *outEditorYs = alignedEditor;
     if (outPreviewYs) *outPreviewYs = alignedPreview;

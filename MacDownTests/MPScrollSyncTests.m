@@ -2982,4 +2982,37 @@ static const NSUInteger MPScrollOwnerNeither = 2;
         @"previewY must never scroll past the bottom of the preview's content");
 }
 
+- (void)testLargeAlignedDocumentAvoidsQuadraticMatrix
+{
+    NSMutableArray *ys = [NSMutableArray array];
+    NSMutableArray *kinds = [NSMutableArray array];
+    for (NSUInteger i = 0; i < 20000; i++) { [ys addObject:@(i)]; [kinds addObject:@7]; }
+    NSArray *editor = nil, *preview = nil;
+    [MPDocument alignEditorYs:ys editorTypes:kinds previewYs:ys previewTypes:kinds
+        alignedEditorYs:&editor alignedPreviewYs:&preview];
+    XCTAssertEqualObjects(editor, ys);
+    XCTAssertEqualObjects(preview, ys);
+}
+
+- (void)testLargeDivergentDocumentKeepsCompatibleMonotonicAnchors
+{
+    NSMutableArray *ys = [NSMutableArray array], *editorKinds = [NSMutableArray array], *previewKinds = [NSMutableArray array];
+    for (NSUInteger i = 0; i < 5000; i++)
+    {
+        [ys addObject:@(i)]; [editorKinds addObject:@(i % 2 ? 7 : 8)];
+        [previewKinds addObject:@(i % 3 ? 7 : 8)];
+    }
+    NSArray *editor = nil, *preview = nil;
+    [MPDocument alignEditorYs:ys editorTypes:editorKinds previewYs:ys previewTypes:previewKinds
+        alignedEditorYs:&editor alignedPreviewYs:&preview];
+    XCTAssertGreaterThan(editor.count, 0);
+    XCTAssertEqual(editor.count, preview.count);
+    for (NSUInteger i = 0; i < editor.count; i++)
+    {
+        XCTAssertEqualObjects(editorKinds[[editor[i] unsignedIntegerValue]], previewKinds[[preview[i] unsignedIntegerValue]]);
+        if (i) { XCTAssertGreaterThan([editor[i] unsignedIntegerValue], [editor[i-1] unsignedIntegerValue]);
+            XCTAssertGreaterThan([preview[i] unsignedIntegerValue], [preview[i-1] unsignedIntegerValue]); }
+    }
+}
+
 @end
