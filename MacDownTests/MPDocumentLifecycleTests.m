@@ -1196,6 +1196,45 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
     [document close];
 }
 
+- (void)testChangedHeadScriptsReloadAndUnchangedHeadPreservesJavaScriptState
+{
+    MPPreferences *preferences = self.document.preferences;
+    BOOL math = preferences.htmlMathJax, mermaid = preferences.htmlMermaid, graphviz = preferences.htmlGraphviz;
+    MPDocumentExportAuditProbe *document = [MPDocumentExportAuditProbe new];
+    WebView *preview = [[WebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)];
+    document.preview = preview;
+    preview.frameLoadDelegate = (id<WebFrameLoadDelegate>)document;
+    MPRenderer *renderer = [MPRenderer new];
+    document.renderer = renderer;
+    NSString *(^html)(NSString *, NSString *) = ^NSString *(NSString *marker, NSString *body) {
+        return [NSString stringWithFormat:@"<html><head><script>window.macdownAuditHeadMarker='%@';</script></head><body><p>%@</p></body></html>", marker, body];
+    };
+    @try {
+        preferences.htmlMathJax = NO; preferences.htmlMermaid = NO; preferences.htmlGraphviz = NO;
+        [document renderer:renderer didProduceHTMLOutput:html(@"first", @"first body")];
+        XCTNSPredicateExpectation *first = [[XCTNSPredicateExpectation alloc]
+            initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id object, NSDictionary *bindings) {
+                return document.isPreviewReady &&
+                    [[[preview.mainFrame.javaScriptContext evaluateScript:@"window.macdownAuditHeadMarker"] toString] isEqualToString:@"first"];
+            }] object:document];
+        [self waitForExpectations:@[first] timeout:10.0];
+        [document renderer:renderer didProduceHTMLOutput:html(@"second", @"second body")];
+        XCTNSPredicateExpectation *second = [[XCTNSPredicateExpectation alloc]
+            initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id object, NSDictionary *bindings) {
+                return !document.alreadyRenderingInWeb &&
+                    [[[preview.mainFrame.javaScriptContext evaluateScript:@"window.macdownAuditHeadMarker"] toString] isEqualToString:@"second"];
+            }] object:document];
+        [self waitForExpectations:@[second] timeout:10.0];
+        [preview.mainFrame.javaScriptContext evaluateScript:@"window.macdownAuditHeadMarker='survived';"];
+        [document renderer:renderer didProduceHTMLOutput:html(@"second", @"third body")];
+        XCTAssertEqualObjects([[preview.mainFrame.javaScriptContext evaluateScript:@"window.macdownAuditHeadMarker"] toString], @"survived");
+        XCTAssertEqualObjects([[preview.mainFrame.javaScriptContext evaluateScript:@"document.body.textContent.trim()"] toString], @"third body");
+    } @finally {
+        preview.frameLoadDelegate = nil;
+        [document close];
+        preferences.htmlMathJax = math; preferences.htmlMermaid = mermaid; preferences.htmlGraphviz = graphviz;
+    }
+}
 
 
 
