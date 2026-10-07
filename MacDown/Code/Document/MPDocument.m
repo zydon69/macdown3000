@@ -1444,7 +1444,11 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     NSString *content = [[NSString alloc] initWithData:data
                                               encoding:NSUTF8StringEncoding];
     if (!content)
+    {
+        if (outError) *outError = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileReadInapplicableStringEncodingError
+            userInfo:@{NSLocalizedDescriptionKey: NSLocalizedString(@"The document is not valid UTF-8 text.", @"Invalid Markdown encoding")}];
         return NO;
+    }
 
     // Normalize Windows CRLF to LF (Issue #382)
     content = [content stringByReplacingOccurrencesOfString:@"\r\n" withString:@"\n"];

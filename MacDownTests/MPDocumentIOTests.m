@@ -708,6 +708,16 @@
 // folder tmp" failure, which require manual verification against a real
 // SSHFS/SMB/NFS mount. Related to #371.
 
+- (void)testInvalidUTF8ProvidesReadError
+{
+    const unsigned char bytes[] = {0xff, 0xfe, 0xff};
+    NSError *error = nil;
+    XCTAssertFalse([self.document readFromData:[NSData dataWithBytes:bytes length:sizeof(bytes)]
+        ofType:@"net.daringfireball.markdown" error:&error]);
+    XCTAssertEqualObjects(error.domain, NSCocoaErrorDomain);
+    XCTAssertEqual(error.code, NSFileReadInapplicableStringEncodingError);
+}
+
 - (void)testReadBeforeWindowLoadingCanBeSerializedWithoutDataLoss
 {
     NSString *source = @"# Loaded before its window\n\nÉ漢😀\n";
