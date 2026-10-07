@@ -67,8 +67,10 @@
         } catch (error) {
           console.error('Mermaid rendering error:', error);
           // Display error message in place of the <pre>
-          pre.outerHTML = '<pre style="color: red; padding: 10px; background: #fee;">' +
-            'Mermaid Error: ' + (error.message || error) + '</pre>';
+          var errorElement = document.createElement('pre');
+          errorElement.style.cssText = 'color: red; padding: 10px; background: #fee;';
+          errorElement.textContent = 'Mermaid Error: ' + (error.message || error);
+          if (document.body.contains(pre) && pre.parentNode) pre.parentNode.replaceChild(errorElement, pre);
         }
       }
     } finally {
