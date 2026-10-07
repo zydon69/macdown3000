@@ -30,6 +30,8 @@
 @property (nonatomic) BOOL isPreviewReady;
 @property (nonatomic) BOOL alreadyRenderingInWeb;
 @property (nonatomic) BOOL renderToWebPending;
++ (NSInvocation *)printCompletionForDelegate:(id)delegate selector:(SEL)selector context:(void *)context;
+- (void)document:(NSDocument *)doc didPrint:(BOOL)ok context:(void *)context;
 @end
 
 // Spy renderer: records whether parseAndRenderNow was called without
@@ -65,6 +67,20 @@
 }
 @end
 
+
+@interface MPPrintDelegateProbe : NSObject
+@property NSDocument *document;
+@property BOOL success;
+@property void *context;
+@property NSUInteger calls;
+- (void)document:(NSDocument *)document printed:(BOOL)success context:(void *)context;
+@end
+@implementation MPPrintDelegateProbe
+- (void)document:(NSDocument *)document printed:(BOOL)success context:(void *)context
+{
+    self.document = document; self.success = success; self.context = context; self.calls++;
+}
+@end
 
 @interface MPDocumentLifecycleTests : XCTestCase
 @property (strong) MPDocument *document;
@@ -936,6 +952,25 @@
     NSURL *root = [NSURL fileURLWithPath:@"/tmp" isDirectory:YES];
     doc.workspaceRootURL = root;
     XCTAssertEqualObjects(doc.workspaceRootURL, root);
+}
+
+- (void)testPrintCompletionRetainsDelegateAndDeliversArguments
+{
+    MPPrintDelegateProbe *probe = [MPPrintDelegateProbe new];
+    __weak MPPrintDelegateProbe *weakProbe = probe;
+    void *expectedContext = (__bridge void *)self;
+    NSInvocation *invocation = [MPDocument printCompletionForDelegate:probe
+        selector:@selector(document:printed:context:) context:expectedContext];
+    void *retainedContext = (__bridge_retained void *)invocation;
+    invocation = nil;
+    probe = nil;
+    XCTAssertNotNil(weakProbe);
+    probe = weakProbe;
+    [self.document document:self.document didPrint:YES context:retainedContext];
+    XCTAssertEqual(probe.calls, 1);
+    XCTAssertEqual(probe.document, self.document);
+    XCTAssertTrue(probe.success);
+    XCTAssertEqual(probe.context, expectedContext);
 }
 
 @end

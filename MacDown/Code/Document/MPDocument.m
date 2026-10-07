@@ -450,6 +450,7 @@ typedef NS_ENUM(NSInteger, MPReferenceKind) {
       alignedEditorYs:(NSArray<NSNumber *> **)outEditorYs
      alignedPreviewYs:(NSArray<NSNumber *> **)outPreviewYs;
 - (void)invokeRenderCompletionHandlers;
++ (NSInvocation *)printCompletionForDelegate:(id)delegate selector:(SEL)selector context:(void *)context;
 - (void)willStartPreviewLiveScroll:(NSNotification *)notification;
 - (void)didEndPreviewLiveScroll:(NSNotification *)notification;
 // Commit 6 (gaps 1+3): layout-change sync
@@ -1536,20 +1537,13 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 
     [self performAfterRender:^{
         self.printing = YES;
-        NSInvocation *invocation = nil;
-        if (printDelegate && printSelector)
-        {
-            NSMethodSignature *signature =
-                [printDelegate methodSignatureForSelector:printSelector];
-            invocation = [NSInvocation invocationWithMethodSignature:signature];
-            invocation.target = printDelegate;
-            if (context)
-                [invocation setArgument:&context atIndex:2];
-        }
+        NSInvocation *invocation = [MPDocument printCompletionForDelegate:printDelegate
+                                                                 selector:printSelector
+                                                                  context:context];
         [super printDocumentWithSettings:settings
                           showPrintPanel:showPanel delegate:self
                         didPrintSelector:@selector(document:didPrint:context:)
-                             contextInfo:(void *)invocation];
+                             contextInfo:invocation ? (__bridge_retained void *)invocation : NULL];
     }];
 }
 
@@ -4724,6 +4718,23 @@ to link outside that scope.", \
 }
 
 
++ (NSInvocation *)printCompletionForDelegate:(id)delegate selector:(SEL)selector context:(void *)context
+{
+    if (!delegate || !selector) return nil;
+    NSMethodSignature *signature = [delegate methodSignatureForSelector:selector];
+    NSParameterAssert(signature && signature.numberOfArguments == 5);
+    NSInvocation *invocation = [NSInvocation invocationWithMethodSignature:signature];
+    invocation.target = delegate;
+    invocation.selector = selector;
+    NSDocument *document = nil;
+    BOOL success = NO;
+    [invocation setArgument:&document atIndex:2];
+    [invocation setArgument:&success atIndex:3];
+    [invocation setArgument:&context atIndex:4];
+    [invocation retainArguments];
+    return invocation;
+}
+
 - (void)document:(NSDocument *)doc didPrint:(BOOL)ok context:(void *)context
 {
     if ([doc respondsToSelector:@selector(setPrinting:)])
@@ -4749,11 +4760,11 @@ to link outside that scope.", \
 
     if (context)
     {
-        NSInvocation *invocation = (__bridge NSInvocation *)context;
+        NSInvocation *invocation = (__bridge_transfer NSInvocation *)context;
         if ([invocation isKindOfClass:[NSInvocation class]])
         {
-            [invocation setArgument:&doc atIndex:0];
-            [invocation setArgument:&ok atIndex:1];
+            [invocation setArgument:&doc atIndex:2];
+            [invocation setArgument:&ok atIndex:3];
             [invocation invoke];
         }
     }
