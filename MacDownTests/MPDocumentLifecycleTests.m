@@ -1283,5 +1283,51 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
     }
 }
 
+- (void)testHTMLExportReportsWriteFailureAfterRealRenderAndPreservesExistingFile
+{
+    MPControlledExportPanel *panel = [MPControlledExportPanel new];
+    // An existing directory cannot be atomically replaced by the HTML file.
+    panel.URL = [NSURL fileURLWithPath:self.testDirectory isDirectory:YES];
+    NSString *preservedPath = [self.testDirectory stringByAppendingPathComponent:@"preserved.md"];
+    XCTAssertTrue([@"preserved" writeToFile:preservedPath atomically:YES encoding:NSUTF8StringEncoding error:NULL]);
+    MPDocumentExportAuditProbe *document = [MPDocumentExportAuditProbe new];
+    MPEditorView *editor = [[MPEditorView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)];
+    editor.string = @"# Exported content";
+    document.editor = editor;
+    WebView *preview = [[WebView alloc] initWithFrame:NSMakeRect(0, 0, 400, 300)];
+    document.preview = preview;
+    preview.frameLoadDelegate = (id<WebFrameLoadDelegate>)document;
+    MPRenderer *renderer = [MPRenderer new];
+    renderer.delegate = (id<MPRendererDelegate>)document;
+    renderer.dataSource = (id<MPRendererDataSource>)document;
+    document.renderer = renderer;
+    MPPreferences *preferences = document.preferences;
+    BOOL math = preferences.htmlMathJax;
+    MPCurrentControlledExportPanel = panel;
+    Method factory = class_getClassMethod(NSSavePanel.class, @selector(savePanel));
+    IMP original = method_setImplementation(factory, (IMP)MPControlledExportPanelFactory);
+    @try {
+        preferences.htmlMathJax = NO;
+        [document exportHtml:nil];
+        XCTAssertEqual(panel.presentations, 1u);
+        XCTAssertNotNil(panel.completion);
+        panel.completion(NSFileHandlingPanelOKButton);
+        XCTNSPredicateExpectation *failed = [[XCTNSPredicateExpectation alloc]
+            initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id object, NSDictionary *bindings) {
+                return document.presentedError != nil;
+            }] object:document];
+        [self waitForExpectations:@[failed] timeout:10.0];
+        XCTAssertNotNil(document.presentedError);
+        XCTAssertTrue([renderer.currentHtml containsString:@"Exported content"]);
+        XCTAssertEqualObjects([NSString stringWithContentsOfFile:preservedPath encoding:NSUTF8StringEncoding error:NULL], @"preserved");
+    } @finally {
+        method_setImplementation(factory, original);
+        MPCurrentControlledExportPanel = nil;
+        preview.frameLoadDelegate = nil;
+        [document close];
+        preferences.htmlMathJax = math;
+    }
+}
+
 
 @end
