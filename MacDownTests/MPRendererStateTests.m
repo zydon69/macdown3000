@@ -24,6 +24,7 @@
 @property (nonatomic) NSInteger syntaxHighlightingCallCount;
 @property (nonatomic) NSInteger htmlOutputCallCount;
 @property (nonatomic, copy) NSString *lastReceivedHTML;
+@property (nonatomic, copy) void (^onHTML)(NSString *html);
 @end
 
 @implementation MPTrackingRendererDelegate
@@ -63,6 +64,7 @@
     self.htmlOutputCallCount++;
     self.lastReceivedHTML = html;
     [super renderer:renderer didProduceHTMLOutput:html];
+    if (self.onHTML) self.onHTML(html);
 }
 
 @end
@@ -74,6 +76,7 @@
 @property (nonatomic) NSInteger markdownCallCount;
 @property (nonatomic) NSInteger titleCallCount;
 @property (nonatomic) NSInteger loadingCallCount;
+@property (nonatomic) BOOL loading;
 @end
 
 @implementation MPTrackingRendererDataSource
@@ -93,7 +96,7 @@
 - (BOOL)rendererLoading
 {
     self.loadingCallCount++;
-    return [super rendererLoading];
+    return self.loading;
 }
 
 @end
@@ -439,6 +442,52 @@
     NSString *quotes = [@"" stringByPaddingToLength:220 withString:@"> " startingAtIndex:0];
     [self.renderer parseMarkdown:[quotes stringByAppendingString:@"Deep text"]];
     XCTAssertTrue([self.renderer.currentHtml containsString:@"Deep text"]);
+}
+
+- (void)testImmediateRenderCompletesWhilePreviousPreviewIsLoading
+{
+    self.dataSource.loading = YES;
+    self.dataSource.markdown = @"# Latest";
+    XCTestExpectation *finished = [self expectationWithDescription:@"Immediate render"];
+    self.delegate.onHTML = ^(NSString *html) {
+        XCTAssertTrue([NSThread isMainThread]);
+        XCTAssertTrue([html containsString:@"Latest"]);
+        [finished fulfill];
+    };
+    [self.renderer parseAndRenderNow];
+    [self waitForExpectations:@[finished] timeout:2];
+}
+
+- (void)testDelayedRenderHasBoundedWaitWhenPreviewNeverFinishesLoading
+{
+    self.dataSource.loading = YES;
+    self.dataSource.markdown = @"Bounded";
+    XCTestExpectation *finished = [self expectationWithDescription:@"Bounded render"];
+    NSDate *started = [NSDate date];
+    self.delegate.onHTML = ^(NSString *html) {
+        XCTAssertTrue([html containsString:@"Bounded"]);
+        XCTAssertGreaterThanOrEqual(-started.timeIntervalSinceNow, 0.45);
+        [finished fulfill];
+    };
+    [self.renderer parseAndRenderLater];
+    [self waitForExpectations:@[finished] timeout:2];
+}
+
+- (void)testNewRequestSupersedesPendingPreview
+{
+    self.dataSource.loading = YES;
+    self.dataSource.markdown = @"Old content";
+    [self.renderer parseAndRenderLater];
+    self.dataSource.markdown = @"New content";
+    XCTestExpectation *finished = [self expectationWithDescription:@"Latest content"];
+    self.delegate.onHTML = ^(NSString *html) {
+        XCTAssertTrue([html containsString:@"New content"]);
+        XCTAssertFalse([html containsString:@"Old content"]);
+        [finished fulfill];
+    };
+    [self.renderer parseAndRenderNow];
+    [self waitForExpectations:@[finished] timeout:2];
+    XCTAssertEqual(self.delegate.htmlOutputCallCount, 1);
 }
 
 @end

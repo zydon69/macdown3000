@@ -241,6 +241,7 @@ NS_INLINE BOOL MPAreNilableStringsEqual(NSString *s1, NSString *s2)
 @property MPCodeBlockAccessoryType codeBlockAccesory;
 @property BOOL lineNumbers;
 @property BOOL manualRender;
+@property NSUInteger renderGeneration;
 @property (copy) NSString *highlightingThemeName;
 @property (nonatomic, copy, readwrite) NSString *checkboxBridgeToken;
 @property (nonatomic, copy, readwrite) NSArray<NSNumber *> *checkboxSourceOffsets;
@@ -643,33 +644,59 @@ NS_INLINE NSString *MPPreviewHeadTags(NSString *checkboxBridgeToken)
 
 #pragma mark - Public
     
-- (void)parseAndRenderWithMaxDelay:(NSTimeInterval)maxDelay {
-    [self.parseQueue cancelAllOperations];
-    [self.parseQueue addOperationWithBlock:^{
-        // Fetch the markdown (from the main thread)
-        __block NSString *markdown;
-        dispatch_sync(dispatch_get_main_queue(), ^{
-            markdown = [[self.dataSource rendererMarkdown:self] copy];
-        });
+// Readiness is polled on the main queue without blocking it. A new request
+// invalidates old completion blocks, including those already dispatched.
+- (void)renderWhenReadyUntil:(NSDate *)deadline generation:(NSUInteger)generation
+{
+    if (generation != self.renderGeneration)
+        return;
+    if (![self.dataSource rendererLoading] || deadline.timeIntervalSinceNow <= 0)
+    {
+        [self render];
+        return;
+    }
+    __weak typeof(self) weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.01 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        [weakSelf renderWhenReadyUntil:deadline generation:generation];
+    });
+}
 
-        // Parse in backgound
-        [self parseMarkdown:markdown];
-        
-        // Wait untils is renderer has finished loading OR until the maxDelay has passed
-        // This should result in overall faster update times
-        NSDate *start = [NSDate date];
-        __block BOOL rendererIsLoading = true;
-        while (rendererIsLoading || [start timeIntervalSinceNow] >= maxDelay) {
-            dispatch_sync(dispatch_get_main_queue(), ^{
-                rendererIsLoading = [self.dataSource rendererLoading];
-            });
-        }
-        
-        // Render on main thread
+- (void)parseAndRenderWithMaxDelay:(NSTimeInterval)maxDelay
+{
+    if (![NSThread isMainThread])
+    {
+        __weak typeof(self) weakSelf = self;
         dispatch_async(dispatch_get_main_queue(), ^{
-            [self render];
+            [weakSelf parseAndRenderWithMaxDelay:maxDelay];
+        });
+        return;
+    }
+    NSUInteger generation = ++self.renderGeneration;
+    NSString *markdown = [[self.dataSource rendererMarkdown:self] copy];
+    NSDictionary *options = [self parseOptions];
+    [self.parseQueue cancelAllOperations];
+    __weak typeof(self) weakSelf = self;
+    NSBlockOperation *operation = [[NSBlockOperation alloc] init];
+    __weak NSBlockOperation *weakOperation = operation;
+    [operation addExecutionBlock:^{
+        NSBlockOperation *runningOperation = weakOperation;
+        MPRenderer *renderer = weakSelf;
+        if (!renderer || runningOperation.cancelled)
+            return;
+        NSDictionary *result = [renderer parseResultForMarkdown:markdown options:options];
+        if (runningOperation.cancelled)
+            return;
+        NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:MAX(0, maxDelay)];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            MPRenderer *currentRenderer = weakSelf;
+            if (!currentRenderer || generation != currentRenderer.renderGeneration)
+                return;
+            [currentRenderer publishParseResult:result options:options];
+            [currentRenderer renderWhenReadyUntil:deadline generation:generation];
         });
     }];
+    [self.parseQueue addOperation:operation];
 }
 
 - (void)parseAndRenderNow
@@ -690,7 +717,7 @@ NS_INLINE NSString *MPPreviewHeadTags(NSString *checkboxBridgeToken)
             || [delegate rendererRendersTOC:self] != self.TOC
             || [delegate rendererDetectsFrontMatter:self] != self.frontMatter)
     {
-        [self parseMarkdown:[self.dataSource rendererMarkdown:self]];
+        [self parseAndRenderNow];
     }
 }
 
@@ -749,6 +776,8 @@ NS_INLINE NSString *MPPreviewHeadTags(NSString *checkboxBridgeToken)
 // same pure parse pipeline and publish their snapshots on the main queue.
 - (void)parseMarkdown:(NSString *)markdown
 {
+    ++self.renderGeneration;
+    [self.parseQueue cancelAllOperations];
     NSDictionary *options = [self parseOptions];
     [self publishParseResult:[self parseResultForMarkdown:markdown options:options]
                     options:options];

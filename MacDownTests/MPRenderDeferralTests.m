@@ -17,6 +17,10 @@
 @property (nonatomic, strong) NSMutableArray *renderCompletionHandlers;
 @property (nonatomic, readonly) BOOL needsHtml;
 - (void)performAfterRender:(void (^)(void))handler;
+- (void)finishPreviewRender;
+@property BOOL awaitingRequestedRender;
+@property BOOL alreadyRenderingInWeb;
+@property BOOL renderToWebPending;
 // IBActions used in tests
 - (IBAction)togglePreviewPane:(id)sender;
 - (IBAction)copyHtml:(id)sender;
@@ -123,43 +127,44 @@
  * Test that handler executes immediately when preview is visible.
  * Issue #16: Core behavior - no deferral when needsHtml is YES.
  */
-- (void)testPerformAfterRenderExecutesImmediatelyWhenPreviewVisible
+- (void)testVisiblePreviewStillWaitsForFreshRender
 {
     [self.document makeWindowControllers];
 
     // In headless CI, preview may not be visible
     if (!self.document.needsHtml) {
-        NSLog(@"Skipping testPerformAfterRenderExecutesImmediatelyWhenPreviewVisible - needsHtml is NO (headless mode)");
+        NSLog(@"Skipping testVisiblePreviewStillWaitsForFreshRender - needsHtml is NO (headless mode)");
         return;
     }
 
     [self.document performAfterRender:[self testHandlerBlock]];
 
-    XCTAssertTrue(self.handlerWasInvoked,
-                  @"Handler should execute immediately when needsHtml is YES");
-    XCTAssertEqual(self.handlerInvocationCount, 1,
-                   @"Handler should be invoked exactly once");
+    XCTAssertFalse(self.handlerWasInvoked);
+    XCTAssertEqual(self.document.renderCompletionHandlers.count, 1);
+    self.document.awaitingRequestedRender = NO;
+    [self.document finishPreviewRender];
+    XCTAssertEqual(self.handlerInvocationCount, 1);
+    [self.document finishPreviewRender];
+    XCTAssertEqual(self.handlerInvocationCount, 1);
 }
 
 /**
  * Test that handler is NOT queued when executed immediately.
  * Issue #16: When preview visible, handlers bypass the queue.
  */
-- (void)testNoQueueingWhenPreviewVisible
+- (void)testVisiblePreviewQueuesOperation
 {
     [self.document makeWindowControllers];
 
     if (!self.document.needsHtml) {
-        NSLog(@"Skipping testNoQueueingWhenPreviewVisible - needsHtml is NO (headless mode)");
+        NSLog(@"Skipping testVisiblePreviewQueuesOperation - needsHtml is NO (headless mode)");
         return;
     }
 
     [self.document performAfterRender:[self testHandlerBlock]];
 
-    // Queue should remain empty after immediate execution
-    NSArray *handlers = self.document.renderCompletionHandlers;
-    XCTAssertTrue(handlers == nil || handlers.count == 0,
-                  @"Handler queue should be empty after immediate execution");
+    XCTAssertEqual(self.document.renderCompletionHandlers.count, 1);
+    XCTAssertFalse(self.handlerWasInvoked);
 }
 
 
@@ -442,6 +447,25 @@
     // exportPdf: opens a save panel, so just verify it doesn't crash
     XCTAssertNoThrow([self.document exportPdf:nil],
                      @"exportPdf: should not crash");
+}
+
+- (void)testOldRenderCompletionCannotReleasePendingExport
+{
+    [self.document performAfterRender:[self testHandlerBlock]];
+    [self.document finishPreviewRender];
+    XCTAssertFalse(self.handlerWasInvoked);
+    self.document.awaitingRequestedRender = NO;
+    [self.document finishPreviewRender];
+    XCTAssertEqual(self.handlerInvocationCount, 1);
+}
+
+- (void)testCloseCancelsPendingOperations
+{
+    [self.document performAfterRender:[self testHandlerBlock]];
+    [self.document close];
+    [self.document finishPreviewRender];
+    XCTAssertFalse(self.handlerWasInvoked);
+    XCTAssertEqual(self.document.renderCompletionHandlers.count, 0);
 }
 
 @end
