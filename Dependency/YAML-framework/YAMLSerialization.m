@@ -64,6 +64,57 @@ static BOOL YAMLNodeIsAcyclic(yaml_document_t *document, int index,
     return YES;
 }
 
+// M13OrderedDictionary has identity equality and copying creates a different
+// identity. Mapping keys therefore need Foundation value-equality containers.
+static id YAMLMappingKey(id object, NSMapTable *copies) {
+    id existing = [copies objectForKey:object];
+    if (existing)
+        return existing;
+    id result = nil;
+    if ([object isKindOfClass:[NSArray class]]) {
+        NSMutableArray *items = [NSMutableArray array];
+        for (id item in object)
+            [items addObject:YAMLMappingKey(item, copies)];
+        result = [[items copy] autorelease];
+    } else if ([object isKindOfClass:[M13OrderedDictionary class]]) {
+        NSMutableDictionary *items = [NSMutableDictionary dictionary];
+        for (NSUInteger index = 0; index < [object count]; index++)
+            [items setObject:YAMLMappingKey([object objectAtIndex:index], copies)
+                      forKey:YAMLMappingKey([object keyAtIndex:index], copies)];
+        result = [[items copy] autorelease];
+    } else {
+        result = [[object copy] autorelease];
+    }
+    [copies setObject:result forKey:object];
+    return result;
+}
+
+// Populate children before inserting mapping keys. Foundation dictionaries copy
+// keys, so inserting an empty collection key and filling it later breaks lookup.
+// The acyclic check has already bounded recursion; states memoizes aliases.
+static void YAMLFillNode(yaml_document_t *document, int index, id *objects,
+                         unsigned char *states, NSMapTable *keyCopies) {
+    if (states[index - 1])
+        return;
+    yaml_node_t *node = yaml_document_get_node(document, index);
+    if (node->type == YAML_SEQUENCE_NODE) {
+        for (yaml_node_item_t *item = node->data.sequence.items.start;
+             item < node->data.sequence.items.top; item++) {
+            YAMLFillNode(document, *item, objects, states, keyCopies);
+            [objects[index - 1] addObject:objects[*item - 1]];
+        }
+    } else if (node->type == YAML_MAPPING_NODE) {
+        for (yaml_node_pair_t *pair = node->data.mapping.pairs.start;
+             pair < node->data.mapping.pairs.top; pair++) {
+            YAMLFillNode(document, pair->key, objects, states, keyCopies);
+            YAMLFillNode(document, pair->value, objects, states, keyCopies);
+            [objects[index - 1] setObject:objects[pair->value - 1]
+                                  forKey:YAMLMappingKey(objects[pair->key - 1], keyCopies)];
+        }
+    }
+    states[index - 1] = 1;
+}
+
 // Serialize single, parsed document. Does not destroy the document.
 static id YAMLImmutableObject(id object, NSMapTable *copies) {
     id existing = [copies objectForKey:object];
@@ -112,8 +163,6 @@ __YAMLSerializationObjectWithYAMLDocument (yaml_document_t *document, YAMLReadOp
     }
 
     yaml_node_t *node = NULL;
-    yaml_node_item_t *item = NULL;
-    yaml_node_pair_t *pair = NULL;
 
     int i = 0;
 
@@ -125,8 +174,8 @@ __YAMLSerializationObjectWithYAMLDocument (yaml_document_t *document, YAMLReadOp
 
     unsigned char *states = calloc(document->nodes.top - document->nodes.start, 1);
     BOOL acyclic = states && YAMLNodeIsAcyclic(document, 1, states, 0);
-    free(states);
     if (!acyclic) {
+        free(states);
         free(objects);
         YAML_SET_ERROR(kYAMLErrorInvalidYamlObject,
                        @"Cyclic or excessively nested YAML document",
@@ -159,24 +208,12 @@ __YAMLSerializationObjectWithYAMLDocument (yaml_document_t *document, YAMLReadOp
         }
     }
 
-    // Fill in containers
-    for (node = document->nodes.start, i = 0; node < document->nodes.top; node++, i++) {
-        switch (node->type) {
-            case YAML_SEQUENCE_NODE:
-                for (item = node->data.sequence.items.start; item < node->data.sequence.items.top; item++)
-                    [objects[i] addObject: objects[*item - 1]];
-                break;
-
-            case YAML_MAPPING_NODE:
-                for (pair = node->data.mapping.pairs.start; pair < node->data.mapping.pairs.top; pair++)
-                    [objects[i] setObject: objects[pair->value - 1]
-                                   forKey: objects[pair->key - 1]];
-                break;
-
-            default:
-                break;
-        }
-    }
+    // Fill containers in dependency order, preserving shared alias objects.
+    memset(states, 0, document->nodes.top - document->nodes.start);
+    NSMapTable *keyCopies = [NSMapTable mapTableWithKeyOptions:NSPointerFunctionsObjectPointerPersonality
+                                                valueOptions:NSPointerFunctionsStrongMemory];
+    YAMLFillNode(document, 1, objects, states, keyCopies);
+    free(states);
 
     // Retain the root object
     if (root != nil) {

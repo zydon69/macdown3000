@@ -873,4 +873,36 @@
     XCTAssertTrue([leaves[0] isKindOfClass:NSMutableString.class]);
 }
 
+- (void)testYAMLCollectionKeysArePopulatedBeforeDictionaryCopiesThem {
+    NSArray *cases = @[@"? [a, b]\n: value\n",
+                       @"? {a: b}\n: value\n",
+                       @"one: &key [a, b]\n? *key\n: value\n",
+                       @"? [{a: b}]\n: value\n"];
+    NSArray *options = @[@(kYAMLReadOptionStringScalars),
+                         @(kYAMLReadOptionStringScalars | kYAMLReadOptionMutableContainers),
+                         @(kYAMLReadOptionStringScalars | kYAMLReadOptionMutableContainersAndLeaves)];
+    for (NSNumber *option in options) {
+        for (NSString *yaml in cases) {
+            NSError *error = nil;
+            id document = [YAMLSerialization objectWithYAMLString:yaml
+                options:option.unsignedIntegerValue error:&error];
+            XCTAssertNotNil(document);
+            XCTAssertNil(error);
+            id collectionKey = nil;
+            for (id key in [document allKeys])
+                if (![key isKindOfClass:NSString.class]) collectionKey = key;
+            XCTAssertNotNil(collectionKey);
+            XCTAssertEqualObjects([document objectForKey:collectionKey], @"value");
+            if ([collectionKey isKindOfClass:NSArray.class]) {
+                if ([collectionKey count] == 2)
+                    XCTAssertEqualObjects(collectionKey, (@[@"a", @"b"]));
+                else
+                    XCTAssertEqualObjects([collectionKey[0] objectForKey:@"a"], @"b");
+            } else {
+                XCTAssertEqualObjects([collectionKey objectForKey:@"a"], @"b");
+            }
+        }
+    }
+}
+
 @end
