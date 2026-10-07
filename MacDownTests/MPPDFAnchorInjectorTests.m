@@ -194,6 +194,13 @@ static const CGFloat kMPTestTolerance = 2.0;
         // view is just an offset by that page's slice of pageHeight.
         CGFloat viewX = item.topLeftPoint.x;
         CGFloat viewY = (CGFloat)item.pageIndex * _pageHeight + item.topLeftPoint.y;
+        // A print pass only paints its page slice. Emitting text outside
+        // that slice leaves clipped glyphs in the PDF content stream;
+        // PDFKit can still find them and report duplicate occurrences.
+        NSRect textRect = NSMakeRect(viewX, viewY, attrString.size.width, attrString.size.height);
+        if (!NSIntersectsRect(textRect, dirtyRect)) {
+            continue;
+        }
         [attrString drawAtPoint:NSMakePoint(viewX, viewY)];
     }
 }
@@ -1360,7 +1367,20 @@ static BOOL MPTestAnnotationIsLink(PDFAnnotation *annotation)
     XCTAssertEqual([document indexForPage:destination.page], pages[0].unsignedIntegerValue);
     XCTAssertEqualWithAccuracy(destination.point.y, NSMaxY(rects[0].rectValue), kMPTestTolerance);
 
-
+    // The exported file must retain a navigable GoTo action when reopened.
+    NSData *exportedData = document.dataRepresentation;
+    XCTAssertNotNil(exportedData);
+    PDFDocument *reopened = exportedData ? [[PDFDocument alloc] initWithData:exportedData] : nil;
+    XCTAssertNotNil(reopened);
+    NSArray<PDFAnnotation *> *savedAnnotations =
+        [self linkAnnotationsOnPage:[reopened pageAtIndex:pages[1].unsignedIntegerValue]];
+    XCTAssertEqual(savedAnnotations.count, 1U);
+    if (savedAnnotations.count != 1) return;
+    XCTAssertTrue([savedAnnotations.firstObject.action isKindOfClass:[PDFActionGoTo class]]);
+    if (![savedAnnotations.firstObject.action isKindOfClass:[PDFActionGoTo class]]) return;
+    PDFDestination *savedDestination = ((PDFActionGoTo *)savedAnnotations.firstObject.action).destination;
+    XCTAssertEqual([reopened indexForPage:savedDestination.page], pages[0].unsignedIntegerValue);
+    XCTAssertEqualWithAccuracy(savedDestination.point.y, NSMaxY(rects[0].rectValue), kMPTestTolerance);
 }
 
 - (void)testRepeatedProseAndTwoInlineLinksResolveExactHeadingOccurrence
