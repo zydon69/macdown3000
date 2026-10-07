@@ -27,6 +27,8 @@ runs:
         MARKETING_VERSION_INPUT: ${{ inputs.marketing-version }}
         BUILD_NUMBER_INPUT: ${{ inputs.build-number }}
         TEAM_ID_INPUT: ${{ inputs.team-id }}
+        MACDOWN_RELEASE_VERSION: ${{ inputs.marketing-version }}
+        MACDOWN_RELEASE_BUILD: ${{ inputs.build-number }}
       run: |
         echo "🔨 Building MacDown..."
         set -o pipefail
