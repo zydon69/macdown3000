@@ -6,7 +6,7 @@
 //  Copyright (c) 2014 Tzu-ping Chung . All rights reserved.
 //
 
-#import <sys/time.h>
+#import "MPCommandInput.h"
 #import <AppKit/AppKit.h>
 #import <GBCli/GBCli.h>
 #import "NSUserDefaults+Suite.h"
@@ -14,7 +14,6 @@
 #import "MPArgumentProcessor.h"
 
 
-const NSUInteger kMPPathEncoding = NSUTF8StringEncoding;
 
 
 NSRunningApplication *MPRunningMacDownInstance()
@@ -58,33 +57,6 @@ void MPCollectFoldersForMacDown(NSOrderedSet<NSURL *> *urls)
     [defaults synchronize];
 }
 
-/**
- * Data piped to macdown through stdin.
- * 
- * @return Piped data if any, otherwise nil.
- */
-NSData* MPPipedData() {
-    NSFileHandle *stdInFileHandle = [NSFileHandle fileHandleWithStandardInput];
-    // Check if stdin file handle have anything to read
-    // Modified solution from http://stackoverflow.com/questions/7505777/how-do-i-check-for-nsfilehandle-has-data-available
-    int fd = [stdInFileHandle fileDescriptor];
-    fd_set fdset;
-    struct timeval tmout = { 0, 0 };
-    FD_ZERO(&fdset);
-    FD_SET(fd, &fdset);
-    if (select(fd + 1, &fdset, NULL, NULL, &tmout) <= 0) { // Doesn't hold any data
-        return nil;
-    }
-    else if (FD_ISSET(fd, &fdset)) { // Holds data
-        NSData *stdInData = [NSData dataWithData:[stdInFileHandle readDataToEndOfFile]];
-        return stdInData;
-    }
-    else {
-        return nil;
-    }
-}
-
-
 int main(int argc, const char * argv[])
 {
     @autoreleasepool
@@ -96,34 +68,36 @@ int main(int argc, const char * argv[])
         else if (argproc.printsVersion)
             [argproc printVersion:YES];
         
-        NSData *dataFromPipe = MPPipedData();
+        NSError *inputError = nil;
+        NSData *dataFromPipe = MPReadCommandInput(STDIN_FILENO, &inputError);
+        if (inputError) {
+            fprintf(stderr, "Could not read standard input: %s\n", inputError.localizedDescription.UTF8String);
+            return EXIT_FAILURE;
+        }
         
         if (dataFromPipe) {
             // Store piped content in a temporary file which will be read by MacDown on launch
             NSString *fileName = [NSString stringWithFormat:@"%@_%@", [[NSProcessInfo processInfo] globallyUniqueString], @"pipedText.txt"];
             NSURL *fileURL = [NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:fileName]];
             
-            NSError *writeError;
-            [dataFromPipe writeToFile:fileURL.path options:0 error:&writeError];
-            
-            if (writeError == nil) {
-                MPCollectPipedContentURLForMacDown(fileURL);
+            NSError *writeError = nil;
+            if (![dataFromPipe writeToFile:fileURL.path options:NSDataWritingAtomic error:&writeError]) {
+                fprintf(stderr, "Could not save piped input: %s\n", writeError.localizedDescription.UTF8String);
+                return EXIT_FAILURE;
             }
+            MPCollectPipedContentURLForMacDown(fileURL);
         }
 
         // Treat all arguments as file names to open. Convert them to absolute
         // paths and store them (as an array) in MacDown's user defaults to
         // be opened later.
         NSString *pwd = [NSFileManager defaultManager].currentDirectoryPath;
-        NSURL *pwdUrl = [NSURL fileURLWithPath:pwd isDirectory:YES];
         NSFileManager *fm = [NSFileManager defaultManager];
         NSMutableOrderedSet<NSURL *> *fileURLs = [NSMutableOrderedSet orderedSet];
         NSMutableOrderedSet<NSURL *> *folderURLs = [NSMutableOrderedSet orderedSet];
         for (NSString *arg in argproc.arguments)
         {
-            NSString *escaped =
-                [arg stringByAddingPercentEscapesUsingEncoding:kMPPathEncoding];
-            NSURL *url = [NSURL URLWithString:escaped relativeToURL:pwdUrl];
+            NSURL *url = MPCommandFileURL(arg, pwd);
             BOOL isDir = NO;
             if ([fm fileExistsAtPath:url.path isDirectory:&isDir] && isDir)
                 [folderURLs addObject:url];
@@ -137,7 +111,11 @@ int main(int argc, const char * argv[])
         MPCollectFoldersForMacDown(folderURLs);
 
         // Launch MacDown.
-        [[NSWorkspace sharedWorkspace] launchAppWithBundleIdentifier:kMPApplicationBundleIdentifier options:NSWorkspaceLaunchDefault additionalEventParamDescriptor:nil launchIdentifier:nil];
+        BOOL launched = [[NSWorkspace sharedWorkspace] launchAppWithBundleIdentifier:kMPApplicationBundleIdentifier options:NSWorkspaceLaunchDefault additionalEventParamDescriptor:nil launchIdentifier:nil];
+        if (!launched) {
+            fprintf(stderr, "Could not launch %s\n", kMPApplicationBundleIdentifier.UTF8String);
+            return EXIT_FAILURE;
+        }
     }
     return EXIT_SUCCESS;
 }
