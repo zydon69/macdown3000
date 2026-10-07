@@ -320,7 +320,7 @@ NS_INLINE NSString *MPQuickLookContentSecurityPolicy(void)
 
     // HTML header
     [html appendString:@"<!DOCTYPE html>\n"];
-    [html appendString:@"<html>\n<head>\n"];
+    [html appendString:@"<html data-color-mode=\"light\" data-light-theme=\"light\">\n<head>\n"];
     [html appendString:@"<meta charset=\"utf-8\">\n"];
     [html appendString:@"<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"];
     [html appendFormat:@"<meta http-equiv=\"Content-Security-Policy\" content=\"%@\">\n",
