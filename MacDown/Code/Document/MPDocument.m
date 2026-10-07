@@ -3072,18 +3072,18 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 
 - (IBAction)toggleOrderedList:(id)sender
 {
-    [self.editor toggleBlockWithPattern:@"^[0-9]+ \\S" prefix:@"1. "];
+    [self.editor toggleBlockWithPattern:@"^[0-9]+\\.[ \t]+" prefix:@"1. "];
 }
 
 - (IBAction)toggleUnorderedList:(id)sender
 {
     NSString *marker = self.preferences.editorUnorderedListMarker;
-    [self.editor toggleBlockWithPattern:@"^[\\*\\+-] \\S" prefix:marker];
+    [self.editor toggleBlockWithPattern:@"^[\\*\\+-][ \t]+" prefix:marker];
 }
 
 - (IBAction)toggleBlockquote:(id)sender
 {
-    [self.editor toggleBlockWithPattern:@"^> \\S" prefix:@"> "];
+    [self.editor toggleBlockWithPattern:@"^>[ \t]?" prefix:@"> "];
 }
 
 - (IBAction)indent:(id)sender

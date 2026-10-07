@@ -768,4 +768,22 @@
     XCTAssertTrue(NSEqualRanges(view.selectedRange, NSMakeRange(0, 0)));
 }
 
+- (void)testOrderedBlockToggleRemovesEntireMarkerAndPreservesSelectedText {
+    NSTextView *view = [[NSTextView alloc] initWithFrame:NSZeroRect];
+    view.string = @"12. first\n123. second";
+    view.selectedRange = NSMakeRange(0, view.string.length);
+    [view toggleBlockWithPattern:@"^[0-9]+\\.[ \t]+" prefix:@"1. "];
+    XCTAssertEqualObjects(view.string, @"first\nsecond");
+    XCTAssertTrue(NSEqualRanges(view.selectedRange, NSMakeRange(0, view.string.length)));
+}
+
+- (void)testBlockToggleRemovesEmptyMarkerWithCursorInsideMarker {
+    NSTextView *view = [[NSTextView alloc] initWithFrame:NSZeroRect];
+    view.string = @"12. ";
+    view.selectedRange = NSMakeRange(0, 0);
+    [view toggleBlockWithPattern:@"^[0-9]+\\.[ \t]+" prefix:@"1. "];
+    XCTAssertEqualObjects(view.string, @"");
+    XCTAssertTrue(NSEqualRanges(view.selectedRange, NSMakeRange(0, 0)));
+}
+
 @end

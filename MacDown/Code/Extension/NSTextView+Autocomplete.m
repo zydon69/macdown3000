@@ -329,82 +329,47 @@ static NSString * const kMPBlockquoteLinePattern = @"^((?:\\> ?)+).*$";
 
 - (void)toggleBlockWithPattern:(NSString *)pattern prefix:(NSString *)prefix
 {
-    NSRegularExpression *regex =
-        [[NSRegularExpression alloc] initWithPattern:pattern options:0
-                                               error:NULL];
+    NSRegularExpression *regex = [[NSRegularExpression alloc] initWithPattern:pattern options:0 error:NULL];
+    if (!regex || !prefix.length)
+        return;
     NSString *content = self.string;
-    NSRange selectedRange = self.selectedRange;
-    NSRange lineRange = [content lineRangeForRange:selectedRange];
-
+    NSRange selection = self.selectedRange;
+    NSRange lineRange = [content lineRangeForRange:selection];
     NSString *toProcess = [content substringWithRange:lineRange];
-    BOOL hasTrailingNewline = NO;
-    if ([toProcess hasSuffix:@"\n"])
-    {
-        toProcess = [toProcess substringToIndex:(toProcess.length - 1)];
-        hasTrailingNewline = YES;
+    BOOL trailingNewline = [toProcess hasSuffix:@"\n"];
+    if (trailingNewline)
+        toProcess = [toProcess substringToIndex:toProcess.length - 1];
+    NSArray<NSString *> *lines = [toProcess componentsSeparatedByString:@"\n"];
+    NSMutableArray<NSTextCheckingResult *> *matches = [NSMutableArray array];
+    BOOL marked = YES;
+    for (NSString *line in lines) {
+        NSTextCheckingResult *match = [regex firstMatchInString:line options:0 range:NSMakeRange(0, line.length)];
+        BOOL hasMarker = match && match.range.location == 0 && match.range.length > 0;
+        marked = marked && hasMarker;
+        [matches addObject:hasMarker ? (id)match : (id)NSNull.null];
     }
-
-    NSArray *lines = [toProcess componentsSeparatedByString:@"\n"];
-
-    BOOL isMarked = YES;
-    for (NSString *line in lines)
-    {
-        NSRange matchRange =
-            [regex rangeOfFirstMatchInString:line options:0
-                                       range:NSMakeRange(0, line.length)];
-        if (matchRange.location == NSNotFound)
-        {
-            isMarked = NO;
-            break;
-        }
+    NSMutableArray *processedLines = [NSMutableArray array];
+    NSUInteger sourceOffset = lineRange.location;
+    NSUInteger mappedStart = selection.location;
+    NSUInteger mappedEnd = NSMaxRange(selection);
+    NSUInteger originalEnd = mappedEnd;
+    for (NSUInteger i = 0; i < lines.count; i++) {
+        NSString *line = lines[i];
+        NSUInteger removed = marked ? matches[i].range.length : 0;
+        NSUInteger added = marked ? 0 : prefix.length;
+        [processedLines addObject:marked ? [line substringFromIndex:removed]
+                                         : [prefix stringByAppendingString:line]];
+        if (selection.location >= sourceOffset)
+            mappedStart = mappedStart - MIN(removed, selection.location - sourceOffset) + added;
+        if (originalEnd >= sourceOffset)
+            mappedEnd = mappedEnd - MIN(removed, originalEnd - sourceOffset) + added;
+        sourceOffset += line.length + 1;
     }
-
-    NSUInteger prefixLength = prefix.length;
-    NSMutableArray *modLines = [NSMutableArray arrayWithCapacity:lines.count];
-
-    __block NSUInteger totalShift = 0;
-    [lines enumerateObjectsUsingBlock:^(id obj, NSUInteger index, BOOL *stop) {
-        NSString *line = obj;
-        if (line.length)
-            totalShift += prefixLength;
-        if (!isMarked)
-            line = [prefix stringByAppendingString:line];
-        else
-            line = [line substringFromIndex:prefixLength];
-        [modLines addObject:line];
-    }];
-
-    NSString *processed = [modLines componentsJoinedByString:@"\n"];
-    if (hasTrailingNewline)
-        processed = [NSString stringWithFormat:@"%@\n", processed];
+    NSString *processed = [processedLines componentsJoinedByString:@"\n"];
+    if (trailingNewline)
+        processed = [processed stringByAppendingString:@"\n"];
     [self insertText:processed replacementRange:lineRange];
-
-    if (!isMarked)
-    {
-        selectedRange.location += prefixLength;
-        if (selectedRange.length + totalShift >= prefixLength)
-            selectedRange.length += totalShift - prefixLength;
-        else    // Underflow.
-            selectedRange.length = 0;
-    }
-    else
-    {
-        if (prefixLength <= selectedRange.location)
-            selectedRange.location -= prefixLength;
-        else    // Underflow.
-            selectedRange.location = 0;
-        if (totalShift - prefixLength <= selectedRange.length)
-            selectedRange.length -= totalShift - prefixLength;
-        else    // Underflow.
-            selectedRange.length = 0;
-
-        if (selectedRange.location < lineRange.location)
-        {
-            selectedRange.length -= lineRange.location - selectedRange.location;
-            selectedRange.location = lineRange.location;
-        }
-    }
-    self.selectedRange = selectedRange;
+    self.selectedRange = NSMakeRange(mappedStart, mappedEnd - mappedStart);
 }
 
 - (void)indentSelectedLinesWithPadding:(NSString *)padding
