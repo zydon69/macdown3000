@@ -28,6 +28,7 @@
 @property (copy) NSString *loadedString;
 - (void)reloadFromLoadedString;
 - (IBAction)toggleUnderline:(id)sender;
+- (BOOL)textViewShouldMoveToLeftEndOfLine:(NSTextView *)textView;
 @property (nonatomic) BOOL isPreviewReady;
 @property (nonatomic) BOOL alreadyRenderingInWeb;
 @property (nonatomic) BOOL renderToWebPending;
@@ -1020,6 +1021,23 @@
         XCTAssertTrue(NSEqualRanges(editor.selectedRange, NSMakeRange(1, 0)));
     } @finally {
         preferences.editorCompleteMatchingCharacters = original;
+    }
+}
+
+- (void)testSmartHomeWithSurrogatePairMovesToFirstContentCharacter
+{
+    MPPreferences *preferences = self.document.preferences;
+    BOOL original = preferences.editorSmartHome;
+    MPEditorView *editor = [[MPEditorView alloc] initWithFrame:NSMakeRect(0, 0, 400, 200)];
+    self.document.editor = editor;
+    @try {
+        preferences.editorSmartHome = YES;
+        editor.string = @"  😀";
+        editor.selectedRange = NSMakeRange(editor.string.length, 0);
+        XCTAssertFalse([self.document textViewShouldMoveToLeftEndOfLine:editor]);
+        XCTAssertTrue(NSEqualRanges(editor.selectedRange, NSMakeRange(2, 0)));
+    } @finally {
+        preferences.editorSmartHome = original;
     }
 }
 

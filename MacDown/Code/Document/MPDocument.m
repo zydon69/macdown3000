@@ -1830,10 +1830,10 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     NSLayoutManager *manager = textView.layoutManager;
     NSTextContainer *container = textView.textContainer;
     NSRect targetRect =
-        [manager boundingRectForGlyphRange:NSMakeRange(location, 1)
+        [manager boundingRectForGlyphRange:[manager glyphRangeForCharacterRange:NSMakeRange(location, 1) actualCharacterRange:NULL]
                            inTextContainer:container];
     NSRect currentRect =
-        [manager boundingRectForGlyphRange:NSMakeRange(cur, 1)
+        [manager boundingRectForGlyphRange:[manager glyphRangeForCharacterRange:NSMakeRange(cur, 1) actualCharacterRange:NULL]
                            inTextContainer:container];
     if (targetRect.origin.y != currentRect.origin.y)
         return YES;
