@@ -8,6 +8,7 @@
 
 #import <XCTest/XCTest.h>
 #import "MPUtilities.h"
+#import "pmh_styleparser.h"
 #import "YAMLSerialization.h"
 #import "NSTextView+Autocomplete.h"
 #import "NSDocumentController+Document.h"
@@ -919,6 +920,21 @@
     id decoded = [YAMLSerialization objectWithYAMLString:yaml
         options:kYAMLReadOptionStringScalars error:&error];
     XCTAssertEqualObjects([decoded objectForKey:@"title"], @"é漢😀");
+}
+
+- (void)testStylesheetRepeatedLanguageRulesStayWithinCollectionCapacity {
+    NSMutableString *stylesheet = [NSMutableString string];
+    for (NSUInteger i = 0; i < 100; i++)
+        [stylesheet appendString:@"H1\ncolor: ff0000\n\n"];
+    pmh_style_collection *styles = pmh_parse_styles((char *)stylesheet.UTF8String, NULL, NULL);
+    NSUInteger count = 0;
+    for (int i = 0; i < pmh_NUM_LANG_TYPES; i++)
+        for (pmh_style_attribute *attribute = styles->element_styles[i]; attribute; attribute = attribute->next) {
+            XCTAssertEqual(attribute->lang_element_type, pmh_H1);
+            count++;
+        }
+    XCTAssertEqual(count, 100u);
+    pmh_free_style_collection(styles);
 }
 
 @end
