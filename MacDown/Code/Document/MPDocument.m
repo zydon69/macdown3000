@@ -2200,12 +2200,16 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
                 // Only replace body content, preserving head (CSS, scripts)
                 JSContext *context = self.preview.mainFrame.javaScriptContext;
                 context[@"window"][@"__macdownTempHtml"] = bodyContent;
+                context[@"window"][@"__macdownTempCheckboxToken"] = renderer.checkboxBridgeToken;
 
                 NSString *updateScript = [NSString stringWithFormat:
                     @"(function(){"
                     @"  var scrollY = %.0f;"
                     @"  var html = window.__macdownTempHtml;"
                     @"  delete window.__macdownTempHtml;"
+                    @"  var tokenMeta=document.querySelector('meta[name=\"macdown-checkbox-token\"]');"
+                    @"  if(tokenMeta){tokenMeta.content=window.__macdownTempCheckboxToken;}"
+                    @"  delete window.__macdownTempCheckboxToken;"
                     @"  var body = document.body;"
                     @"  body.innerHTML = html;"
                     @"  if(window.Prism){Prism.highlightAll();}"
