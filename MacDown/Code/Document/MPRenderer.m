@@ -119,7 +119,8 @@ NS_INLINE NSString *MPHTMLFromMarkdown(
         hoedown_html_smartypants(ob, ib->data, ib->size);
         hoedown_buffer_free(ib);
     }
-    NSString *result = [NSString stringWithUTF8String:hoedown_buffer_cstr(ob)];
+    NSString *result = [[NSString alloc] initWithBytes:ob->data length:ob->size
+                                           encoding:NSUTF8StringEncoding] ?: @"";
     hoedown_document_free(document);
     hoedown_buffer_free(ob);
 
@@ -130,7 +131,8 @@ NS_INLINE NSString *MPHTMLFromMarkdown(
         ob = hoedown_buffer_new(64);
         hoedown_document_render(
             document, ob, inputData.bytes, inputData.length);
-        NSString *toc = [NSString stringWithUTF8String:hoedown_buffer_cstr(ob)];
+        NSString *toc = [[NSString alloc] initWithBytes:ob->data length:ob->size
+                                            encoding:NSUTF8StringEncoding] ?: @"";
 
         static NSRegularExpression *tocRegex = nil;
         static dispatch_once_t onceToken;

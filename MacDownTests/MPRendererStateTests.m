@@ -559,4 +559,16 @@
     }
 }
 
+- (void)testEmbeddedNullDoesNotTruncateRenderedBodyOrTOC
+{
+    self.delegate.renderTOC = YES;
+    const char bytes[] = "[TOC]\n\n# Before\0After\n\n# Last heading\n\nLast paragraph";
+    NSString *markdown = [[NSString alloc] initWithBytes:bytes length:sizeof(bytes) - 1
+                                               encoding:NSUTF8StringEncoding];
+    [self.renderer parseMarkdown:markdown];
+    XCTAssertTrue([self.renderer.currentHtml containsString:@"After</h1>"]);
+    XCTAssertTrue([self.renderer.currentHtml containsString:@"href=\"#last-heading\""]);
+    XCTAssertTrue([self.renderer.currentHtml containsString:@"Last paragraph</p>"]);
+}
+
 @end
