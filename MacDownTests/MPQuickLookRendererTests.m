@@ -218,7 +218,7 @@
     NSString *markdown = @"```\ncode block\n```";
     NSString *html = [self.renderer renderMarkdown:markdown];
 
-    XCTAssertTrue([html containsString:@"<pre>"],
+    XCTAssertTrue([html containsString:@"<pre "],
                   @"Should render fenced code blocks");
     XCTAssertTrue([html containsString:@"<code"],
                   @"Should include code element");
@@ -356,7 +356,7 @@
     NSString *html = [self.renderer renderMarkdown:markdown];
 
     // Should render as a code block, not a diagram
-    XCTAssertTrue([html containsString:@"<pre>"] || [html containsString:@"<code"],
+    XCTAssertTrue([html containsString:@"<pre "] || [html containsString:@"<code"],
                   @"Mermaid blocks should render as code, not diagrams");
 }
 

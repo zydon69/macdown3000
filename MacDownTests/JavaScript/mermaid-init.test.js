@@ -83,3 +83,87 @@ const vm = require('node:vm');
   assert.equal(newPre.outerHTML, '<svg>new graph</svg>');
   process.stdout.write('Mermaid replaced DOM during pending render: passed\n');
 })().catch(error => { console.error(error); process.exitCode = 1; });
+
+// R04 places the language class on both PRE and CODE. The adapter's broad
+// selector must still render each CODE exactly once and keep sibling diagrams.
+(async function () {
+  let onLoad, onMutation;
+  const scheduled = [];
+  const rendered = [];
+  const body = { slots: [], contains: node => body.slots.includes(node) };
+  const wrapper = { tagName: 'DIV' };
+  function diagrams(sources) {
+    return sources.map(source => {
+      const classes = new Set(['language-mermaid']);
+      const pre = {
+        tagName: 'PRE', parentElement: wrapper, textContent: source,
+        classList: { remove: name => classes.delete(name) }, classes
+      };
+      pre.code = {
+        tagName: 'CODE', textContent: source, parentElement: pre,
+        classes: new Set(['language-mermaid'])
+      };
+      Object.defineProperty(pre, 'outerHTML', {
+        set(svg) {
+          const index = body.slots.indexOf(pre);
+          assert.notEqual(index, -1, 'Only an attached PRE may be replaced');
+          body.slots[index] = { tagName: 'SVG', svg, source };
+          onMutation();
+        }
+      });
+      return pre;
+    });
+  }
+  const initial = ['graph TD; A-->B;', 'sequenceDiagram; Alice->>Bob: Hello'];
+  const replacement = ['graph TD; C-->D;', 'sequenceDiagram; Bob->>Alice: Reply'];
+  body.slots = diagrams(initial);
+  const context = {
+    document: {
+      readyState: 'complete', body,
+      querySelectorAll(selector) {
+        assert.equal(selector, '.language-mermaid');
+        return body.slots.flatMap(pre => pre.tagName === 'PRE'
+          ? [pre, pre.code].filter(node => node.classes.has('language-mermaid')) : []);
+      }
+    },
+    window: { addEventListener: (event, callback) => { onLoad = callback; } },
+    console: { warn() {}, error() {} },
+    setTimeout: callback => { scheduled.push(callback); },
+    MutationObserver: class {
+      constructor(callback) { onMutation = callback; }
+      observe(node, options) {
+        assert.equal(node, body);
+        assert.equal(options.childList, true);
+        assert.equal(options.subtree, true);
+      }
+    },
+    mermaid: {
+      initialize() {},
+      async render(id, source) {
+        rendered.push(source);
+        return { svg: '<svg>' + source + '</svg>' };
+      }
+    }
+  };
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname,
+    '../../MacDown/Resources/Extensions/mermaid.init.js'), 'utf8'), context);
+  async function settle() {
+    for (let i = 0; i < 10; i++) await Promise.resolve();
+    while (scheduled.length) await scheduled.shift()();
+  }
+  await onLoad();
+  await settle();
+  assert.deepEqual(rendered, initial, 'PRE selection must not add renderer calls');
+  assert.deepEqual(body.slots.map(node => node.source), initial);
+  assert.equal(body.slots.filter(node => node.tagName === 'SVG').length, 2);
+  body.slots = diagrams(replacement);
+  onMutation();
+  await settle();
+  assert.deepEqual(rendered, initial.concat(replacement));
+  assert.deepEqual(body.slots.map(node => node.source), replacement);
+  assert.equal(body.slots.filter(node => node.tagName === 'SVG').length, 2);
+  onMutation();
+  await settle();
+  assert.equal(rendered.length, 4, 'Completed SVG siblings must not render again');
+  process.stdout.write('Mermaid R04 PRE/CODE siblings and body replacement: passed\n');
+})().catch(error => { console.error(error); process.exitCode = 1; });

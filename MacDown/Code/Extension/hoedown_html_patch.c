@@ -46,8 +46,17 @@ static size_t task_marker_length(const uint8_t *bytes, size_t size,
     return i + 1;
 }
 
-// rndr_blockcode from HEAD. The "language-" prefix in class in needed to make
-// the HTML compatible with Prism.
+// Prism styles both CODE and its PRE parent, including when scripts are disabled.
+static void render_code_language_class(hoedown_buffer *ob, const hoedown_buffer *lang)
+{
+    HOEDOWN_BUFPUTSL(ob, "language-");
+    if (lang && lang->size)
+        hoedown_escape_html(ob, lang->data, lang->size, 0);
+    else
+        HOEDOWN_BUFPUTSL(ob, "none");
+}
+
+// Keep the same escaped language class on both elements for every consumer.
 void hoedown_patch_render_blockcode(
     hoedown_buffer *ob, const hoedown_buffer *text, const hoedown_buffer *lang,
     const hoedown_renderer_data *data)
@@ -84,20 +93,19 @@ void hoedown_patch_render_blockcode(
             lang = mapped;
     }
 
-    HOEDOWN_BUFPUTSL(ob, "<div><pre");
+    HOEDOWN_BUFPUTSL(ob, "<div><pre class=\"");
+    render_code_language_class(ob, lang);
     if (state->flags & HOEDOWN_HTML_BLOCKCODE_LINE_NUMBERS)
-        HOEDOWN_BUFPUTSL(ob, " class=\"line-numbers\"");
+        HOEDOWN_BUFPUTSL(ob, " line-numbers");
+    HOEDOWN_BUFPUTSL(ob, "\"");
     if (back && back->size)
     {
         HOEDOWN_BUFPUTSL(ob, " data-information=\"");
         hoedown_escape_html(ob, back->data, back->size, 0);
         HOEDOWN_BUFPUTSL(ob, "\"");
     }
-    HOEDOWN_BUFPUTSL(ob, "><code class=\"language-");
-    if (lang && lang->size)
-        hoedown_escape_html(ob, lang->data, lang->size, 0);
-    else
-        HOEDOWN_BUFPUTSL(ob, "none");
+    HOEDOWN_BUFPUTSL(ob, "><code class=\"");
+    render_code_language_class(ob, lang);
     HOEDOWN_BUFPUTSL(ob, "\">");
 
 	if (text)
