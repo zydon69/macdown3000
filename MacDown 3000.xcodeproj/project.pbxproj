@@ -1430,6 +1430,7 @@
 				3198B1CA77107FD17C448E9F /* Frameworks */,
 				A8CD48055430F29166E66E0E /* Resources */,
 				7A0A130FF5F3E5EA4F8952E7 /* Embed Frameworks */,
+				AUDIT015QLBUILDVERSION /* Update Build Number */,
 			);
 			buildRules = (
 			);
@@ -1667,6 +1668,23 @@
 			showEnvVarsInLog = 0;
 		};
 		1F8A82A81952F19B00B6BF69 /* Update Build Number */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)",
+			);
+			name = "Update Build Number";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "bash Tools/update_build_number.sh\n";
+			showEnvVarsInLog = 0;
+		};
+		AUDIT015QLBUILDVERSION /* Update Build Number */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
