@@ -2,7 +2,7 @@
 
 Chaque correction de production a son commit autonome. Les commits de tests et de preuve sont identifiés par leur préfixe. Un commit ancien peut être remplacé par une correction ultérieure après une nouvelle preuve : notamment le matching PDF par occurrences, invalidé par un essai réel avec ordre CSS inversé ; il ne doit pas être considéré comme validé dans la version finale.
 
-La justification et les contrôles réels sont dans les notes de `preuves/`. La suite complète verte de 1416 tests précède la refonte PDF native en cours ; cette réussite historique ne vaut pas certification du HEAD final. Aucun push effectué.
+La justification et les contrôles réels sont dans les notes de `preuves/`. Suite finale sur les dernières sources : 1427 tests, zéro échec, et builds propres universels Debug/Release verts ; l’acceptation UI reste bloquée avant le premier test. Aucun push effectué.
 
 | Commit | Objet |
 | --- | --- |
@@ -111,3 +111,10 @@ La justification et les contrôles réels sont dans les notes de `preuves/`. La 
 | `21828e9` | test(preview): verify head script refresh and retained JavaScript state |
 | `a841445` | test(preview): verify resource coalescing and stale watcher rejection |
 | `40d1bf6` | test(export): verify HTML write errors preserve existing files |
+| `bde22d1` | test(ci): run native build and resource contract regressions |
+| `97f699c` | docs(audit): record corrections and outstanding delivery gates |
+| `0c80850` | fix(quicklook): resolve and read shared user styles in sandbox |
+| `e2845a7` | fix(pdf): preserve native link geometry and original print appearance |
+| `24b2e48` | test(export): consume completed Mermaid diagrams with real WebKit |
+| `bae35a9` | fix(pdf): publish original directly when no internal anchors exist |
+| `984b8b3` | fix(preview): restore local document after foreign navigation |
