@@ -204,11 +204,10 @@ jobs:
             exit 1
           fi
 
-          # Check if DMG is already stapled
+          # A retry after uploading assets may download the already-stapled DMG.
+          # Keep it and repeat every signature, ticket and publication gate.
           if xcrun stapler validate "build/MacDown-${VERSION}.dmg" 2>/dev/null; then
-            echo "::error::DMG is already stapled. This workflow may have already run."
-            echo "To re-staple, delete the release assets and re-upload from build-release workflow."
-            exit 1
+            echo "✅ DMG is already stapled; resuming verification and publication"
           fi
 
           echo "✅ DMG verified and ready for stapling"
@@ -217,8 +216,10 @@ jobs:
         run: |
           echo "📎 Stapling notarization ticket to DMG..."
 
-          # Staple the ticket
-          xcrun stapler staple "build/MacDown-${VERSION}.dmg"
+          # Reuse a valid ticket after a partial publication, otherwise staple it.
+          if ! xcrun stapler validate "build/MacDown-${VERSION}.dmg" 2>/dev/null; then
+            xcrun stapler staple "build/MacDown-${VERSION}.dmg"
+          fi
 
           # Validate stapling
           echo "🔍 Validating stapled ticket..."
@@ -407,6 +408,8 @@ jobs:
           ## Verification
 
           ✅ This build is **fully notarized and stapled** by Apple.
+
+          Submission ID: \`${NOTARIZATION_ID}\`
 
           **SHA256 Checksum:**
           \`\`\`
