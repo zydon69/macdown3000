@@ -709,8 +709,33 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 
 - (void)setMarkdown:(NSString *)markdown
 {
-    if (self.editor) self.editor.string = markdown ?: @"";
-    else self.loadedString = markdown;
+    MPEditorView *editor = self.editor;
+    if (!editor) {
+        // Initial/background content remains available until the nib loads.
+        self.loadedString = markdown;
+        return;
+    }
+    NSString *content = markdown ?: @"";
+    NSString *previous = [editor.string copy];
+    if ([previous isEqualToString:content]) return;
+
+    NSUndoManager *undo = self.undoManager;
+    BOOL registersUndo = undo.isUndoRegistrationEnabled;
+    BOOL startsGroup = registersUndo && !undo.isUndoing && !undo.isRedoing;
+    if (startsGroup) [undo beginUndoGrouping];
+    @try {
+        if (registersUndo) [[undo prepareWithInvocationTarget:self] setMarkdown:previous];
+        // A scripting property is literal content, so bypass the interactive
+        // shouldChangeText delegate's matching-character autocompletion.
+        editor.string = content;
+        self.loadedString = nil;
+        [editor didChangeText];
+        // NSDocument tracks registered groups and undo/redo itself. Incrementing
+        // here as well would leave the document dirty after undo to its baseline.
+        if (!registersUndo) [self updateChangeCount:NSChangeDone];
+    } @finally {
+        if (startsGroup) [undo endUndoGrouping];
+    }
 }
 
 - (NSString *)html
