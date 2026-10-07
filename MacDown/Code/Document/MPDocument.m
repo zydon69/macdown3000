@@ -353,6 +353,7 @@ typedef NS_ENUM(NSInteger, MPReferenceKind) {
 @property BOOL isPreviewReady;
 @property BOOL documentClosed;
 @property NSUInteger fileWatchGeneration;
+@property NSUInteger saveGeneration;
 @property (strong) NSURL *currentBaseUrl;
 @property (copy) NSString *currentStyleName;
 @property (copy) NSString *currentHighlightingThemeName;
@@ -1343,6 +1344,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 {
     // Issue #290: Mark that we're saving to avoid triggering reload
     self.isSelfSaving = YES;
+    NSUInteger saveGeneration = ++self.saveGeneration;
 
     // Issue #290: Capture previous URL before super updates it (for Save As detection)
     NSURL *previousURL = self.fileURL;
@@ -1366,7 +1368,8 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     // the file watcher doesn't trigger (events may be coalesced)
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
-        self.isSelfSaving = NO;
+        if (self.saveGeneration == saveGeneration)
+            self.isSelfSaving = NO;
     });
 
     // If URL changed (Save As), restart watching the new file
