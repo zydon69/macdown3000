@@ -75,3 +75,49 @@ Ces empreintes suivent la lecture effective, ne servent pas à automatiser valid
 | `MacDown/Localization/sk.lproj/Localizable.strings` | `01fbebec2b1033ec16618a93fb81be564f4183564f9f546b396a606c99cbfaba` | ☑ | ☑ | ☐ |
 | `MacDownTests/Localization/PluralCountRegression.m` | `f459898ba69108d4bf3b6e7caecbe0b364558a0776b7ac4db60b5b67ec154130` | ☑ | ☑ | ☐ |
 | `MacDownTests/Localization/test_plural_counts.sh` | `d5bce2afab9e7f1a488d59fa9daef7b02f64856d98f6a4e04c8492db61226a15` | ☑ | ☑ | ☐ |
+
+## Extension de reprise — éditeur, YAML et callback Terminal
+
+Lecture intégrale effective de MPEditorView.h/m et YAMLSerialization.h/m, puis relecture finale intégrale de YAMLSerialization.m après les correctifs ci-dessous. MPTerminalPreferencesTests.m intégralement relu après ajout (sortie tronquée récupérée par lecture ciblée de toutes lignes manquantes). MPUtilityTests : sections YAML/éditeur relues de la ligne 720 à la fin, et infrastructures de streams examinées ; aucune certification nouvelle du fichier de tests entier sur cette seule lecture partielle.
+
+Éditeur : toutes méthodes de scroll, géométrie, drag, paste/copy et propriétés de substitution examinées. Corrections héritées justifiées : boundingRectForGlyphRange reçoit désormais une plage de glyphes issue de glyphRangeForCharacterRange ; échappement Markdown du label avant paste et encodage des parenthèses de destination protègent les liens collés. Les tests geometry avec surrogate pairs/espaces terminaux et paste avec crochet/parenthèse exercent les entrées concernées ; leur exécution XCTest reste centralisée par root.
+
+YAML hérité : fermeture input stream sur succès/erreur, firstObject sans exception sur document vide, décodage UTF-8 par longueur explicite, rejet des aliases cycliques et limite de profondeur, options mutable containers/leaves indépendantes, copie immutable des conteneurs, validation types/cycles du writer, longueur UTF-8 en octets, émission multi-documents, prise en compte des écritures partielles/échouées et libération des documents examinés. Les aliases partagés sont conservés en lecture ; aucune suppression des API deprecated sans preuve des consommateurs. Pas de second parseur introduit.
+
+### Défaut nouveau : clés de collection YAML
+
+Entrées `? [a, b]\n: value\n`, `? {a: b}\n: value\n`, alias de séquence comme clé et séquence contenant mapping comme clé : la version héritée lève NSInvalidArgumentException en essayant d'insérer une valeur nil. Elle copie les clés avant de remplir leurs enfants ; M13OrderedDictionary utilise en plus l'identité NSObject, son copy ne reste pas recherchable par la clé d'origine. Les collections sont des clés YAML autorisées ([spécification YAML 1.2.2, Nodes](https://yaml.org/spec/1.2.2/#3211-nodes)). Le front matter NSString.frontMatter appelle réellement ce parseur, et le renderer appelle frontMatter ; défaut atteignable par contenu document.
+
+Correction : remplir enfants avant parents avec memo des nodes déjà remplis, convertir uniquement les clés de collection en conteneurs Foundation immutables à égalité par valeur, avec memo à identité pour conserver le partage et éviter expansion des aliases pendant cette conversion. Les valeurs M13 ordonnées existantes restent préservées. Nouveau test public testYAMLCollectionKeysArePopulatedBeforeDictionaryCopiesThem couvre quatre entrées et trois combinaisons de mutabilité, lookup et contenu des clés.
+
+Validation indépendante réelle : clang Foundation, YAMLSerialization sans ARC, M13OrderedDictionary avec ARC, les huit sources C LibYAML du Pod réel. Harness `/tmp/macdown-yaml-review/regression.m`, quatre clés × trois options + cycle/empty/alias valides = 15 contrôles. Source héritée snapshot : code 1, 12 échecs (/tmp/macdown-yaml-review/red.log). Source corrigée : code 0, 0 échec (/tmp/macdown-yaml-review/green.log). Le test ne remplace ni parser ni dictionaries. XCTest application restant.
+
+### Défaut nouveau distinct : erreur YAMLString convertie en chaîne vide
+
+Foundation initWithData:nil crée une chaîne vide dans le probe réel, masquant l'échec de YAMLData pour objet non pris en charge. Correction isolée : retour nil immédiat quand YAMLData est nil. Nouveau test testYAMLStringWriterReturnsNilOnSerializationFailure : NSObject non pris en charge avec NSError, nil avec error NULL, succès Unicode et roundtrip. Probe réel avant : chaîne vide + NSError code 6 ; après : nil + même NSError. Le correctif garde l'échec observable dans l'API publique. XCTest application restant.
+
+### UI-005 : régression callback ajoutée
+
+Complément au guard hérité déjà committé : méthode privée detectHomebrewPrefixWithCompletionHandler qui relaie strictement la fonction de discovery existante ; ce seul bord subprocess est substitué dans le test. Le test conserve le vrai completion créé par lookForShellUtility, libère réellement le controller sous ARC/autoreleasepool, vérifie weak nil puis appelle completion avec nil et un préfixe valide. Il vérifie absence de rétention/exception après destruction, sans fake de l'ownership ni construction URL. Aucun sous-processus Homebrew réel lancé par cette régression. La ligne UI-005 du tableau initial est historique : ce test existe désormais, validation XCTest encore attendue.
+
+### Diagnostic menu français (lecture seule)
+
+L'échec tests2 attend backslash et obtient backtick. XIB Base déclare backslash, aucune surcharge de keyEquivalent localisée retrouvée, ni defaults NSUserKeyEquivalents app/global. NSMenuItem.h du SDK AppKit expose allowsAutomaticKeyEquivalentLocalization depuis macOS 12 et documente remapping automatique des touches inaccessibles au clavier courant, activé par défaut pour SDK 12+. Cela explique plausiblement le résultat français sans établir une mauvaise définition du raccourci. Correction proposée à root : isoler dans le test la propriété allowsAutomaticKeyEquivalentLocalization à NO dans @try/@finally, restaurer sa valeur, puis vérifier le raccourci déclaré ; conserver adaptation en production. Probe Cocoa standalone n'a pas reproduit le remapping, donc diagnostic explicitement inféré du SDK et des données observées, sans revendication de reproduction complète. MPMainControllerMenuTests non modifié ici.
+
+### Versions et garanties restantes
+
+Snapshots hérités intacts pour commit séparé : `/tmp/macdown-yaml-inherited.m` SHA `8477db1fbae7bead8ae3b95546941e6d7b2f9703330b4ee5817364b12bc4542e`, `/tmp/macdown-utility-inherited.m` SHA `f5d662a9a855d43bc41f3e3b9fec07068d112154a27489f4b45862053b54b08a`. Ils excluent les deux nouveaux correctifs YAML, permettant de committer héritage puis nouvelles corrections indépendamment. Ni staging ni commit ni exécution Xcode par cet agent. git diff --check du périmètre corrigé réussi.
+
+| Fichier/version finale examinée | SHA-256 | Lecture entière de cette reprise | Validation application |
+| --- | --- | --- | --- |
+| MacDown/Code/View/MPEditorView.m | 494d6f39eeff530482928d829651df78ae97860aa74840f20dcdee6470121e08 | oui | restante |
+| MacDown/Code/View/MPEditorView.h | 515c6983974c0ba35ff0291b45c9595cde6f9f6807f9a5ef186b322ccb7491b5 | oui | restante |
+| Dependency/YAML-framework/YAMLSerialization.m | 4c5e7f821e53578a08314efcd490d7758ec19d430a28d830684747863a4929ae | oui | restante ; harness 15/15 |
+| Dependency/YAML-framework/YAMLSerialization.h | 68e864d1d3bbd71066a1f4e73f76ed69928004bbca198f89502159a97b8169b3 | oui | restante |
+| MacDown/Code/Preferences/MPTerminalPreferencesViewController.m | 1948d8a659461fa84878f7289d7dd46550ebe96aa70fb2c036414b07d3ea6835 | oui ; remplace ancienne empreinte ci-dessus | restante |
+| MacDownTests/MPTerminalPreferencesTests.m | e2550bea7ffcfc062a4d5c7599eb489a5b18f47a3dce856964c9e7046ff7ca05 | oui | restante |
+| MacDownTests/MPUtilityTests.m | a7e0cf9031790140844957663303b50985a9536e9e282407650199de152f2e3b | partielle, sections concernées explicites | restante |
+
+Aucune case de validation application cochée sur la seule réussite d'un harness ou d'un hash. Attente des résultats Xcode centralisés et couverture de packaging/consommateurs application.
+
+Résultat central reçu ensuite : `/tmp/macdown-audit-reprise-full-tests.log`, Terminal 19/19 et MPUtilityTests 46/46 réussis, incluant callback détruit et nouveaux tests YAML. La suite globale 1408 tests contient 8 échecs sur d'autres classes (external change et fixtures rendering/syntax) ; cette réussite locale ne vaut pas livraison globale. Aucun contrôle de signature/package manuel revendiqué.

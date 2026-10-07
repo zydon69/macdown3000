@@ -94,11 +94,11 @@
     {
       "path": ".github/workflows/test.yml",
       "snapshot_sha256": "ff340a907ef3dc27cd7e4f80ec299f7f7a2424c6dd3a45361c188db75bdf953e",
-      "sha256": "ff340a907ef3dc27cd7e4f80ec299f7f7a2424c6dd3a45361c188db75bdf953e",
+      "sha256": "9501da350496f41e13090b35dec33eda2afdd15f2963316ebf57b17aaba2683b",
       "read": true,
       "analyzed": true,
       "validated": false,
-      "evidence": "reprise-build.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
+      "evidence": "reprise-root.md R11 : lecture intégrale finale, workflow YAML et scripts réels verts ; CI distante non exécutée",
       "open_findings": []
     },
     {
@@ -138,17 +138,17 @@
       "read": true,
       "analyzed": true,
       "validated": false,
-      "evidence": "Options, scalaires UTF8, aliases graph cycle/depth, ownership MRC/libyaml, streams close/errors, emit document/partial writes ; EU-13. Lecture complète consignée dans session, version finale relue après modifications. Tests Cocoa centralisés root à relier avant validation.",
+      "evidence": "reprise-ui.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "Dependency/YAML-framework/YAMLSerialization.m",
       "snapshot_sha256": "5045acc3de1cb8336d9bccfc8007e708b000f2547dc76705baa3d79f41eaf6e1",
-      "sha256": "8477db1fbae7bead8ae3b95546941e6d7b2f9703330b4ee5817364b12bc4542e",
-      "read": false,
-      "analyzed": false,
+      "sha256": "4c5e7f821e53578a08314efcd490d7758ec19d430a28d830684747863a4929ae",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "Options, scalaires UTF8, aliases graph cycle/depth, ownership MRC/libyaml, streams close/errors, emit document/partial writes ; EU-13. Lecture complète consignée dans session, version finale relue après modifications. Tests Cocoa centralisés root à relier avant validation. ; à revalider : empreinte actuelle divergente, preuve historique conservée",
+      "evidence": "reprise-ui.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
@@ -158,7 +158,7 @@
       "read": true,
       "analyzed": true,
       "validated": false,
-      "evidence": "Lifecycle vue active, génération publication parse worker→main, cache, offsets Unicode, visible glyph range, styles/defaults/reset ; EU-14. Lecture complète consignée dans session, version finale relue après modifications. Tests Cocoa centralisés root à relier avant validation.",
+      "evidence": "reprise-peg.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
@@ -168,7 +168,7 @@
       "read": true,
       "analyzed": true,
       "validated": false,
-      "evidence": "Lifecycle vue active, génération publication parse worker→main, cache, offsets Unicode, visible glyph range, styles/defaults/reset ; EU-14. Lecture complète consignée dans session, version finale relue après modifications. Tests Cocoa centralisés root à relier avant validation.",
+      "evidence": "reprise-peg.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
@@ -178,7 +178,7 @@
       "read": true,
       "analyzed": true,
       "validated": false,
-      "evidence": "Tous attributes/color/font types style conversion, ownership C→Cocoa ; parser stylesheet consumer. Lecture complète consignée dans session, version finale relue après modifications. Tests Cocoa centralisés root à relier avant validation.",
+      "evidence": "reprise-peg.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
@@ -188,7 +188,7 @@
       "read": true,
       "analyzed": true,
       "validated": false,
-      "evidence": "Tous attributes/color/font types style conversion, ownership C→Cocoa ; parser stylesheet consumer. Lecture complète consignée dans session, version finale relue après modifications. Tests Cocoa centralisés root à relier avant validation.",
+      "evidence": "reprise-peg.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
@@ -198,7 +198,7 @@
       "read": true,
       "analyzed": true,
       "validated": false,
-      "evidence": "Dépendances build générateur→grammar→combine, incremental header dependencies/install/clean ; EU-17. Lecture complète consignée dans session, version finale relue après modifications. Tests Cocoa centralisés root à relier avant validation.",
+      "evidence": "reprise-peg.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
@@ -208,7 +208,7 @@
       "read": true,
       "analyzed": true,
       "validated": false,
-      "evidence": "Dépendances build générateur→grammar→combine, incremental header dependencies/install/clean ; EU-17. Lecture complète consignée dans session, version finale relue après modifications. Tests Cocoa centralisés root à relier avant validation.",
+      "evidence": "reprise-peg.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
@@ -218,7 +218,7 @@
       "read": true,
       "analyzed": true,
       "validated": false,
-      "evidence": "Tous Node_compile branches, variables/offsets, generated runtime buffers/stack/free, consumesInput recursion et output ; EU-16. Lecture complète consignée dans session, version finale relue après modifications. Tests Cocoa centralisés root à relier avant validation.",
+      "evidence": "reprise-peg.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
@@ -228,7 +228,7 @@
       "read": true,
       "analyzed": true,
       "validated": false,
-      "evidence": "Bootstrap générateur effectivement compilé, 37 règles et runtime input/thunks/stack/text/new/free/CLI ; EU-16. Lecture complète consignée dans session, version finale relue après modifications. Tests Cocoa centralisés root à relier avant validation.",
+      "evidence": "reprise-peg.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
@@ -238,7 +238,7 @@
       "read": true,
       "analyzed": true,
       "validated": false,
-      "evidence": "Grammaire generator complète, actions AST, commandes CLI/includes et trailer. Lecture complète consignée dans session, version finale relue après modifications. Tests Cocoa centralisés root à relier avant validation.",
+      "evidence": "reprise-peg.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
@@ -248,17 +248,17 @@
       "read": true,
       "analyzed": true,
       "validated": false,
-      "evidence": "Tous types AST et déclarations generator, flags et version. Lecture complète consignée dans session, version finale relue après modifications. Tests Cocoa centralisés root à relier avant validation.",
+      "evidence": "reprise-peg.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "Dependency/peg-markdown-highlight/greg/tree.c",
       "snapshot_sha256": "c128b3cedea0f0ca36908ad7912588a7e0201a9d5d0a920a3276901de4e7e78d",
-      "sha256": "1d63188fba5f68abcc38a16cb07684c7fd6f454385f44413594bef6376e7484a",
-      "read": false,
-      "analyzed": false,
+      "sha256": "43854b78d4ae1c28cb51c19d6accf9fac3f4a55ed337b11243d5738fee425311",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "Tous constructors AST, links/rules/action name/predicate, stack dynamique et Node printing ; EU-16. Lecture complète consignée dans session, version finale relue après modifications. Tests Cocoa centralisés root à relier avant validation. ; à revalider : empreinte actuelle divergente, preuve historique conservée",
+      "evidence": "reprise-peg.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
@@ -268,7 +268,7 @@
       "read": true,
       "analyzed": true,
       "validated": false,
-      "evidence": "Build phase sources/headers, compiler flags ARC/MRC, framework references, release configs. Lecture complète consignée dans session, version finale relue après modifications. Tests Cocoa centralisés root à relier avant validation.",
+      "evidence": "reprise-peg.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
@@ -278,7 +278,7 @@
       "read": true,
       "analyzed": true,
       "validated": false,
-      "evidence": "Workspace déclarations et référence self du projet. Lecture complète consignée dans session, version finale relue après modifications. Tests Cocoa centralisés root à relier avant validation.",
+      "evidence": "reprise-peg.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
@@ -288,7 +288,7 @@
       "read": true,
       "analyzed": true,
       "validated": false,
-      "evidence": "Enums lang/extensions/elements et linked lists allocation ownership consumers parser/highlighter. Lecture complète consignée dans session, version finale relue après modifications. Tests Cocoa centralisés root à relier avant validation.",
+      "evidence": "reprise-peg.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
@@ -298,7 +298,7 @@
       "read": true,
       "analyzed": true,
       "validated": false,
-      "evidence": "Toutes règles langage PEG, references nesting, fenced blocks, inline HTML/emphasis/list, extensions et actions. Lecture complète consignée dans session, version finale relue après modifications. Tests Cocoa centralisés root à relier avant validation.",
+      "evidence": "reprise-peg.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
@@ -308,7 +308,7 @@
       "read": true,
       "analyzed": true,
       "validated": false,
-      "evidence": "Contrat pmh_markdown_to_elements, offsets codepoints, lang lookup/sort/free. Lecture complète consignée dans session, version finale relue après modifications. Tests Cocoa centralisés root à relier avant validation.",
+      "evidence": "reprise-peg.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
@@ -318,7 +318,7 @@
       "read": true,
       "analyzed": true,
       "validated": false,
-      "evidence": "Entrée parse Markdown, preprocess sort output/free et debug type names. Lecture complète consignée dans session, version finale relue après modifications. Tests Cocoa centralisés root à relier avant validation.",
+      "evidence": "reprise-peg.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
@@ -328,7 +328,7 @@
       "read": true,
       "analyzed": true,
       "validated": false,
-      "evidence": "Tous helpers UTF8, RAW spans recursive parse, offsets/preprocessing, malloc hooks et ownership. Limite instrumentée ASAN non établie. Lecture complète consignée dans session, version finale relue après modifications. Tests Cocoa centralisés root à relier avant validation.",
+      "evidence": "reprise-peg.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
@@ -338,7 +338,7 @@
       "read": true,
       "analyzed": true,
       "validated": false,
-      "evidence": "Entrée et tokenizer line/style rules, noms attributes/colors/fonts, empty trim, duplicates merge et frees ; EU-15. Lecture complète consignée dans session, version finale relue après modifications. Tests Cocoa centralisés root à relier avant validation.",
+      "evidence": "reprise-peg.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
@@ -348,7 +348,7 @@
       "read": true,
       "analyzed": true,
       "validated": false,
-      "evidence": "Entrée et tokenizer line/style rules, noms attributes/colors/fonts, empty trim, duplicates merge et frees ; EU-15. Lecture complète consignée dans session, version finale relue après modifications. Tests Cocoa centralisés root à relier avant validation.",
+      "evidence": "reprise-peg.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
@@ -358,7 +358,7 @@
       "read": true,
       "analyzed": true,
       "validated": false,
-      "evidence": "Entrée générée marker unique, shell fail-fast, header/footer concat et sortie atomique par Makefile ; EU-17. Lecture complète consignée dans session, version finale relue après modifications. Tests Cocoa centralisés root à relier avant validation.",
+      "evidence": "reprise-peg.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
@@ -404,21 +404,21 @@
     {
       "path": "MacDown 3000.xcodeproj/project.pbxproj",
       "snapshot_sha256": "186b973e21f1f610bf86361cbf2a9889dcfa2bb58316c1b466b10c4e43ad61f4",
-      "sha256": "23968f12dda3dd9a16bb8ef09b6bc6e5af2b068992a76d46971d15128be4ebb7",
-      "read": false,
-      "analyzed": false,
+      "sha256": "bb83fc2aec277b6160ab5d1c08c66da113e5e006edb88ff09fd44386557f55f4",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "Lecture intégrale du projet 2 833 lignes puis version finale par blocs non tronqués, UUID abrégés sans retrait des valeurs ; dernier delta Transpile Styles relu entièrement. Références targets/sources/frameworks/localisations/phases analysées ; plutil valide ; compilation centralisée en attente. ; version modifiée depuis la lecture, relecture finale requise ; à revalider : empreinte actuelle divergente, preuve historique conservée",
+      "evidence": "reprise-packaging-versions.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown 3000.xcodeproj/project.xcworkspace/contents.xcworkspacedata",
       "snapshot_sha256": "3aa2529c5694bb9105cac0cf445a9424eaa9d3c920ca8a769bc476cec562c694",
-      "sha256": "3aa2529c5694bb9105cac0cf445a9424eaa9d3c920ca8a769bc476cec562c694",
-      "read": false,
-      "analyzed": false,
+      "sha256": "7f3b00b5c3fdb45242d7b87e1e5c4e25d1fa8129a16c94295ecc4e8ea2235c5f",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "root.md : lecture intégrale et analyse contrats configuration, build et ressources ; gates en attente ; version modifiée depuis la lecture, relecture finale requise ; à revalider : empreinte actuelle divergente, preuve historique conservée",
+      "evidence": "reprise-root.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": [
         "workspace MarkPad référence périmée à vérifier"
       ]
@@ -539,21 +539,21 @@
     {
       "path": "MacDown/Code/Document/MPAsset.h",
       "snapshot_sha256": "c1a03ae5c84d0a4cd5ee4c2b6aec7a4920d979cfbaff84e0954a9d0f0dee3f2e",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "c1a03ae5c84d0a4cd5ee4c2b6aec7a4920d979cfbaff84e0954a9d0f0dee3f2e",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Code/Document/MPAsset.m",
       "snapshot_sha256": "a4e260bd0ab242b7862c030229aac8892af464e8f63333db1cbe5ef86c22e943",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "a4e260bd0ab242b7862c030229aac8892af464e8f63333db1cbe5ef86c22e943",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
@@ -563,17 +563,17 @@
       "read": true,
       "analyzed": true,
       "validated": false,
-      "evidence": "root.md : lecture intégrale et analyse contrats configuration, build et ressources ; gates en attente",
+      "evidence": "reprise-document.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Code/Document/MPDocument.m",
       "snapshot_sha256": "32914c3e3ff4fb1b434d894ae1146742f8afebf45ba12c3d88eb71a0d4af7907",
-      "sha256": "32914c3e3ff4fb1b434d894ae1146742f8afebf45ba12c3d88eb71a0d4af7907",
+      "sha256": "255fa0e18a12763d3a409a90ac92b2e537f1aa38c4a445a49683337c42b50374",
       "read": false,
       "analyzed": false,
       "validated": false,
-      "evidence": "root.md : version initiale entièrement lue 1–5255 ; modifications ultérieures et seconde passe arrêtées avant certification finale ; version modifiée depuis la lecture, relecture finale requise ; à revalider : empreinte actuelle divergente, preuve historique conservée",
+      "evidence": "reprise-document.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte ; à revalider : empreinte actuelle divergente, preuve historique conservée",
       "open_findings": [
         "relecture finale du diff et gates à terminer"
       ]
@@ -582,40 +582,40 @@
       "path": "MacDown/Code/Document/MPPDFAnchorInjector.h",
       "snapshot_sha256": "966a68c6eb2b467ce49b082920f5ae7fd827cb975340e9e94cfaff6a018225e1",
       "sha256": "558508dae940e858e83675149f6f271dae75b3d84ffca106abf506543c09ba40",
-      "read": true,
-      "analyzed": true,
+      "read": false,
+      "analyzed": false,
       "validated": false,
-      "evidence": "pdf-anchors.md : h/m entièrement lus avant et après correction ; tests entier lu, ajouts relus ; JS syntaxe et fixture simulée réussis ; Xcode centralisé en attente",
+      "evidence": "pdf-anchors.md : h/m entièrement lus avant et après correction ; tests entier lu, ajouts relus ; JS syntaxe et fixture simulée réussis ; Xcode centralisé en attente ; à revalider : empreinte actuelle divergente, preuve historique conservée",
       "open_findings": []
     },
     {
       "path": "MacDown/Code/Document/MPPDFAnchorInjector.m",
       "snapshot_sha256": "22ac82ca57ae60566d3cf0fc4b90cc90d8fc07fc47ffa4e68e0ebf58fe743b40",
       "sha256": "b8f20104ec80990652b864742864fd0b6e6662cf8c6986cbae67027d78a6e590",
-      "read": true,
-      "analyzed": true,
+      "read": false,
+      "analyzed": false,
       "validated": false,
-      "evidence": "pdf-anchors.md : h/m entièrement lus avant et après correction ; tests entier lu, ajouts relus ; JS syntaxe et fixture simulée réussis ; Xcode centralisé en attente",
+      "evidence": "pdf-anchors.md : h/m entièrement lus avant et après correction ; tests entier lu, ajouts relus ; JS syntaxe et fixture simulée réussis ; Xcode centralisé en attente ; à revalider : empreinte actuelle divergente, preuve historique conservée",
       "open_findings": []
     },
     {
       "path": "MacDown/Code/Document/MPRenderer.h",
       "snapshot_sha256": "dd66e0c5d2aac89a0c355d94dbe4920ca68d15f63d8e9bd644dbb38de413d41f",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "45e93c4fd1c078842d10fdc835fbbc71f4f247709c6c468d9d53755a6eff1d4e",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-rendering.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Code/Document/MPRenderer.m",
       "snapshot_sha256": "32e81c217a72cbffe956f79f876ac53295d00e5e14ac94c60cf2342ddd4df6e6",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "a939696a43b801dd5f59e28a731865c24b6bdf3ec092f5c997ae65667370ecff",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-rendering.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
@@ -811,21 +811,21 @@
     {
       "path": "MacDown/Code/Extension/hoedown_html_patch.c",
       "snapshot_sha256": "176679d4142772931b55f82dacb03ca170f56f7fc36f590b09a9f812ef253475",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "12676962fcb7f21e22b57c361ff28a010d5f8581bf51e80ce031d072913259bf",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-rendering.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Code/Extension/hoedown_html_patch.h",
       "snapshot_sha256": "2b4a736c1e4d7fcacc37c84be4abc804de0f81d25f8de7eba870b96722aece96",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "763870f5ef85caee5a24198c1493f4f8da72690bb434e4415085eec579221d84",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-rendering.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
@@ -973,11 +973,11 @@
     {
       "path": "MacDown/Code/Preferences/MPTerminalPreferencesViewController.m",
       "snapshot_sha256": "648dce4c43b1ded108971028bc8ec6b1cf9f53bd569200f113823f1f4887fb8d",
-      "sha256": "d1fe66fd53262cee2cf70e3358edd7f1126bcb1b66c1496cee86a8b2935313c0",
-      "read": false,
-      "analyzed": false,
+      "sha256": "1948d8a659461fa84878f7289d7dd46550ebe96aa70fb2c036414b07d3ea6835",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "ui-preferences.md : lecture intégrale des sources, contrats/actions/bindings/données déclaratives ; validation centralisée en attente ; à revalider : empreinte actuelle divergente, preuve historique conservée",
+      "evidence": "reprise-ui.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": [
         "tests-centralises-a-executer"
       ]
@@ -1291,7 +1291,7 @@
       "read": true,
       "analyzed": true,
       "validated": false,
-      "evidence": "Drags, clipboard interop, linkification, layout character/glyph, prefs substitution ; EU-12. Lecture complète consignée dans session, version finale relue après modifications. Tests Cocoa centralisés root à relier avant validation.",
+      "evidence": "reprise-ui.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
@@ -1301,7 +1301,7 @@
       "read": true,
       "analyzed": true,
       "validated": false,
-      "evidence": "Drags, clipboard interop, linkification, layout character/glyph, prefs substitution ; EU-12. Lecture complète consignée dans session, version finale relue après modifications. Tests Cocoa centralisés root à relier avant validation.",
+      "evidence": "reprise-ui.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
@@ -4067,21 +4067,21 @@
     {
       "path": "MacDown/Resources/Extensions/export.css",
       "snapshot_sha256": "401a13f7ec8583be6b64ce605a1fdbdec4bf4063485ee9dac7b1864297d07c48",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "401a13f7ec8583be6b64ce605a1fdbdec4bf4063485ee9dac7b1864297d07c48",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Extensions/mermaid.forest.css",
       "snapshot_sha256": "30f7a6778b2cd70bffeb591b4d66b22bcbee1b31c5118a53e6431f462454bf8d",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "30f7a6778b2cd70bffeb591b4d66b22bcbee1b31c5118a53e6431f462454bf8d",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
@@ -4091,377 +4091,377 @@
       "read": true,
       "analyzed": true,
       "validated": false,
-      "evidence": "reprise-root.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Extensions/print.css",
       "snapshot_sha256": "ecdc5c62dee023591c76552d700e1a80bb047c88ef16f77d23b9a7acc089a3d1",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "da10026e3d91bc032fbbc237dfeb8bb74cf55297307c6b0263da142a1dbe553b",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Extensions/show-information.css",
       "snapshot_sha256": "7f34e118051caa0a640390778e1ea8485854e0f35c815eaa430140ec6727c97d",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "7f34e118051caa0a640390778e1ea8485854e0f35c815eaa430140ec6727c97d",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Extensions/table-resize.js",
       "snapshot_sha256": "bdd2edb6f2e28a58ab681afa69f5f3a07c3bf5bf46ab215b90f3bed42c2d8e44",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "bdd2edb6f2e28a58ab681afa69f5f3a07c3bf5bf46ab215b90f3bed42c2d8e44",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Extensions/tasklist.js",
       "snapshot_sha256": "baaec190711edd666226fb5be1b7dca7534036327543c477a02bce835d4e6d47",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "baaec190711edd666226fb5be1b7dca7534036327543c477a02bce835d4e6d47",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Extensions/viz.init.js",
       "snapshot_sha256": "4284c2771c200f079d9c0b9d9f25f680754a090c38f3d23cfd76e9349a4ac140",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "4284c2771c200f079d9c0b9d9f25f680754a090c38f3d23cfd76e9349a4ac140",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/MacDown.sdef",
       "snapshot_sha256": "5643f7986c7f96fbc9c2e90db550d84407ea21955bf0f2ac9b71eb19c56939db",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "5643f7986c7f96fbc9c2e90db550d84407ea21955bf0f2ac9b71eb19c56939db",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/MathJax/init.js",
       "snapshot_sha256": "c1dba6dd393057ba073b8dbad36b88ff36f5a53a55a35b4a5bf27284cd17606e",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "c1dba6dd393057ba073b8dbad36b88ff36f5a53a55a35b4a5bf27284cd17606e",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Styles/Clearness Dark.css",
       "snapshot_sha256": "f5e84a44a4eb5e45ede9eec5ba86c3d3b58f74bc9a7cb98f29b606acf41a6988",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "f5e84a44a4eb5e45ede9eec5ba86c3d3b58f74bc9a7cb98f29b606acf41a6988",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Styles/Clearness.css",
       "snapshot_sha256": "fc407d712394b6dc65bd62685e4e5abf9afb960c0e25f76025a178322e47fdd3",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "fc407d712394b6dc65bd62685e4e5abf9afb960c0e25f76025a178322e47fdd3",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Styles/GitHub Tomorrow.css",
       "snapshot_sha256": "d274836c48020747374111fec9b3428670fb75d0eaaf298523221ff74b86f5d8",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "d274836c48020747374111fec9b3428670fb75d0eaaf298523221ff74b86f5d8",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Styles/GitHub-2020.css",
       "snapshot_sha256": "02a6f516007712296361b92b9f6dd97a15ac05d3ae2e32cbb98cb95d419ed277",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "8a193080ed45c1abaeec8e65724df31d26c14f62d56ecd8e821f74f628d94d2b",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Styles/GitHub.css",
       "snapshot_sha256": "50b145c3b6ae27c8c1f0d2907f83eeade0feabbf082ed9827fd423fa02086328",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "50b145c3b6ae27c8c1f0d2907f83eeade0feabbf082ed9827fd423fa02086328",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Styles/GitHub2.css",
       "snapshot_sha256": "d526e3d22730267ba919c1af92c9ed826ccd8b681f516add89de9ce912a79938",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "d526e3d22730267ba919c1af92c9ed826ccd8b681f516add89de9ce912a79938",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Styles/Github2 (dark).css",
       "snapshot_sha256": "d437fa41d15204f524a180dd75c0fbf03ca84df442e64154f97f6f73980af3e5",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "d437fa41d15204f524a180dd75c0fbf03ca84df442e64154f97f6f73980af3e5",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Styles/Gmail.css",
       "snapshot_sha256": "cf2f35839c870f75716ea92a40cb27a1431049983b7095a983689fc188fa5e35",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "cf2f35839c870f75716ea92a40cb27a1431049983b7095a983689fc188fa5e35",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Styles/Google Docs.css",
       "snapshot_sha256": "7305f1bbf7680a5dfa6f3db8d3fdb6f98377d9a2b0c31cc4939f40dde28ea819",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "7305f1bbf7680a5dfa6f3db8d3fdb6f98377d9a2b0c31cc4939f40dde28ea819",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Styles/Solarized (Dark).css",
       "snapshot_sha256": "831c8a7c415905f99ef5ff53625a9a6e5a2b9de3563d71f61d0f8cf287a0570d",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "831c8a7c415905f99ef5ff53625a9a6e5a2b9de3563d71f61d0f8cf287a0570d",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Styles/Solarized (Light).css",
       "snapshot_sha256": "66385e7e12660597a8ddd3b57f6ccf6c94bd34125bb9f880b328b1cf8c189c71",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "66385e7e12660597a8ddd3b57f6ccf6c94bd34125bb9f880b328b1cf8c189c71",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Templates/Default.handlebars",
       "snapshot_sha256": "dd82a2caa452a57f10eb9df86846d307fb7aa41f619268785a412099d3435644",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "3911974b1f3b264ea57ba04d54b3fabad99f948af1510f0220fac5e206d180c8",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Themes/GitHub Dark Default+.style",
       "snapshot_sha256": "1c871c959cdd2b32178de980ad180cd0f5cd1f629f11075449be10289f07d6ab",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "1c871c959cdd2b32178de980ad180cd0f5cd1f629f11075449be10289f07d6ab",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Themes/GitHub Dark Default.style",
       "snapshot_sha256": "7ddc20007c5b98703cc031461f7d68080d46a1c51c1f63596681f17ce84d381a",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "7ddc20007c5b98703cc031461f7d68080d46a1c51c1f63596681f17ce84d381a",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Themes/Mou Fresh Air+.style",
       "snapshot_sha256": "9c7b5281bc5736ef43daa6a415dc9d875f72eb4d386f2631294372a138d7d21c",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "9c7b5281bc5736ef43daa6a415dc9d875f72eb4d386f2631294372a138d7d21c",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Themes/Mou Fresh Air.style",
       "snapshot_sha256": "7cf14e22925608ef66e58f8e48bf1cc3640f3b1890631e4cc4ebeadd6dafed9e",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "7cf14e22925608ef66e58f8e48bf1cc3640f3b1890631e4cc4ebeadd6dafed9e",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Themes/Mou Night+.style",
       "snapshot_sha256": "29ac097ec816c3f6c315ede0b0aba97ee0175ff9f83d65e18bb05a2906b5650e",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "29ac097ec816c3f6c315ede0b0aba97ee0175ff9f83d65e18bb05a2906b5650e",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Themes/Mou Night.style",
       "snapshot_sha256": "5f07cfb769df3846bfe0aca3ab4305291580d0bdbb84e67574e3063587861017",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "5f07cfb769df3846bfe0aca3ab4305291580d0bdbb84e67574e3063587861017",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Themes/Mou Paper+.style",
       "snapshot_sha256": "8d2350b0042a4fa4ebe889296db1c5f0b471b3115911f98ef34dfef4efa4dd7d",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "8d2350b0042a4fa4ebe889296db1c5f0b471b3115911f98ef34dfef4efa4dd7d",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Themes/Mou Paper.style",
       "snapshot_sha256": "f91490c350a951a55c5bc0530544f8de80309adab93fdadd8735cbee0ebc7c5b",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "f91490c350a951a55c5bc0530544f8de80309adab93fdadd8735cbee0ebc7c5b",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Themes/Solarized (Dark)+.style",
       "snapshot_sha256": "2fc489c15373f77d12ae28eb42b75bf4fa80ae0295d1957cee17f37d96cf432d",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "2fc489c15373f77d12ae28eb42b75bf4fa80ae0295d1957cee17f37d96cf432d",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Themes/Solarized (Dark).style",
       "snapshot_sha256": "b087429dda9c25540a339485bde5632d5f1c5e8cacc438c3b256d69b36b67fae",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "b087429dda9c25540a339485bde5632d5f1c5e8cacc438c3b256d69b36b67fae",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Themes/Solarized (Light)+.style",
       "snapshot_sha256": "807de1062aad78f56eb4c1a9155aa0c1387732ae1b1881853a70a3e3c8ab0964",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "807de1062aad78f56eb4c1a9155aa0c1387732ae1b1881853a70a3e3c8ab0964",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Themes/Solarized (Light).style",
       "snapshot_sha256": "1e62c3734ef412f23a8ae4ccf8c509c55d069c644c0af94f849dd20bdcf42b50",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "1e62c3734ef412f23a8ae4ccf8c509c55d069c644c0af94f849dd20bdcf42b50",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Themes/Tomorrow Blue.style",
       "snapshot_sha256": "090ad9ac160ce57ab4133050be04050d36be35596f53a726b6b21aa346abd354",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "090ad9ac160ce57ab4133050be04050d36be35596f53a726b6b21aa346abd354",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Themes/Tomorrow+.style",
       "snapshot_sha256": "ed759e275d7a46f370fc00f315a49db90b5fb27ffe8f007560dbc6709e1c15c2",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "ed759e275d7a46f370fc00f315a49db90b5fb27ffe8f007560dbc6709e1c15c2",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Themes/Tomorrow.style",
       "snapshot_sha256": "75c8dc06b2f41fa2838478b8e4a8459668067e2a554937881ec6cbb9a90a33fe",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "75c8dc06b2f41fa2838478b8e4a8459668067e2a554937881ec6cbb9a90a33fe",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Themes/Writer+.style",
       "snapshot_sha256": "732b282bb9928f5ab0f9c4fb62ec70d9b1a4a87780be06d45d3addab68790012",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "732b282bb9928f5ab0f9c4fb62ec70d9b1a4a87780be06d45d3addab68790012",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/Themes/Writer.style",
       "snapshot_sha256": "1f9c437258f2716b2ff2d1385be05629a20b8b11056f1cd55395e411b96fa3ab",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "1f9c437258f2716b2ff2d1385be05629a20b8b11056f1cd55395e411b96fa3ab",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDown/Resources/syntax_highlighting.json",
       "snapshot_sha256": "048275f9e5a6106c0e86bcb80abe8ba50d4555639032c2d0920d9756861713a3",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "048275f9e5a6106c0e86bcb80abe8ba50d4555639032c2d0920d9756861713a3",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
@@ -4477,101 +4477,101 @@
     {
       "path": "MacDownCore/Info.plist",
       "snapshot_sha256": "9c444ac2cdac387a058adf74e22dca9f6f89b5907a9494c4bac9a6bdd766a530",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "9c444ac2cdac387a058adf74e22dca9f6f89b5907a9494c4bac9a6bdd766a530",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-root.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDownCore/MPQuickLookPreferences.h",
       "snapshot_sha256": "26d4c0091d141199c2377b452d3f7918f57d2885a54af6629164dc21da52ef04",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "26d4c0091d141199c2377b452d3f7918f57d2885a54af6629164dc21da52ef04",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-root.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDownCore/MPQuickLookPreferences.m",
       "snapshot_sha256": "b429ff799fda66b7676ae64db185139e7db5a1c3773437a1c4864e918307ef44",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "e269e6e827ef42f6082cd7ea9f8943ad16c04976badb9bbaf41a6deb8de5113e",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-quicklook-sandbox.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDownCore/MPQuickLookRenderer.h",
       "snapshot_sha256": "4527abeb9263c23f6f5d2f3dbc86cbcf0eb7d53930be24ec0e943346a652580b",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "8624df9faeb328e0c4ae1e3ad5ac82da4487fd9697dec3495849a90681908400",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-rendering.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDownCore/MPQuickLookRenderer.m",
       "snapshot_sha256": "b5ce1c929e35174def302f4f1ab9d4517f58a8fb3c05bffbee1f23b48c3e101c",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "f7637311c6c552fe5e0143790a7a83c3b229ff03fe5d07adfb833071e99b4bd5",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-rendering.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDownCore/MacDownCore.h",
       "snapshot_sha256": "903651853151ca1f62942726076875ef38127216b1d9f77d673b39ae88f7240c",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "903651853151ca1f62942726076875ef38127216b1d9f77d673b39ae88f7240c",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-root.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDownQuickLook/Info.plist",
       "snapshot_sha256": "59e4ab4e6df81f0e9f689f27670ac339e0e3779107a2fe840a41a3d85deb23d7",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "59e4ab4e6df81f0e9f689f27670ac339e0e3779107a2fe840a41a3d85deb23d7",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-root.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDownQuickLook/MacDownQuickLook.entitlements",
       "snapshot_sha256": "61d08adf6941bda39f6a173946af252f5c9696da7c11c81501c70e76e8db882a",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "b625a38499d888ac947a33bfd66a2725aa6b4a766532cb4f9cca2b47b7eaf1b8",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-quicklook-sandbox.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDownQuickLook/PreviewViewController.h",
       "snapshot_sha256": "638953029363de21bf9889cd0a9b493ca06a9e225efd2981d2b9724cbd243480",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "638953029363de21bf9889cd0a9b493ca06a9e225efd2981d2b9724cbd243480",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-root.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
       "path": "MacDownQuickLook/PreviewViewController.m",
       "snapshot_sha256": "d589240c44c6909a8603aac3376c07624253a3728340a3ecea4c0fec6bd11e28",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "6fad5f1905f4566f9a6e77c6b4436fcb815669020f8490b14d60f5c02765f76d",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-rendering.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
@@ -4617,11 +4617,11 @@
     {
       "path": "Tools/GitHub-style-generator/index.sass",
       "snapshot_sha256": "10daab1c94e27a6752a86f26b1f9f6132dfa05eb82f42a86d96acc299e528940",
-      "sha256": "10daab1c94e27a6752a86f26b1f9f6132dfa05eb82f42a86d96acc299e528940",
+      "sha256": "876e8f8a34a64b5f5c9fd394cf5bf013bd5f0e984a4a120ee4316240f32baf34",
       "read": true,
       "analyzed": true,
       "validated": false,
-      "evidence": "reprise-build.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
+      "evidence": "reprise-resources.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
@@ -4787,11 +4787,11 @@
     {
       "path": "MacDownCore/MPMarkdownPreprocessor.h",
       "snapshot_sha256": "ed5e8e88ac2b0daf36d5907a8c676c51da858470f08858cc5370ee879adb65cf",
-      "sha256": null,
-      "read": false,
-      "analyzed": false,
+      "sha256": "ed5e8e88ac2b0daf36d5907a8c676c51da858470f08858cc5370ee879adb65cf",
+      "read": true,
+      "analyzed": true,
       "validated": false,
-      "evidence": "",
+      "evidence": "reprise-rendering.md : lecture intégrale finale et analyse consignée ; validation centrale ouverte",
       "open_findings": []
     },
     {
@@ -5286,5 +5286,5 @@
     "build": "Compilations et sauvegardes locales, aucune donnée à auditer.",
     ".git": "Métadonnées Git."
   },
-  "revision_reprise": "d3ce00472cc2116a9c3019886d7f3cf977eadc0e"
+  "revision_reprise": "bde22d15097bb2016cb18c6796f6449fff46a462"
 }

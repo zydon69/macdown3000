@@ -32,3 +32,15 @@ Le même test vérifie désormais la persistance : PDF annoté sérialisé, rouv
 - Les selections multi-page ne sont représentées que par leur première page ; la prise en charge d'un lien long à cheval sur deux pages n'est pas démontrée par les fixtures courtes actuelles. Cette limite préexistante doit rester visible lors de la validation du flux complet.
 
 Prochaine action : contrôle ciblé inline puis suite PDF centralisés, inscription des résultats réels, résolution de l'hypothèse d'ordre avant validation globale du flux.
+
+## Seconde passe export réel — défaut d'ordre confirmé
+
+Les lots PDF ciblés et la suite complète finale `/tmp/macdown-audit-reprise-full-tests3.log` (1416 tests, 0 échec) ont réussi. La correction de fixture et le roundtrip de persistance sont donc vérifiés. Cela ne résout pas les limites suivantes découvertes hors des fixtures initiales.
+
+Reproduction supplémentaire : compilateur clang/AppKit/WebKit/JavaScriptCore/PDFKit, production `MPPDFAnchorInjector.m`, JavaScript d'extraction exact de MPDocument, WebFrameView.printOperationWithPrintInfo → NSPrintOperation → PDFKit. Source/log `/tmp/macdown-pdf-order-harness.m` et `.log`. HTML : h2 Target suivi de a Target, conteneur `display:flex; flex-direction:column-reverse`. DOM heading index0/link index1, cardinalité2 ; PDF trouve deux matches dans ordre visuel inversé. L'annotation ajoutée se trouve sur le titre et vise le lien. **Défaut confirmé et non corrigé à ce stade** ; validation du flux suspendue, pas un simple avertissement CSS.
+
+Le même consumer WebView émet déjà une annotation native Link au rectangle correct du lien interne, mais sans URL/action ni named destination pour `#target` (même avec baseURL file et ancre `a[name]`). Avec une URL synthétique absolue, il conserve URL/action et geometry. Une ancre vide positionnée absolument, top/left:auto et dimension1px au début du titre produit également une annotation native URL au point du titre sans glyphes ni modification du flux normal. Reproduction `/tmp/macdown-pdf-marker-harness.m` / `.log` / `/tmp/macdown-pdf-marker.pdf`.
+
+Approche en investigation : transporter les identités de sources/destinations dans ces annotations natives puis convertir en GoTo, nettoyer les marqueurs et restaurer le DOM après impression. Elle traite ordre CSS, source fractionnée, répétitions et différence media print sans déduire les positions PDF depuis des coordinates DOM. Les styles structurels sensibles à l'insertion d'un enfant doivent être vérifiés avant adoption.
+
+Autre preuve : texte de lien normalisé `First Last` ne retrouve pas le PDF dont le texte contient `First\nLast` ; la recherche PDFKit actuelle ne couvre donc pas un lien multi-ligne de manière démontrée. Les essais de sauts de page internes au lien ont donné un PDF incomplet pour Last et ne constituent pas encore une reproduction valide du cas multi-page ; conserver cette distinction.
