@@ -68,5 +68,6 @@
   "scripts/regenerate-golden-files.sh",
   "setup.sh",
   "macdown-cmd/MPCommandInput.h",
-  ".markdownlint.json"
+  ".markdownlint.json",
+  "macdown-cmd/MPCommandQueue.h"
 ]

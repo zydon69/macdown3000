@@ -43,5 +43,7 @@
   "MacDown/Code/Utility/MPUtilities.m",
   "MacDown/Code/main.m",
   "MacDown/MacDown-Info.plist",
-  "MacDown/MacDown.entitlements"
+  "MacDown/MacDown.entitlements",
+  "MacDown/Resources/Data/data.map",
+  "MacDown/Resources/Data/treats.map"
 ]
