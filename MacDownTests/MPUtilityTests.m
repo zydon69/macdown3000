@@ -8,6 +8,7 @@
 
 #import <XCTest/XCTest.h>
 #import "MPUtilities.h"
+#import "NSString+Lookup.h"
 #import "NSPasteboard+Types.h"
 
 @interface MPUtilityTests : XCTestCase
@@ -679,6 +680,13 @@
     [pasteboard clearContents];
     XCTAssertNil([pasteboard URLForType:NSPasteboardTypeString]);
     [pasteboard releaseGlobally];
+}
+
+- (void)testFrontMatterClosingDelimiterMustOccupyWholeLine {
+    NSString *input = @"---\ntitle: sample\n---not a delimiter\nbody";
+    NSUInteger offset = NSNotFound;
+    XCTAssertNil([input frontMatter:&offset]);
+    XCTAssertEqual(offset, 0u);
 }
 
 @end
