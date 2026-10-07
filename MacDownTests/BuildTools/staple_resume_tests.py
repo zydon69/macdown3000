@@ -3,6 +3,7 @@ from pathlib import Path
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 
@@ -37,12 +38,12 @@ if tool == 'gh':
         for asset in args[3:]:
             if asset != '--clobber': shutil.copy2(asset, root / 'remote' / Path(asset).name)
     elif args[:2] == ['release', 'edit']:
-        operation = 'notes' if '--notes-file' in args else 'publish'
+        operation = ('metadata' if args[-1] == 'asset-release-notes.md' else 'notes') if '--notes-file' in args else 'publish'
         failure = root / ('fail-' + operation)
         if failure.exists():
             failure.unlink()
             sys.exit(42)
-        if operation == 'notes': state['body'] = Path(args[args.index('--notes-file') + 1]).read_text()
+        if operation in ['notes', 'metadata']: state['body'] = Path(args[args.index('--notes-file') + 1]).read_text()
         else: state['isDraft'] = False
         (root / 'release.json').write_text(json.dumps(state))
     else: sys.exit(2)
@@ -72,6 +73,9 @@ else: sys.exit(2)
 def fixture(failure=None, invalid=None):
     with tempfile.TemporaryDirectory(prefix='macdown-staple-resume-') as directory:
         root = Path(directory)
+        (root / 'Tools').mkdir()
+        shutil.copy2(ROOT / 'Tools/release_asset_checksums.py', root / 'Tools')
+        shutil.copy2(ROOT / 'Tools/release_asset_checksums.py', root / 'macdown-release-asset-checksums.py')
         (root / 'bin').mkdir()
         (root / 'remote').mkdir()
         for tool in ['gh', 'xcrun', 'codesign', 'spctl']:
@@ -87,11 +91,13 @@ def fixture(failure=None, invalid=None):
         if invalid == 'checksum': digest = '0' * 64
         (root / 'remote/MacDown-1.2.3.dmg.sha256').write_text(digest + '  MacDown-1.2.3.dmg\n')
         identity = 'wrong-submission' if invalid == 'submission' else SUBMISSION
-        (root / 'release.json').write_text(json.dumps({'id': 'fixture-release', 'isDraft': True,
+        (root / 'release.json').write_text(json.dumps({'id': 'fixture-release', 'isDraft': True, 'tagName': 'v1.2.3',
             'body': 'Submission ID: `' + identity + '`'}))
         (root / 'CHANGELOG.md').write_text('## [1.2.3]\n\nResume publication safely.\n')
         env = dict(os.environ, FIXTURE_ROOT=str(root), EXPECTED_ID=SUBMISSION,
             PATH=str(root / 'bin') + ':' + os.environ['PATH'], VERSION='1.2.3', TAG='v1.2.3',
+            RELEASE_COMMIT='a' * 40,
+            RUNNER_TEMP=str(root),
             APPLE_ID='fixture@example.invalid', APPLE_APP_PASSWORD='fixture-only', APPLE_TEAM_ID='FIXTURE',
             GITHUB_REPOSITORY='fixture/never-publish', GITHUB_ENV=str(root / 'github.env'))
         if failure: (root / ('fail-' + failure)).touch()
@@ -101,7 +107,7 @@ def fixture(failure=None, invalid=None):
             for path in (root / 'build').glob('*') if (root / 'build').exists() else []: path.unlink()
             for name in ['Get release info', 'Verify notarization status (with polling)',
                          'Download and verify DMG from release', 'Staple notarization ticket',
-                         'Generate updated checksums', 'Update release with stapled DMG',
+                         'Generate updated checksums', 'Persist asset recovery hashes', 'Update release with stapled DMG',
                          'Update release notes', 'Publish release']:
                 (root / 'github.env').write_text('')
                 script = step(name).replace('${{ github.repository }}', 'fixture/never-publish')
@@ -133,15 +139,16 @@ def fixture(failure=None, invalid=None):
         print('PASS resume after', failure, 'failure: one ticket, retained submission, verified checksum/signature')
 
 
-for failure in ['notes', 'publish']:
-    fixture(failure=failure)
-for invalid in ['checksum', 'signature', 'ticket', 'submission']:
-    fixture(invalid=invalid)
+if __name__ == '__main__':
+    for failure in ['notes', 'publish']:
+        fixture(failure=failure)
+    for invalid in ['checksum', 'signature', 'ticket', 'submission']:
+        fixture(invalid=invalid)
 
-# Native final checks are unchanged and remain mandatory on resumed releases.
-final = step('Final comprehensive verification')
-for gate in ['codesign -vvv --strict', 'xcrun stapler validate', 'spctl -a',
-             'hdiutil attach', 'codesign -vvv --deep --strict',
-             'Tools/verify_sparkle_signature.sh', 'shasum -a 256 -c']:
-    assert gate in final, gate
-print('PASS final native verification remains mandatory; fixture does not claim native notarization validation')
+    # Native final checks are unchanged and remain mandatory on resumed releases.
+    final = step('Final comprehensive verification')
+    for gate in ['codesign -vvv --strict', 'xcrun stapler validate', 'spctl -a',
+                 'hdiutil attach', 'codesign -vvv --deep --strict',
+                 'Tools/verify_sparkle_signature.sh', 'shasum -a 256 -c']:
+        assert gate in final, gate
+    print('PASS final native verification remains mandatory; fixture does not claim native notarization validation')

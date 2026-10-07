@@ -35,6 +35,7 @@ jobs:
         python3 MacDownTests/BuildTools/version_tests.py
         python3 MacDownTests/BuildTools/release_identity_tests.py
         python3 MacDownTests/BuildTools/staple_resume_tests.py
+        python3 MacDownTests/BuildTools/staple_partial_upload_tests.py
         python3 MacDownTests/BuildTools/packaging_version_tests.py
         python3 MacDownTests/BuildTools/peg_contracts.py
         python3 MacDownTests/BuildTools/yaml_graph_tests.py
