@@ -1798,7 +1798,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 - (BOOL)textViewShouldDeleteBackward:(NSTextView *)textView
 {
     NSRange selectedRange = textView.selectedRange;
-    if (self.preferences.editorCompleteMatchingCharacters)
+    if (self.preferences.editorCompleteMatchingCharacters && !selectedRange.length)
     {
         NSUInteger location = selectedRange.location;
         if ([textView deleteMatchingCharactersAround:location])

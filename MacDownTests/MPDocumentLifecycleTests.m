@@ -1004,6 +1004,24 @@
     }
 }
 
+- (void)testBackspaceDeletesSelectionWithoutDeletingMatchingPairAroundIt
+{
+    MPPreferences *preferences = self.document.preferences;
+    BOOL original = preferences.editorCompleteMatchingCharacters;
+    MPEditorView *editor = [[MPEditorView alloc] initWithFrame:NSMakeRect(0, 0, 400, 200)];
+    self.document.editor = editor;
+    editor.delegate = (id<NSTextViewDelegate>)self.document;
+    @try {
+        preferences.editorCompleteMatchingCharacters = YES;
+        editor.string = @"[]";
+        editor.selectedRange = NSMakeRange(1, 1);
+        [editor doCommandBySelector:@selector(deleteBackward:)];
+        XCTAssertEqualObjects(editor.string, @"[");
+        XCTAssertTrue(NSEqualRanges(editor.selectedRange, NSMakeRange(1, 0)));
+    } @finally {
+        preferences.editorCompleteMatchingCharacters = original;
+    }
+}
 
 
 @end
