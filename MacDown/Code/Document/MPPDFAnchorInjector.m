@@ -13,15 +13,25 @@
 @interface MPPDFAnchorLink ()
 @property (nonatomic, copy, readwrite) NSString *linkText;
 @property (nonatomic, copy, readwrite) NSString *targetSlug;
+@property (nonatomic, readwrite) NSUInteger occurrenceIndex;
+@property (nonatomic, readwrite) NSUInteger occurrenceCount;
 @end
 
 @implementation MPPDFAnchorLink
 
 + (instancetype)linkWithText:(NSString *)linkText slug:(NSString *)targetSlug
 {
+    return [self linkWithText:linkText slug:targetSlug occurrenceIndex:NSNotFound occurrenceCount:0];
+}
+
++ (instancetype)linkWithText:(NSString *)linkText slug:(NSString *)targetSlug
+             occurrenceIndex:(NSUInteger)index occurrenceCount:(NSUInteger)count
+{
     MPPDFAnchorLink *link = [[self alloc] init];
     link.linkText = linkText;
     link.targetSlug = targetSlug;
+    link.occurrenceIndex = index;
+    link.occurrenceCount = count;
     return link;
 }
 
@@ -33,15 +43,25 @@
 @interface MPPDFAnchorHeading ()
 @property (nonatomic, copy, readwrite) NSString *slug;
 @property (nonatomic, copy, readwrite) NSString *headingText;
+@property (nonatomic, readwrite) NSUInteger occurrenceIndex;
+@property (nonatomic, readwrite) NSUInteger occurrenceCount;
 @end
 
 @implementation MPPDFAnchorHeading
 
 + (instancetype)headingWithSlug:(NSString *)slug text:(NSString *)headingText
 {
+    return [self headingWithSlug:slug text:headingText occurrenceIndex:NSNotFound occurrenceCount:0];
+}
+
++ (instancetype)headingWithSlug:(NSString *)slug text:(NSString *)headingText
+                 occurrenceIndex:(NSUInteger)index occurrenceCount:(NSUInteger)count
+{
     MPPDFAnchorHeading *heading = [[self alloc] init];
     heading.slug = slug;
     heading.headingText = headingText;
+    heading.occurrenceIndex = index;
+    heading.occurrenceCount = count;
     return heading;
 }
 
@@ -147,7 +167,7 @@ static NSArray<MPPDFAnchorMatch *> *MPPDFAnchorSnapshotMatches(NSArray<PDFSelect
 
     // Step 1: slug -> FIRST-match heading text. Headings with a blank slug
     // or blank heading text are skipped and never recorded.
-    NSMutableDictionary<NSString *, NSString *> *slugToHeadingText = [NSMutableDictionary dictionary];
+    NSMutableDictionary<NSString *, MPPDFAnchorHeading *> *slugToHeading = [NSMutableDictionary dictionary];
     for (MPPDFAnchorHeading *heading in headings) {
         if (heading == nil) {
             continue;
@@ -157,10 +177,10 @@ static NSArray<MPPDFAnchorMatch *> *MPPDFAnchorSnapshotMatches(NSArray<PDFSelect
         if (MPPDFAnchorStringIsBlank(slug) || MPPDFAnchorStringIsBlank(text)) {
             continue;
         }
-        if (slugToHeadingText[slug] != nil) {
+        if (slugToHeading[slug] != nil) {
             continue; // Keep only the first heading recorded per slug.
         }
-        slugToHeadingText[slug] = text;
+        slugToHeading[slug] = heading;
     }
 
     // Step 2: distinct non-blank needle texts (every link's linkText, plus
@@ -174,7 +194,7 @@ static NSArray<MPPDFAnchorMatch *> *MPPDFAnchorSnapshotMatches(NSArray<PDFSelect
         if (!MPPDFAnchorStringIsBlank(link.linkText)) {
             [needleTexts addObject:link.linkText];
         }
-        NSString *destText = slugToHeadingText[link.targetSlug ?: @""];
+        NSString *destText = slugToHeading[link.targetSlug ?: @""].headingText;
         if (!MPPDFAnchorStringIsBlank(destText)) {
             [needleTexts addObject:destText];
         }
@@ -238,11 +258,16 @@ static NSArray<MPPDFAnchorMatch *> *MPPDFAnchorSnapshotMatches(NSArray<PDFSelect
             NSUInteger k = linkTextCounter[linkText].unsignedIntegerValue;
             linkTextCounter[linkText] = @(k + 1);
 
-            if (k >= tocSelections.count) {
-                continue; // Not enough TOC occurrences for this link; skip.
+            MPPDFAnchorMatch *sourceMatch = nil;
+            if (link.occurrenceIndex != NSNotFound) {
+                // Printing may hide/reorder text. Never guess if DOM and PDF
+                // disagree about the number of occurrences.
+                if (allMatches.count != link.occurrenceCount || link.occurrenceIndex >= allMatches.count)
+                    continue;
+                sourceMatch = allMatches[link.occurrenceIndex];
+            } else if (k < tocSelections.count) {
+                sourceMatch = tocSelections[k]; // Legacy TOC-only contract.
             }
-
-            MPPDFAnchorMatch *sourceMatch = tocSelections[k];
             if (sourceMatch == nil) {
                 continue;
             }
@@ -259,7 +284,7 @@ static NSArray<MPPDFAnchorMatch *> *MPPDFAnchorSnapshotMatches(NSArray<PDFSelect
             }
 
             // Step 5: resolve the destination.
-            NSString *destText = slugToHeadingText[link.targetSlug ?: @""];
+            NSString *destText = slugToHeading[link.targetSlug ?: @""].headingText;
             if (MPPDFAnchorStringIsBlank(destText)) {
                 continue; // Unknown/empty-text slug target; skip.
             }
@@ -270,26 +295,22 @@ static NSArray<MPPDFAnchorMatch *> *MPPDFAnchorSnapshotMatches(NSArray<PDFSelect
             NSArray<MPPDFAnchorMatch *> *bodyGroup =
                 [destMatches subarrayWithRange:NSMakeRange(destTocAvailable,
                                                             destMatches.count - destTocAvailable)];
-            if (bodyGroup.count == 0) {
-                continue; // No body occurrence to land on; skip.
-            }
-
-            // (i) Preferred: first body occurrence taller than the source
-            // (a heading rendered larger than the TOC/body text).
+            MPPDFAnchorHeading *heading = slugToHeading[link.targetSlug ?: @""];
             MPPDFAnchorMatch *destMatch = nil;
-            for (MPPDFAnchorMatch *candidate in bodyGroup) {
-                if (candidate == nil) {
+            if (heading.occurrenceIndex != NSNotFound) {
+                if (destMatches.count != heading.occurrenceCount || heading.occurrenceIndex >= destMatches.count)
                     continue;
+                destMatch = destMatches[heading.occurrenceIndex];
+            } else {
+                // Compatibility only: TOC entries precede body headings.
+                for (MPPDFAnchorMatch *candidate in bodyGroup) {
+                    if (candidate.height > hSource) {
+                        destMatch = candidate;
+                        break;
+                    }
                 }
-                if (candidate.height > hSource) {
-                    destMatch = candidate;
-                    break;
-                }
-            }
-            // (ii) Fallback: first body occurrence in document order, so a
-            // same-size heading (e.g. default-theme h5/h6) is never dropped.
-            if (destMatch == nil) {
-                destMatch = bodyGroup.firstObject;
+                if (!destMatch)
+                    destMatch = bodyGroup.firstObject;
             }
             if (destMatch == nil) {
                 continue;

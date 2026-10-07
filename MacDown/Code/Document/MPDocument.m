@@ -54,35 +54,63 @@ static const NSTimeInterval kMPExternalChangeCoalesceInterval = 0.25;
 // evaluateScript: bridge already proven by -updateHeaderLocations
 // (Issue #436, see :2908 nearby). Enumerates internal fragment links
 // (`a[href^="#"]`) and headings with an id (`h1[id]`..`h6[id]`) in document
-// order (querySelectorAll is document-ordered), collapsing whitespace and
+// order through a visible-body traversal, collapsing whitespace and
 // skipping anything with an empty fragment or empty visible text. Returns a
 // JS object (read back via JSValue subscripting — never a JSON string):
-// {links:[{linkText,targetSlug}], headings:[{slug,headingText}]}.
-static NSString * const kMPAnchorModelJS = @"(function() {"
-    "  function normalize(el) {"
-    "    return (el.textContent || '').replace(/\\s+/g, ' ').trim();"
-    "  }"
-    "  var links = [];"
-    "  var anchors = document.querySelectorAll('a[href^=\"#\"]');"
-    "  for (var i = 0; i < anchors.length; i++) {"
-    "    var a = anchors[i];"
-    "    var href = a.getAttribute('href') || '';"
-    "    var slug = href.slice(1);"
-    "    var text = normalize(a);"
-    "    if (!slug || !text) continue;"
-    "    links.push({ linkText: text, targetSlug: slug });"
-    "  }"
-    "  var headings = [];"
-    "  var heads = document.querySelectorAll('h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]');"
-    "  for (var j = 0; j < heads.length; j++) {"
-    "    var h = heads[j];"
-    "    var slug2 = h.getAttribute('id') || '';"
-    "    var text2 = normalize(h);"
-    "    if (!slug2 || !text2) continue;"
-    "    headings.push({ slug: slug2, headingText: text2 });"
-    "  }"
-    "  return { links: links, headings: headings };"
-    "})();";
+// Each entry includes its zero-based occurrenceIndex and occurrenceCount
+// among all visible body text matches, including ordinary paragraphs.
+static NSString * const kMPAnchorModelJS = @"(function() {\n"
+    "  function normalize(text) { return text.replace(/\\s+/g, ' ').trim(); }\n"
+    "  var raw = '', entries = [];\n"
+    "  function walk(node) {\n"
+    "    if (node.nodeType === 3) { var visibility = window.getComputedStyle(node.parentNode).visibility; if (visibility !== 'hidden' && visibility !== 'collapse') raw += node.nodeValue || ''; return; }\n"
+    "    if (node.nodeType !== 1) return;\n"
+    "    var tag = node.tagName.toLowerCase();\n"
+    "    if (/^(script|style|noscript)$/.test(tag)) return;\n"
+    "    var style = window.getComputedStyle(node);\n"
+    "    if (style.display === 'none') return;\n"
+    "    var block = !/^(inline|inline-block|contents)$/.test(style.display);\n"
+    "    if (block || tag === 'br') raw += '\\n';\n"
+    "    var start = raw.length;\n"
+    "    for (var child = node.firstChild; child; child = child.nextSibling) walk(child);\n"
+    "    var text = normalize(raw.slice(start));\n"
+    "    if (text && style.visibility !== 'hidden' && style.visibility !== 'collapse') {\n"
+    "      if (tag === 'a') {\n"
+    "        var href = node.getAttribute('href') || '';\n"
+    "        if (href.charAt(0) === '#' && href.length > 1) {\n"
+    "          var slug = href.slice(1);\n"
+    "          try { slug = decodeURIComponent(slug); } catch (e) {}\n"
+    "          entries.push({linkText:text, targetSlug:slug, start:start});\n"
+    "        }\n"
+    "      } else if (/^h[1-6]$/.test(tag) && node.id) {\n"
+    "        entries.push({headingText:text, slug:node.id, start:start});\n"
+    "      }\n"
+    "    }\n"
+    "    if (block) raw += '\\n';\n"
+    "  }\n"
+    "  if (!document.body) return {links:[], headings:[]};\n"
+    "  walk(document.body);\n"
+    "  var body = normalize(raw), links = [], headings = [];\n"
+    "  entries.sort(function(a,b) { return a.start - b.start; });\n"
+    "  for (var i = 0; i < entries.length; i++) {\n"
+    "    var entry = entries[i], text = entry.linkText || entry.headingText;\n"
+    "    var offset = normalize(raw.slice(0, entry.start)).length;\n"
+    "    var positions = [], pos = body.indexOf(text);\n"
+    "    while (pos !== -1) { positions.push(pos); pos = body.indexOf(text, pos + text.length); }\n"
+    "    // A match crossing the element boundary is ambiguous: do not annotate it.\n"
+    "    var index = -1;\n"
+    "    for (var j = 0; j < positions.length; j++) {\n"
+    "      if (positions[j] === offset || (positions[j] === offset + 1 && body.charAt(offset) === ' ')) {\n"
+    "        index = j; break;\n"
+    "      }\n"
+    "    }\n"
+    "    if (index < 0) continue;\n"
+    "    entry.occurrenceIndex = index; entry.occurrenceCount = positions.length;\n"
+    "    delete entry.start;\n"
+    "    (entry.linkText ? links : headings).push(entry);\n"
+    "  }\n"
+    "  return {links:links, headings:headings};\n"
+    "})();\n";
 
 static const CGFloat kMPMinZoom = 0.5;
 static const CGFloat kMPMaxZoom = 3.0;
@@ -2749,7 +2777,17 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
             continue;
         if (![targetSlug isKindOfClass:[NSString class]] || targetSlug.length == 0)
             continue;
-        [links addObject:[MPPDFAnchorLink linkWithText:linkText slug:targetSlug]];
+        NSNumber *index = dict[@"occurrenceIndex"];
+        NSNumber *count = dict[@"occurrenceCount"];
+        if (![index isKindOfClass:[NSNumber class]] || ![count isKindOfClass:[NSNumber class]]
+            || index.doubleValue < 0 || count.doubleValue < 1
+            || index.doubleValue != index.unsignedIntegerValue
+            || count.doubleValue != count.unsignedIntegerValue
+            || index.unsignedIntegerValue >= count.unsignedIntegerValue)
+            continue;
+        [links addObject:[MPPDFAnchorLink linkWithText:linkText slug:targetSlug
+                                     occurrenceIndex:index.unsignedIntegerValue
+                                     occurrenceCount:count.unsignedIntegerValue]];
     }
 
     NSMutableArray<MPPDFAnchorHeading *> *headings = [NSMutableArray array];
@@ -2763,7 +2801,17 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
             continue;
         if (![headingText isKindOfClass:[NSString class]] || headingText.length == 0)
             continue;
-        [headings addObject:[MPPDFAnchorHeading headingWithSlug:slug text:headingText]];
+        NSNumber *index = dict[@"occurrenceIndex"];
+        NSNumber *count = dict[@"occurrenceCount"];
+        if (![index isKindOfClass:[NSNumber class]] || ![count isKindOfClass:[NSNumber class]]
+            || index.doubleValue < 0 || count.doubleValue < 1
+            || index.doubleValue != index.unsignedIntegerValue
+            || count.doubleValue != count.unsignedIntegerValue
+            || index.unsignedIntegerValue >= count.unsignedIntegerValue)
+            continue;
+        [headings addObject:[MPPDFAnchorHeading headingWithSlug:slug text:headingText
+                                               occurrenceIndex:index.unsignedIntegerValue
+                                               occurrenceCount:count.unsignedIntegerValue]];
     }
 
     if (outLinks)

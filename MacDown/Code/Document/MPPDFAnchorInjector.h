@@ -23,8 +23,14 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property (nonatomic, copy, readonly) NSString *linkText;
 @property (nonatomic, copy, readonly) NSString *targetSlug;
+@property (nonatomic, readonly) NSUInteger occurrenceIndex;
+@property (nonatomic, readonly) NSUInteger occurrenceCount;
 
+// Compatibility for TOC-only callers: links precede their headings.
 + (instancetype)linkWithText:(NSString *)linkText slug:(NSString *)targetSlug;
+// Zero-based occurrence among ALL visible body matches, including plain text.
++ (instancetype)linkWithText:(NSString *)linkText slug:(NSString *)targetSlug
+             occurrenceIndex:(NSUInteger)index occurrenceCount:(NSUInteger)count;
 
 @end
 
@@ -37,8 +43,13 @@ NS_ASSUME_NONNULL_BEGIN
 
 @property (nonatomic, copy, readonly) NSString *slug;
 @property (nonatomic, copy, readonly) NSString *headingText;
+@property (nonatomic, readonly) NSUInteger occurrenceIndex;
+@property (nonatomic, readonly) NSUInteger occurrenceCount;
 
+// Compatibility for the same TOC-only contract as linkWithText:slug:.
 + (instancetype)headingWithSlug:(NSString *)slug text:(NSString *)headingText;
++ (instancetype)headingWithSlug:(NSString *)slug text:(NSString *)headingText
+                 occurrenceIndex:(NSUInteger)index occurrenceCount:(NSUInteger)count;
 
 @end
 

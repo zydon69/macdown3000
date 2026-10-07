@@ -2,7 +2,7 @@
 //  MPPDFAnchorInjectorTests.m
 //  MacDownTests
 //
-//  Headless (no WebView) tests for the pure PDF anchor-annotation engine
+//  PDF fixtures for the anchor-annotation engine and one live DOM model test
 //  described in the design for GitHub issue #504 ("Clickable Internal
 //  Anchor Links in Exported PDF").
 //
@@ -21,7 +21,7 @@
 //  once via -[PDFDocument initWithURL:], so every page -- not just page 0
 //  -- carries genuinely searchable text that -[PDFDocument
 //  findString:withOptions:] can locate. No WebView is involved anywhere in
-//  this file.
+//  the PDF geometry fixtures.
 //
 //  MPPDFAnchorInjector's +injectLinksIntoDocument:links:headings: is fully
 //  implemented (see MPPDFAnchorInjector.m): it uses -findString:withOptions:
@@ -43,6 +43,12 @@
 #import <PDFKit/PDFKit.h>
 #import <math.h> // for fabs(), used throughout the tolerance-based assertions below
 #import "MPPDFAnchorInjector.h"
+#import "MPDocument.h"
+#import <WebKit/WebKit.h>
+
+@interface MPDocument (AnchorModelTests)
+- (BOOL)readAnchorLinks:(NSArray<MPPDFAnchorLink *> **)links headings:(NSArray<MPPDFAnchorHeading *> **)headings;
+@end
 
 
 #pragma mark - Draw Item Helper
@@ -1321,6 +1327,125 @@ static BOOL MPTestAnnotationIsLink(PDFAnnotation *annotation)
     NSUInteger actualDestinationPageIndex = [document indexForPage:goTo.destination.page];
     XCTAssertEqual(actualDestinationPageIndex, expectedDestinationPageIndex,
                   @"The second link must resolve to Target's (measured) page");
+}
+
+#pragma mark - Explicit DOM occurrences (inline links and repeated body text)
+
+- (void)testInlineLinkAfterHeadingTargetsEarlierHeading
+{
+    NSArray *items = @[
+        [MPPDFTestDrawItem itemWithText:@"Target" fontSize:14 pageIndex:0 topLeftPoint:CGPointMake(72, 72)],
+        [MPPDFTestDrawItem itemWithText:@"Target" fontSize:14 pageIndex:1 topLeftPoint:CGPointMake(72, 72)],
+    ];
+    NSArray<NSValue *> *rects = nil;
+    NSArray<NSNumber *> *pages = nil;
+    PDFDocument *document = [self documentFromDrawItems:items drawnRects:&rects drawnPageIndexes:&pages];
+    NSArray<PDFSelection *> *searchMatches = [document findString:@"Target" withOptions:0];
+    XCTAssertEqual(searchMatches.count, 2U, @"Both printed occurrences must be searchable exactly once");
+    for (PDFSelection *selection in searchMatches) {
+        XCTAssertEqual(selection.pages.count, 1U);
+        XCTAssertNotEqual([document indexForPage:selection.pages.firstObject], NSNotFound);
+    }
+    NSArray *links = @[[MPPDFAnchorLink linkWithText:@"Target" slug:@"target" occurrenceIndex:1 occurrenceCount:2]];
+    NSArray *headings = @[[MPPDFAnchorHeading headingWithSlug:@"target" text:@"Target" occurrenceIndex:0 occurrenceCount:2]];
+    XCTAssertEqual([MPPDFAnchorInjector injectLinksIntoDocument:document links:links headings:headings], 1U);
+    NSArray *annotations = [self linkAnnotationsOnPage:[document pageAtIndex:pages[1].unsignedIntegerValue]];
+    XCTAssertEqual(annotations.count, 1U);
+    if (annotations.count != 1) return;
+    PDFAnnotation *annotation = annotations.firstObject;
+    XCTAssertTrue([annotation.action isKindOfClass:[PDFActionGoTo class]]);
+    if (![annotation.action isKindOfClass:[PDFActionGoTo class]]) return;
+    XCTAssertEqualWithAccuracy(NSMinY(annotation.bounds), NSMinY(rects[1].rectValue), kMPTestTolerance);
+    PDFDestination *destination = ((PDFActionGoTo *)annotation.action).destination;
+    XCTAssertEqual([document indexForPage:destination.page], pages[0].unsignedIntegerValue);
+    XCTAssertEqualWithAccuracy(destination.point.y, NSMaxY(rects[0].rectValue), kMPTestTolerance);
+
+
+}
+
+- (void)testRepeatedProseAndTwoInlineLinksResolveExactHeadingOccurrence
+{
+    NSMutableArray *items = [NSMutableArray array];
+    for (NSUInteger i = 0; i < 5; i++)
+        [items addObject:[MPPDFTestDrawItem itemWithText:@"Repeat" fontSize:14 pageIndex:0
+                                         topLeftPoint:CGPointMake(72, 72 + 48 * i)]];
+    NSArray<NSValue *> *rects = nil;
+    PDFDocument *document = [self documentFromDrawItems:items drawnRects:&rects drawnPageIndexes:NULL];
+    // Prose, link, heading, prose, link: font size cannot distinguish any of them.
+    NSArray *links = @[
+        [MPPDFAnchorLink linkWithText:@"Repeat" slug:@"target" occurrenceIndex:1 occurrenceCount:5],
+        [MPPDFAnchorLink linkWithText:@"Repeat" slug:@"target" occurrenceIndex:4 occurrenceCount:5],
+    ];
+    NSArray *headings = @[[MPPDFAnchorHeading headingWithSlug:@"target" text:@"Repeat" occurrenceIndex:2 occurrenceCount:5]];
+    XCTAssertEqual([MPPDFAnchorInjector injectLinksIntoDocument:document links:links headings:headings], 2U);
+    NSArray<PDFAnnotation *> *annotations = [self linkAnnotationsOnPage:[document pageAtIndex:0]];
+    XCTAssertEqual(annotations.count, 2U);
+    for (NSNumber *source in @[@1, @4]) {
+        NSRect expectedBounds = rects[source.unsignedIntegerValue].rectValue;
+        PDFAnnotation *match = nil;
+        for (PDFAnnotation *annotation in annotations) {
+            if (fabs(NSMinY(annotation.bounds) - NSMinY(expectedBounds)) <= kMPTestTolerance)
+                match = annotation;
+        }
+        XCTAssertNotNil(match);
+        if (!match) continue;
+        PDFDestination *destination = ((PDFActionGoTo *)match.action).destination;
+        XCTAssertEqualWithAccuracy(destination.point.y, NSMaxY(rects[2].rectValue), kMPTestTolerance);
+    }
+}
+
+- (void)testPrintCardinalityMismatchSkipsOnlyAmbiguousLinks
+{
+    NSArray *items = @[
+        [MPPDFTestDrawItem itemWithText:@"Ambiguous" fontSize:14 pageIndex:0 topLeftPoint:CGPointMake(72, 72)],
+        [MPPDFTestDrawItem itemWithText:@"Valid" fontSize:14 pageIndex:0 topLeftPoint:CGPointMake(72, 120)],
+        [MPPDFTestDrawItem itemWithText:@"Heading" fontSize:14 pageIndex:0 topLeftPoint:CGPointMake(72, 168)],
+    ];
+    PDFDocument *document = [self documentFromDrawItems:items drawnRects:NULL drawnPageIndexes:NULL];
+    NSArray *links = @[
+        [MPPDFAnchorLink linkWithText:@"Ambiguous" slug:@"heading" occurrenceIndex:0 occurrenceCount:2],
+        [MPPDFAnchorLink linkWithText:@"Valid" slug:@"heading" occurrenceIndex:0 occurrenceCount:1],
+    ];
+    NSArray *headings = @[[MPPDFAnchorHeading headingWithSlug:@"heading" text:@"Heading" occurrenceIndex:0 occurrenceCount:1]];
+    XCTAssertEqual([MPPDFAnchorInjector injectLinksIntoDocument:document links:links headings:headings], 1U);
+    XCTAssertEqual([self totalLinkAnnotationsInDocument:document], 1U);
+    // A destination hidden by print CSS is equally ambiguous.
+    PDFDocument *other = [self documentFromDrawItems:items drawnRects:NULL drawnPageIndexes:NULL];
+    NSArray *hiddenHeadings = @[[MPPDFAnchorHeading headingWithSlug:@"heading" text:@"Heading" occurrenceIndex:0 occurrenceCount:2]];
+    XCTAssertEqual([MPPDFAnchorInjector injectLinksIntoDocument:other links:links headings:hiddenHeadings], 0U);
+}
+
+- (void)testLiveDOMCountsPlainTextAndInlineLinksInDocumentOrder
+{
+    MPDocument *document = [[MPDocument alloc] init];
+    WebView *preview = [[WebView alloc] initWithFrame:NSMakeRect(0, 0, 600, 800)];
+    [document setValue:preview forKey:@"preview"];
+    NSString *html = @"<html><body><p>Repeat</p><p><a href='#tar%20get'>Re<span>peat</span></a></p>"
+        "<h2 id='tar get'>Repeat</h2><p>Repeat</p><p><a href='#tar%20get'>Repeat</a></p>"
+        "<p style='display:none'>Repeat</p><p style='visibility:hidden'>Repeat</p></body></html>";
+    [preview.mainFrame loadHTMLString:html baseURL:nil];
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:5];
+    NSString *readyScript = @"document.readyState === 'complete' && !!document.getElementById('tar get')";
+    while (![[preview stringByEvaluatingJavaScriptFromString:readyScript] isEqualToString:@"true"]
+           && deadline.timeIntervalSinceNow > 0)
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.01]];
+    XCTAssertEqualObjects([preview stringByEvaluatingJavaScriptFromString:readyScript], @"true");
+    NSArray<MPPDFAnchorLink *> *links = nil;
+    NSArray<MPPDFAnchorHeading *> *headings = nil;
+    XCTAssertTrue([document readAnchorLinks:&links headings:&headings]);
+    XCTAssertEqual(links.count, 2U);
+    XCTAssertEqual(headings.count, 1U);
+    if (links.count == 2 && headings.count == 1) {
+        XCTAssertEqual(links[0].occurrenceIndex, 1U);
+        XCTAssertEqual(links[1].occurrenceIndex, 4U);
+        XCTAssertEqual(headings[0].occurrenceIndex, 2U);
+        XCTAssertEqual(links[0].occurrenceCount, 5U);
+        XCTAssertEqual(links[1].occurrenceCount, 5U);
+        XCTAssertEqual(headings[0].occurrenceCount, 5U);
+        XCTAssertEqualObjects(links[0].targetSlug, headings[0].slug);
+    }
+    [document setValue:nil forKey:@"preview"];
+    [preview close];
 }
 
 @end
