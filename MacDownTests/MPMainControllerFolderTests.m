@@ -12,6 +12,7 @@
 - (BOOL)migrateLegacyCommandRequests:(NSError **)error;
 - (NSURL *)commandQueueDirectory;
 - (NSString *)commandPreferencesSuiteName;
+- (void)application:(NSApplication *)application openURLs:(NSArray<NSURL *> *)urls;
 @end
 
 // Only the launch policy is needed by Main. Avoid MPPreferences initialization,
@@ -191,6 +192,44 @@
     XCTNSPredicateExpectation *expectation = [[XCTNSPredicateExpectation alloc] initWithPredicate:opened object:self];
     XCTAssertEqual([XCTWaiter waitForExpectations:@[expectation] timeout:5], XCTWaiterResultCompleted);
     XCTAssertEqual(self.openedDocuments.count, 1u);
+}
+
+- (void)testFinderOpenURLsRoutesFoldersAndFilesToTheirExistingConsumers
+{
+    SEL action = @selector(application:openURLs:);
+    XCTAssertTrue([self.controller respondsToSelector:action],
+                  @"Finder folder drops need an application URL handler");
+    if (![self.controller respondsToSelector:action]) return;
+    NSURL *first = [self folderNamed:@"Finder workspace é"];
+    NSURL *second = [self folderNamed:@"second"];
+    NSURL *file = [self.temporaryDirectory URLByAppendingPathComponent:@"actual.md"];
+    XCTAssertTrue([@"# Finder file\n" writeToURL:file atomically:YES
+                                    encoding:NSUTF8StringEncoding error:NULL]);
+    [self.controller application:NSApp openURLs:@[first, file, second]];
+    XCTNSPredicateExpectation *opened = [[XCTNSPredicateExpectation alloc]
+        initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id object,
+                                                               NSDictionary *bindings) {
+            return self.openedDocuments.count == 3;
+        }] object:self];
+    [self waitForExpectations:@[opened] timeout:5];
+    NSMutableSet *roots = [NSMutableSet set];
+    NSUInteger files = 0;
+    for (MPDocument *document in self.openedDocuments) {
+        if (document.workspaceRootURL) {
+            [roots addObject:document.workspaceRootURL.path];
+            XCTAssertNil(document.fileURL);
+            XCTAssertGreaterThan(document.windowControllers.count, 0u);
+        } else {
+            files++;
+            XCTAssertEqualObjects(document.markdown, @"# Finder file\n");
+            XCTAssertEqualObjects(document.fileURL.URLByResolvingSymlinksInPath,
+                                  file.URLByResolvingSymlinksInPath);
+        }
+    }
+    XCTAssertEqual(files, 1u);
+    XCTAssertEqualObjects(roots, ([NSSet setWithArray:@[
+        first.URLByResolvingSymlinksInPath.path,
+        second.URLByResolvingSymlinksInPath.path]]));
 }
 
 - (void)testLegacyMigrationUsesSameConsumerAndIsNotRepeated

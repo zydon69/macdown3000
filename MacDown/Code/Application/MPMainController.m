@@ -296,6 +296,32 @@ NS_INLINE void treat()
 
 #pragma mark - NSApplicationDelegate
 
+- (void)application:(NSApplication *)application openURLs:(NSArray<NSURL *> *)urls
+{
+    NSDocumentController *controller =
+        [NSDocumentController sharedDocumentController];
+    for (NSURL *url in urls)
+    {
+        NSNumber *directory = nil, *package = nil;
+        if (url.isFileURL)
+        {
+            [url getResourceValue:&directory forKey:NSURLIsDirectoryKey
+                            error:NULL];
+            [url getResourceValue:&package forKey:NSURLIsPackageKey error:NULL];
+        }
+        if (directory.boolValue && !package.boolValue)
+        {
+            [self openWorkspaceAtURL:url];
+            continue;
+        }
+        [controller openDocumentWithContentsOfURL:url display:YES
+            completionHandler:^(NSDocument *document, BOOL alreadyOpen,
+                                NSError *error) {
+                if (error) [application presentError:error];
+            }];
+    }
+}
+
 - (BOOL)applicationShouldOpenUntitledFile:(NSApplication *)sender
 {
     NSArray *pending = MPCommandQueueReadPending(self.commandQueueDirectory, NULL);
