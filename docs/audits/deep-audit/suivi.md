@@ -1,6 +1,6 @@
 # Deep audit — campagne03, départ de zéro
 
-Statut : **audit terminé ; validé techniquement dans le périmètre local décrit**. Début : 8 octobre 2026. Baseline `895d6c95b730dd8c98b7eb4b2fdac179c3407c29` ; arbre source propre. Campagne02 archivée dans [historique/campagne-02-895d6c9](historique/campagne-02-895d6c9/suivi.md). Aucun fichier de la nouvelle campagne n'est certifié par l'ancienne revue.
+Statut campagne03 historique : **audit terminé dans sa version examinée**. Suivi ciblé du commit fusionné : **en cours**, voir la section finale. Début : 8 octobre 2026. Baseline `895d6c95b730dd8c98b7eb4b2fdac179c3407c29` ; arbre source propre. Campagne02 archivée dans [historique/campagne-02-895d6c9](historique/campagne-02-895d6c9/suivi.md). Aucun fichier de la nouvelle campagne n'est certifié par l'ancienne revue.
 
 ## Périmètre
 
@@ -537,3 +537,65 @@ Sept défauts confirmés et corrigés, documentés dans [commits.md](commits.md)
 ## Limites de portée
 
 Validation sur ce macOS/Xcode : tests exécutés arm64, binaires construits arm64/x86_64. Pas d’exécution sur Intel ou matrice macOS14 distante, pas de certification Apple Developer ID/notarisation/publication réelle, pas de certification exhaustive des fournisseurs ni de la grammaire des26langues. Ces limites décrivent le périmètre vérifié ; elles ne sont pas masquées par les cases. Les deux comportements cachés historiques sont documentés dans preuve root, conservés car encore accessibles.
+
+
+## Première lecture ciblée du commit fusionné dbc6b23 — historique du 9 octobre 2026
+
+État consigné avant la nouvelle passe : **en cours à cet instant, non certifié**. Baseline `dbc6b23fc4b22340972c858756fd09bc2229d33d`, arbre initial propre. Cette extension couvre les cinq fichiers source actifs modifiés ou ajoutés par le commit fusionné, intégralement, et les dépendances nécessaires aux parcours. DOMNode+Text.m est ajouté au périmètre source après confirmation que le compteur inclut les commandes du panneau ; le total actuel est donc six fichiers source. Les validations de campagne03 ci-dessus restent historiques ; elles ne certifient pas cette version. Les tests et documents du commit sont vérifiés séparément, hors compteur source. Aucun déploiement ni push prévu par cet audit.
+
+Racines : `MacDown/Code/Document` (document natif, renderer, transaction source) et `MacDown/Resources/Extensions` (interface JavaScript de l’aperçu). Les autres fichiers du commit sont cinq fichiers de tests et quatre documents/artifact image ; leur liste réelle est rapprochée de `git diff --name-status dbc6b23^ dbc6b23`. Pods/Prism sont fournisseurs, build/.git sont artefacts/métadonnées. Le périmètre est fixé par ce commit ; le rapprochement physique recense 20 fichiers sous ces deux racines, aucun fichier ignoré et aucun lien symbolique. Les fichiers hors commit restent des dépendances ou hors périmètre, sans certification implicite.
+
+### Inventaire de la première lecture ciblée (historique, non certifié)
+
+| Chemin | SHA-256 | Lu | Analysé | Validé | État / preuves |
+| --- | --- | --- | --- | --- | --- |
+| `MacDown/Code/Document/MPDocument.m` | `be48148bec57df7324e39dcb2e2ddd372bb8057cc524283116f4034d66af134f` | ☐ | ☐ | ☐ | À lire ; aucune validation héritée |
+| `MacDown/Code/Document/MPPreviewInlineTransaction.h` | `5a2879fb31bf6e66f93cc7f17a0d80b8a674b0e06ec63b9ed32f1b6aec5bfe98` | ☑ | ☑ | ☐ | [Analyse et seconde passe](preuves/squashed-inline-count.md) ; intégration finale attendue |
+| `MacDown/Code/Document/MPRenderer.h` | `897256ea8bb4616dec80592c49c7e02c82bc1ad42f3a43f7c34cc23f213cba6d` | ☑ | ☑ | ☐ | [Analyse et seconde passe](preuves/squashed-renderer.md) ; suite native finale attendue |
+| `MacDown/Code/Document/MPRenderer.m` | `cd6b9a332b52f2a160d9c530d59c1fae3246642fa01679953d8c827cafb418e2` | ☑ | ☑ | ☐ | [Analyse et seconde passe](preuves/squashed-renderer.md) ; suite native finale attendue |
+| `MacDown/Resources/Extensions/preview-edit.js` | `b6123ca35e435cacdfa966ee008e50ea0036766ce84d400952020056e12867ce` | ☑ | ☑ | ☐ | [Analyse et seconde passe](preuves/squashed-js.md) ; contrôles finaux attendus |
+
+| `MacDown/Code/Extension/DOMNode+Text.m` | `1595fa2638565bbf1af3d46d22ebc7d47cec468a55c7802d715b8877550d3218` | ☑ | ☑ | ☐ | [Analyse et seconde passe](preuves/squashed-inline-count.md) ; régression WebView verte, suite finale attendue |
+
+### Parcours et invariants à vérifier
+
+- A1 : souris/clavier → plage DOM → fragments source prouvés → état commun et panneau ; absence de mise en forme pendant le geste.
+- A2 : panneau/barre native → jeton, source et bornes → transaction Markdown → parseur réel → aperçu, sélection et voisins préservés.
+- A3 : édition littérale → brouillon → sauvegarde/fermeture/export/impression → document réellement consommé ; refus sans perte de texte.
+- A4 : rendu différé/rechargement/préférences → restauration → commandes en attente ; annuler si la source ou la sélection change.
+- A5 : volumes et source hostile → sondes/provenance/sérialisation bornées, CSP et navigation ; aucun HTML nouveau dans la source.
+
+### Défauts, contrôles et seconde passe
+
+À renseigner avec des preuves actuelles. Les anciennes suites du rapport de feature sont historiques jusqu’à comparaison des empreintes et vérifications requises.
+
+### Reprise
+
+Six fichiers source recensés ; cinq versions finales entièrement lues et analysées, zéro certifiée avant les suites finales. Document lu intégralement avant correction, relecture finale encore nécessaire. Manifeste CocoaPods, schémas XCTest/XCUITest, workflow natif et coffre d’isolation lus. Corrections déjà commitées séparément : erreurs attachées à la sélection, bouton Fermer retiré, conversion des seules lignes sélectionnées, compteur sans contrôles, couleurs historiques voisines préservées.
+
+## Nouvelle lecture complète du code fusionné — passe indépendante demandée le 9 octobre
+
+Statut : **prêt à livrer dans le périmètre vérifié**. **8 sources intégralement lues, 8 analysées, 8 validées** (9 453 lignes). Aucun défaut confirmé ni hypothèse déterminante ouverts. Huit sources : cinq fichiers applicatifs du commit `dbc6b23`, le compteur DOM et NSTextView+Autocomplete h/m, dépendances directes nécessaires. Chaque version finale a été relue entièrement après correction, sans héritage de certification. Les tests et les quatre documents/artifact du commit sont examinés séparément. Les inventaires précédents restent historiques.
+
+| Chemin | SHA-256 final relu | Lu | Analysé | Validé | Preuve |
+| --- | --- | --- | --- | --- | --- |
+| `MacDown/Code/Document/MPDocument.m` | `f2a130c74ff27e646ebe6ec665285e756539aef5442b26b43f99ea66ab7d9fc6` | ☑ | ☑ | ☑ | [Lecture intégrale et analyse](preuves/squashed-document-pass2.md) |
+| `MacDown/Code/Document/MPPreviewInlineTransaction.h` | `618db0c670ad51b85755258eb1cc27dfdc49f8facd64f060be05cca31434c039` | ☑ | ☑ | ☑ | [Lecture intégrale et analyse](preuves/squashed-inline-count-pass2.md) |
+| `MacDown/Code/Document/MPRenderer.h` | `897256ea8bb4616dec80592c49c7e02c82bc1ad42f3a43f7c34cc23f213cba6d` | ☑ | ☑ | ☑ | [Lecture intégrale et analyse](preuves/squashed-renderer-pass2.md) |
+| `MacDown/Code/Document/MPRenderer.m` | `cd6b9a332b52f2a160d9c530d59c1fae3246642fa01679953d8c827cafb418e2` | ☑ | ☑ | ☑ | [Lecture intégrale et analyse](preuves/squashed-renderer-pass2.md) |
+| `MacDown/Resources/Extensions/preview-edit.js` | `72bb762a66c365f6ea8895882fea2f560a731aa7a8eddb6308a202605bcf7cf0` | ☑ | ☑ | ☑ | [Lecture intégrale et analyse](preuves/squashed-js-pass2.md) |
+| `MacDown/Code/Extension/DOMNode+Text.m` | `1595fa2638565bbf1af3d46d22ebc7d47cec468a55c7802d715b8877550d3218` | ☑ | ☑ | ☑ | [Lecture intégrale et analyse](preuves/squashed-inline-count-pass2.md) |
+| `MacDown/Code/Extension/NSTextView+Autocomplete.h` | `9412de885b8ff167500177ee83787e485eed5cd4d1ea2de781f4ea3d15ef40e2` | ☑ | ☑ | ☑ | [Lecture intégrale et analyse](preuves/squashed-source-heading.md) |
+| `MacDown/Code/Extension/NSTextView+Autocomplete.m` | `2e6d7472c314e9f24f4236f1f5398cb92e2e3021e8f7162e5767af209c07da4f` | ☑ | ☑ | ☑ | [Lecture intégrale et analyse](preuves/squashed-source-heading.md) |
+
+### Contrôles finaux
+
+Les huit fichiers ont été intégralement relus après leur dernière modification. **1 471 XCTest, 13 XCUITest et 65 contrats CLI réussis, zéro échec** ; aucun test ignoré dans les deux suites complètes. Syntaxe JS correcte. Release universel arm64/x86_64 compilé ; signature locale vérifiée et script embarqué identique. Les deux suites ont restauré et vérifié les préférences. Rapprochement final : sources identiques aux versions relues/testées/commitées, aucun fichier actif du périmètre omis. Chaque correction a son commit ; aucune installation ni publication.
+
+Parcours : sélection souris/clavier et styles communs ; source Markdown unique et renderer réel ; restauration/queue commune popup et barre native ; brouillon/sauvegarde/export ; tokens/identité DOM/navigation ; wrappers historiques/UTF-16/volumes. Les preuves individuelles contiennent les registres de fonctions et branches, phases rouges/vertes et secondes passes.
+
+L'ancienne fixture checkbox sans rendererFlags était incorrecte : elle n'est pas utilisée comme preuve de défaut. Une reproduction avec les options réelles démontre le clic non consommé avant correction des collisions d'identité. Le scénario source avec hashes suivis d'espaces a été aligné sur le comportement réel de Hoedown, sans modifier artificiellement sa grammaire.
+
+Extension justifiée : le bouton natif du code fusionné délègue à NSTextView+Autocomplete. Toutes les lignes de cette catégorie h/m sont relues ; les sept consommateurs utilisent désormais les options réelles du renderer du document. L'ancienne API interne a été supprimée après migration et recherche des usages statiques, dynamiques et nib/resources.
+
+[Clôture et résultats](preuves/squashed-cloture.md), [commandes, résultats et empreintes](preuves/squashed-verification.json). Validation locale sur macOS26.6.2/arm64 ; les limites Intel, matrice macOS et distribution sont explicites dans la clôture. Aucun déploiement ni push prévu.

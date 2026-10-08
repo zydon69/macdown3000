@@ -1,5 +1,7 @@
 # Vérification de l’édition de l’aperçu — 8 octobre 2026
 
+Ce rapport est historique : les commits de fonctionnalité cités ont été fusionnés dans `dbc6b23`. Il ne certifie pas les corrections suivantes. La lecture actuelle et ses contrôles sont consignés dans [le suivi deep-audit](../audits/deep-audit/suivi.md).
+
 L’ajout fournit une édition visuelle partielle, liée à des plages Markdown vérifiées, et un panneau de mise en forme sur sélection. Les options et restrictions sont décrites dans [le guide](edition-apercu.md). Le bouton « Texte normal » est livré séparément dans le commit `28bebab`, l’édition de l’aperçu dans `95b9a78`.
 
 ## Relecture et corrections

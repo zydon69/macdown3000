@@ -156,6 +156,65 @@
 
 #pragma mark - Basic Markdown Tests
 
+- (void)testMarkdownSnapshotsDoNotPublishOrChangeLivePreviewAndExportResources
+{
+    self.delegate.extensions = HOEDOWN_EXT_FENCED_CODE;
+    self.delegate.syntaxHighlighting = YES;
+    self.renderer.rendererFlags = HOEDOWN_HTML_USE_TASK_LIST | HOEDOWN_HTML_BLOCKCODE_INFORMATION;
+    self.dataSource.markdown = @"- [ ] Published task\n\n```javascript\nconst published = 42;\n```\n";
+    [self.renderer parseMarkdown:self.dataSource.markdown];
+    [self.renderer render];
+    NSString *publishedHTML = self.renderer.currentHtml;
+    NSString *publishedPage = self.delegate.lastHTML;
+    NSString *publishedToken = self.renderer.checkboxBridgeToken;
+    NSArray *publishedOffsets = self.renderer.checkboxSourceOffsets;
+    NSString *publishedMarkdown = self.renderer.checkboxSourceMarkdown;
+    NSString *publishedExport = [self.renderer HTMLForExportWithStyles:NO highlighting:YES];
+    XCTAssertTrue([publishedPage containsString:@"prism-javascript"]);
+
+    for (NSString *candidate in @[@"", @"- [x] Probe task\n\n```python\nprint('probe')\n```\n",
+                                 @"::: {.callout-note}\n## Probe title\n\nProbe body\n:::\n"]) {
+        NSString *snapshot = [self.renderer HTMLForMarkdownSnapshot:candidate];
+        XCTAssertNotNil(snapshot);
+        XCTAssertEqualObjects(self.renderer.currentHtml, publishedHTML);
+        XCTAssertEqualObjects(self.delegate.lastHTML, publishedPage);
+        XCTAssertEqualObjects(self.renderer.checkboxBridgeToken, publishedToken);
+        XCTAssertEqualObjects(self.renderer.checkboxSourceOffsets, publishedOffsets);
+        XCTAssertEqualObjects(self.renderer.checkboxSourceMarkdown, publishedMarkdown);
+        XCTAssertEqualObjects([self.renderer HTMLForExportWithStyles:NO highlighting:YES], publishedExport);
+    }
+    XCTAssertEqualObjects([self.renderer HTMLForMarkdownSnapshot:nil], @"");
+    [self.renderer render];
+    XCTAssertEqualObjects(self.delegate.lastHTML, publishedPage);
+    XCTAssertFalse([self.delegate.lastHTML containsString:@"prism-python"]);
+}
+
+- (void)testMarkdownSnapshotUsesCurrentParseOptionsWithoutReplacingPublishedState
+{
+    [self.renderer parseMarkdown:@"Published **body**\n"];
+    NSString *published = self.renderer.currentHtml;
+    self.delegate.detectFrontMatter = YES;
+    self.delegate.renderTOC = YES;
+    self.delegate.extensions = HOEDOWN_EXT_UNDERLINE | HOEDOWN_EXT_STRIKETHROUGH;
+    NSString *source = @"---\ntitle: Private metadata\n---\n\n[TOC]\n\n## Visible heading\n\n_underlined_ and ~~deleted~~\n";
+    NSString *snapshot = [self.renderer HTMLForMarkdownSnapshot:source];
+    XCTAssertFalse([snapshot containsString:@"Private metadata"]);
+    XCTAssertTrue([snapshot containsString:@"href=\"#visible-heading\""]);
+    XCTAssertTrue([snapshot containsString:@"<u>underlined</u>"]);
+    XCTAssertTrue([snapshot containsString:@"<del>deleted</del>"]);
+    XCTAssertEqualObjects(self.renderer.currentHtml, published);
+
+    self.delegate.detectFrontMatter = NO;
+    self.delegate.renderTOC = NO;
+    self.delegate.extensions = 0;
+    snapshot = [self.renderer HTMLForMarkdownSnapshot:source];
+    XCTAssertTrue([snapshot containsString:@"Private metadata"]);
+    XCTAssertTrue([snapshot containsString:@"[TOC]"]);
+    XCTAssertTrue([snapshot containsString:@"<em>underlined</em>"]);
+    XCTAssertTrue([snapshot containsString:@"~~deleted~~"]);
+    XCTAssertEqualObjects(self.renderer.currentHtml, published);
+}
+
 - (void)testBasicHeaders
 {
     int extFlags = 0;  // No extensions needed for basic headers

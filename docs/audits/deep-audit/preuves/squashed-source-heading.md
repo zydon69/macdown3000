@@ -42,3 +42,13 @@ Six tests source ciblés ont réussi dans `source-headings-final-green-autosave-
 La seconde passe a identifié un risque introduit dans l'implémentation intermédiaire : un `<h1>` HTML contenant un texte suivi de `====` pouvait satisfaire un marqueur simplement présent dans le corps. Le helper final exige le marqueur terminal et le test littéral comporte ce cas. Deux autres cas demandés en revue (sept hashes et tabulation avec SPACE_HEADERS) ont été ajoutés sans changer la regex après vérification de la grammaire Hoedown. Ces derniers ajouts et le fail-fast snapshot nil requièrent le nouveau gate natif final ; les verts précédents ne certifient pas cette empreinte.
 
 Aucun défaut confirmé encore ouvert dans ce lot à la fin de la lecture. Validation globale, vérification des consommateurs Document et commit de la cause unique centralisés par le parent.
+
+
+## Gate final ciblé
+
+`pass2-final-targets-green.log` : six tests Utility et le test réel draft/sauvegarde, **7 réussis, 0 échec**, 2,217 s, XCTest `Test-MacDown-2026.10.09_01-06-35-+0200.xcresult`. Les derniers cas HTML littéral, tabulation/sept hashes et snapshot absent sont inclus ; préférences restaurées. Correction de cause unique commitée par root dans `ee253cc`. Suites et build de clôture référencés séparément dans `squashed-cloture.md`.
+
+
+## Validation de livraison après les lectures
+
+Les attentes de contrôles mentionnées plus haut décrivent l'état au moment des lectures. Clôture du parent : **1 471 XCTest, 13 XCUITest, 65 contrats CLI réussis**, syntaxe JS correcte et Release universel signé localement vérifié. Aucun changement de source depuis la version finale intégralement relue. Validation dans le périmètre vérifié, commandes/empreintes/limites dans [la clôture](squashed-cloture.md) et [verification.json](squashed-verification.json).
