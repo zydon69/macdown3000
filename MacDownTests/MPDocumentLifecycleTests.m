@@ -27,6 +27,10 @@
 #import "MPHTMLResourceURLs.h"
 
 
+@interface MPPreferences (PreviewEditingTests)
+- (int)rendererFlags;
+@end
+
 // A real loopback HTTP response exercises WebKit navigation and its delegates.
 @interface MPPreviewHTTPFixture : NSObject
 @property (strong) NSURL *URL;
@@ -101,6 +105,11 @@
 - (void)reloadFromLoadedString;
 - (void)setupEditor:(NSString *)changedKey;
 - (IBAction)toggleUnderline:(id)sender;
+- (IBAction)toggleStrong:(id)sender;
+- (IBAction)convertToH1:(id)sender;
+- (IBAction)toggleEmphasis:(id)sender;
+- (IBAction)toggleStrikethrough:(id)sender;
+- (BOOL)previewHasFindFocus;
 - (BOOL)textViewShouldMoveToLeftEndOfLine:(NSTextView *)textView;
 @property (nonatomic) BOOL isPreviewReady;
 @property (nonatomic) BOOL alreadyRenderingInWeb;
@@ -109,6 +118,12 @@
 @property (strong) MPResourceWatcherSet *resourceWatcherSet;
 @property (strong) NSSearchField *previewFindField;
 @property (strong) NSTextField *readingProgressLabel;
+@property (copy) NSArray<NSDictionary *> *previewEditRanges;
+@property (copy) NSString *previewEditToken;
+@property (copy) NSString *previewEditSource;
+- (BOOL)applyPreviewEditPayload:(NSDictionary *)payload;
+- (void)installPreviewEditor;
+- (void)handlePreviewEdit:(NSURL *)url;
 - (void)setupReadingProgress;
 - (void)updateReadingProgress;
 - (void)willStartLiveScroll:(NSNotification *)notification;
@@ -1170,7 +1185,7 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
             editor.string = @"text";
             editor.selectedRange = NSMakeRange(0, editor.string.length);
             [self.document toggleUnderline:nil];
-            XCTAssertEqualObjects(editor.string, enabled.boolValue ? @"_text_" : @"<u>text</u>");
+            XCTAssertEqualObjects(editor.string, @"_text_");
             [renderer parseMarkdown:editor.string];
             XCTAssertTrue([renderer.currentHtml containsString:@"<u>text</u>"]);
             XCTAssertFalse([renderer.currentHtml containsString:@"<em>"]);
@@ -1372,6 +1387,423 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
         if (originalItems.count) [pasteboard writeObjects:originalItems];
         [document updateChangeCount:NSChangeCleared];
         [document close];
+    }
+}
+
+- (void)testPreviewFormattingInsideWordsUsesMarkdownAndRendersStyles
+{
+    MPDocument *document = [MPDocument new];
+    MPEditorView *editor = [[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+    document.editor = editor;
+    MPRenderer *renderer = [MPRenderer new];
+    renderer.delegate = (id<MPRendererDelegate>)document;
+    renderer.dataSource = (id<MPRendererDataSource>)document;
+    document.renderer = renderer;
+    MPPreferences *preferences = document.preferences;
+    BOOL oldIntra = preferences.extensionIntraEmphasis;
+    BOOL oldUnderline = preferences.extensionUnderline;
+    void (^prepare)(NSString *, NSString *) = ^(NSString *source, NSString *text) {
+        editor.string = source;
+        [renderer parseMarkdown:source];
+        NSRange range = [source rangeOfString:text];
+        document.previewEditRanges = @[@{@"location":@(range.location),@"length":@(range.length),@"text":text}];
+        document.previewEditSource = source;
+        document.previewEditToken = renderer.checkboxBridgeToken;
+    };
+    @try {
+        preferences.extensionIntraEmphasis = NO;
+        preferences.extensionUnderline = NO;
+        prepare(@"test avec test", @"test avec test");
+        XCTAssertTrue(([document applyPreviewEditPayload:@{@"token":document.previewEditToken,@"id":@0,@"action":@"bold",@"start":@1,@"end":@11}]));
+        XCTAssertEqualObjects(editor.string, @"t**est avec t**est");
+        XCTAssertTrue([[renderer HTMLForMarkdownSnapshot:editor.string] containsString:@"t<strong>est avec t</strong>est"]);
+        XCTAssertTrue(preferences.extensionIntraEmphasis);
+        prepare(editor.string, @"est avec t");
+        XCTAssertTrue(([document applyPreviewEditPayload:@{@"token":document.previewEditToken,@"id":@0,@"action":@"underline",@"start":@0,@"end":@10}]));
+        XCTAssertEqualObjects(editor.string, @"t**_est avec t_**est");
+        XCTAssertTrue([[renderer HTMLForMarkdownSnapshot:editor.string] containsString:@"t<strong><u>est avec t</u></strong>est"]);
+        XCTAssertFalse([editor.string containsString:@"<"]);
+        // Selection whitespace stays outside the formatting delimiters.
+        preferences.extensionIntraEmphasis = NO;
+        prepare(@"test avec test", @"test avec test");
+        XCTAssertTrue(([document applyPreviewEditPayload:@{@"token":document.previewEditToken,@"id":@0,@"action":@"bold",@"start":@0,@"end":@5}]));
+        XCTAssertEqualObjects(editor.string, @"**test** avec test");
+        XCTAssertTrue([[renderer HTMLForMarkdownSnapshot:editor.string] containsString:@"<strong>test</strong> avec test"]);
+        prepare(@"test avec test", @"test avec test");
+        XCTAssertFalse(([document applyPreviewEditPayload:@{@"token":document.previewEditToken,@"id":@0,@"action":@"bold",@"start":@4,@"end":@5}]));
+        XCTAssertEqualObjects(editor.string, @"test avec test");
+        prepare(@"**part**", @"part");
+        XCTAssertTrue(([document applyPreviewEditPayload:@{@"token":document.previewEditToken,@"id":@0,@"action":@"italic",@"start":@0,@"end":@4}]));
+        XCTAssertEqualObjects(editor.string, @"***part***");
+        prepare(editor.string, @"part");
+        XCTAssertTrue(([document applyPreviewEditPayload:@{@"token":document.previewEditToken,@"id":@0,@"action":@"italic",@"start":@0,@"end":@4}]));
+        XCTAssertEqualObjects(editor.string, @"**part**");
+        preferences.extensionUnderline = YES;
+        prepare(@"_**part**_", @"part");
+        XCTAssertTrue(([document applyPreviewEditPayload:@{@"token":document.previewEditToken,@"id":@0,@"action":@"underline",@"start":@0,@"end":@4}]));
+        XCTAssertEqualObjects(editor.string, @"**part**");
+        prepare(@"first\n\nsecond", @"first\n\nsecond");
+        XCTAssertFalse(([document applyPreviewEditPayload:@{@"token":document.previewEditToken,@"id":@0,@"action":@"bold",@"start":@0,@"end":@13}]));
+        XCTAssertEqualObjects(editor.string, @"first\n\nsecond");
+    } @finally {
+        preferences.extensionIntraEmphasis = oldIntra;
+        preferences.extensionUnderline = oldUnderline;
+        [document close];
+    }
+}
+
+- (void)testPreviewMixedStylesApplyToAllSelectedCharactersAndPreserveOutsideStyles
+{
+    MPDocument *document=[MPDocument new];
+    MPEditorView *editor=[[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+    MPRenderer *renderer=[MPRenderer new];
+    document.editor=editor;document.renderer=renderer;
+    renderer.delegate=(id<MPRendererDelegate>)document;renderer.dataSource=(id<MPRendererDataSource>)document;
+    MPPreferences *preferences=document.preferences;
+    BOOL oldIntra=preferences.extensionIntraEmphasis,oldUnderline=preferences.extensionUnderline,oldStrike=preferences.extensionStrikethough,oldSmart=preferences.extensionSmartyPants;
+    NSArray *cases=@[
+        @[@"test **mot** selection",@[@"test ",@"mot",@" selection"],@0,@0,@1,@3,@"bold",@"**test mot** selection"],
+        @[@"test **mot** selection",@[@"test ",@"mot",@" selection"],@0,@2,@1,@2,@"bold",@"te**st mot** selection"],
+        @[@"test **mot** selection",@[@"test ",@"mot",@" selection"],@1,@1,@2,@4,@"bold",@"test **mot sel**ection"],
+        @[@"test *mot* selection",@[@"test ",@"mot",@" selection"],@0,@0,@1,@3,@"italic",@"*test mot* selection"],
+        @[@"test _mot_ selection",@[@"test ",@"mot",@" selection"],@0,@0,@1,@3,@"underline",@"_test mot_ selection"],
+        @[@"test ~~mot~~ selection",@[@"test ",@"mot",@" selection"],@0,@0,@1,@3,@"strike",@"~~test mot~~ selection"],
+        @[@"test **_mot_** selection",@[@"test ",@"mot",@" selection"],@0,@0,@1,@3,@"bold",@"**test _mot_** selection"],
+        @[@"**a** **b**",@[@"a",@" ",@"b"],@0,@0,@2,@1,@"bold",@"**a b**"],
+        @[@"avant **😀mot** fin",@[@"avant ",@"😀mot",@" fin"],@0,@0,@1,@2,@"bold",@"**avant 😀mot** fin"],
+        @[@"**entier mot** fin",@[@"entier mot",@" fin"],@0,@7,@0,@10,@"bold",@"**entier** mot fin"]
+    ];
+    @try {
+        preferences.extensionUnderline=YES;preferences.extensionStrikethough=YES;preferences.extensionSmartyPants=NO;
+        for(NSArray *scenario in cases) {
+            editor.string=scenario[0];[renderer parseMarkdown:editor.string];
+            NSMutableArray *mapping=[NSMutableArray array];
+            NSUInteger cursor=0;
+            for(NSString *text in scenario[1]) {
+                NSRange found=[editor.string rangeOfString:text options:NSLiteralSearch range:NSMakeRange(cursor,editor.string.length-cursor)];
+                XCTAssertNotEqual(found.location,NSNotFound,@"%@",scenario);
+                if(found.location==NSNotFound) break;
+                [mapping addObject:@{@"location":@(found.location),@"length":@(found.length),@"text":text}];cursor=NSMaxRange(found);
+            }
+            document.previewEditRanges=mapping;document.previewEditSource=editor.string;document.previewEditToken=renderer.checkboxBridgeToken;
+            NSUInteger first=[scenario[2] unsignedIntegerValue],last=[scenario[4] unsignedIntegerValue];
+            NSMutableArray *runs=[NSMutableArray array];NSMutableString *visible=[NSMutableString string];
+            for(NSUInteger i=first;i<=last;i++) {
+                NSUInteger start=i==first?[scenario[3] unsignedIntegerValue]:0,end=i==last?[scenario[5] unsignedIntegerValue]:[mapping[i][@"length"] unsignedIntegerValue];
+                [runs addObject:@{@"id":@(i),@"start":@(start),@"end":@(end)}];
+                [visible appendString:[mapping[i][@"text"] substringWithRange:NSMakeRange(start,end-start)]];
+            }
+            NSMutableDictionary *payload=[runs.firstObject mutableCopy];payload[@"runs"]=runs;payload[@"text"]=visible;payload[@"action"]=scenario[6];payload[@"token"]=document.previewEditToken;
+            XCTAssertTrue([document applyPreviewEditPayload:payload],@"%@",scenario);
+            XCTAssertEqualObjects(editor.string,scenario[7],@"%@",scenario);
+            XCTAssertFalse([editor.string containsString:@"<"]);
+        }
+        editor.string=@"test **mot** selection";[renderer parseMarkdown:editor.string];
+        document.previewEditRanges=@[@{@"location":@0,@"length":@5,@"text":@"test "},@{@"location":@7,@"length":@3,@"text":@"mot"},@{@"location":@12,@"length":@10,@"text":@" selection"}];
+        document.previewEditSource=editor.string;document.previewEditToken=renderer.checkboxBridgeToken;
+        for(NSArray *bad in @[@[@{@"id":@0,@"start":@0,@"end":@5},@{@"id":@2,@"start":@0,@"end":@3}],@[@{@"id":@1,@"start":@0,@"end":@3},@{@"id":@0,@"start":@0,@"end":@5}],@[@{@"id":@0,@"start":@0,@"end":@5},@{@"id":@1,@"start":@0,@"end":@99}]]) {
+            XCTAssertFalse(([document applyPreviewEditPayload:@{@"id":@0,@"token":document.previewEditToken,@"runs":bad,@"text":@"forged",@"action":@"bold"}]));
+            XCTAssertEqualObjects(editor.string,@"test **mot** selection");
+        }
+    } @finally {
+        [document close];preferences.extensionIntraEmphasis=oldIntra;preferences.extensionUnderline=oldUnderline;preferences.extensionStrikethough=oldStrike;preferences.extensionSmartyPants=oldSmart;
+    }
+}
+
+- (void)testPreviewEditingChangesOnlyMappedSourceAndRejectsStaleOrInvalidRequests
+{
+    MPDocument *document = [MPDocument new];
+    document.fileURL = self.testFileURL;
+    MPPreferences *preferences = document.preferences;
+    BOOL oldMath = preferences.htmlMathJax;
+    BOOL oldSmart = preferences.extensionSmartyPants;
+    BOOL oldTasks = preferences.htmlTaskList;
+    BOOL oldUnderline = preferences.extensionUnderline;
+    BOOL oldIntra = preferences.extensionIntraEmphasis;
+    BOOL oldStrike = preferences.extensionStrikethough;
+    MPEditorView *editor = [[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+    WebView *web = [[WebView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+    document.editor = editor; document.preview = web;
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:web.frame styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+    window.releasedWhenClosed = NO;
+    window.contentView = web;
+    web.frameLoadDelegate = (id<WebFrameLoadDelegate>)document;
+    web.policyDelegate = (id<WebPolicyDelegate>)document;
+    MPRenderer *renderer = [MPRenderer new];
+    renderer.delegate = (id<MPRendererDelegate>)document;
+    renderer.dataSource = (id<MPRendererDataSource>)document;
+    document.renderer = renderer;
+    @try {
+        preferences.htmlMathJax = NO;
+        preferences.extensionSmartyPants = NO;
+        preferences.htmlTaskList = YES;
+        renderer.rendererFlags = preferences.rendererFlags;
+        editor.string = @"# Unique heading\n\nEditable phrase é 日本語.\n\n[Keep this link](https://example.com)\n\nRepeated\n\nRepeated\n\n[&#68;ecoded](https://example.com/Decoded)\n\n<span title=\"Attribute\">&#65;ttribute</span>\n";
+        [renderer parseMarkdown:editor.string]; [renderer render];
+        XCTNSPredicateExpectation *loaded = [[XCTNSPredicateExpectation alloc]
+            initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o, NSDictionary *b) {
+                return !web.isLoading && document.previewEditRanges.count > 0;
+            }] object:document];
+        [self waitForExpectations:@[loaded] timeout:10];
+        XCTAssertNotNil(document.previewEditToken);
+        if (!document.previewEditToken) return;
+        NSUInteger index = [document.previewEditRanges indexOfObjectPassingTest:^BOOL(NSDictionary *entry, NSUInteger i, BOOL *stop) {
+            return [entry[@"text"] isEqualToString:@"Editable phrase é 日本語."];
+        }];
+        XCTAssertNotEqual(index, NSNotFound);
+        NSArray *repeated=[document.previewEditRanges filteredArrayUsingPredicate:[NSPredicate predicateWithFormat:@"text == %@",@"Repeated"]];
+        XCTAssertEqual(repeated.count,2U);
+        if (repeated.count==2) XCTAssertNotEqual([repeated[0][@"location"] unsignedIntegerValue],[repeated[1][@"location"] unsignedIntegerValue]);
+        XCTAssertFalse([[document.previewEditRanges valueForKey:@"text"] containsObject:@"Decoded"]);
+        XCTAssertFalse([[document.previewEditRanges valueForKey:@"text"] containsObject:@"Attribute"]);
+        NSString *token = document.previewEditToken;
+        NSString *before = editor.string;
+        XCTAssertFalse(([document applyPreviewEditPayload:@{@"token":@"forged",@"id":@(index),@"action":@"replace",@"text":@"Changed"}]));
+        XCTAssertFalse(([document applyPreviewEditPayload:@{@"token":token,@"id":@(-1),@"action":@"replace",@"text":@"Changed"}]));
+        for (NSString *action in @[@"color",@"background"]) {
+            XCTAssertFalse(([document applyPreviewEditPayload:@{@"token":token,@"id":@(index),@"action":action,@"start":@0,@"end":@4,@"value":@"#175cd3"}]));
+        }
+        XCTAssertFalse(([document applyPreviewEditPayload:@{@"token":token,@"id":@(index),@"action":@"block",@"start":@0,@"end":@4}]));
+        XCTAssertFalse(([document applyPreviewEditPayload:@{@"token":token,@"id":@(index),@"action":@"link",@"start":@0,@"end":@4,@"value":@"javascript:alert(1)"}]));
+        [document handlePreviewEdit:[NSURL URLWithString:@"x-macdown-preview://edit/?payload=%5B%5D"]];
+        XCTAssertEqualObjects(editor.string, before);
+        NSString *script = [NSString stringWithFormat:@"(function(){var e=document.querySelector('[data-mp-edit-id=\"%lu\"]'),r=document.createRange();r.setStart(e.firstChild,0);r.setEnd(e.firstChild,8);var s=getSelection();s.removeAllRanges();s.addRange(r);document.dispatchEvent(new Event('selectionchange'));})()",(unsigned long)index];
+        [web stringByEvaluatingJavaScriptFromString:[NSString stringWithFormat:@"document.querySelector('[data-mp-edit-id=\"%lu\"]').dispatchEvent(new MouseEvent('mousedown',{bubbles:true,button:0}));",(unsigned long)index]];
+        [web stringByEvaluatingJavaScriptFromString:script];
+        [web stringByEvaluatingJavaScriptFromString:@"window.__heldSelectionChecked=false;setTimeout(function(){window.__heldSelectionDisplay=getComputedStyle(document.getElementById('macdown-preview-format')).display;window.__heldSelectionChecked=true;},250);"];
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return [[web stringByEvaluatingJavaScriptFromString:@"window.__heldSelectionChecked"] boolValue];}] object:web]] timeout:5];
+        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"window.__heldSelectionDisplay"], @"none");
+        [web stringByEvaluatingJavaScriptFromString:@"window.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,button:0}));"];
+        XCTNSPredicateExpectation *panel = [[XCTNSPredicateExpectation alloc]
+            initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o, NSDictionary *b) {
+                return [[web stringByEvaluatingJavaScriptFromString:@"getComputedStyle(document.getElementById('macdown-preview-format')).display"] isEqualToString:@"block"];
+            }] object:web];
+        [self waitForExpectations:@[panel] timeout:5];
+        XCTAssertTrue([[web stringByEvaluatingJavaScriptFromString:@"(function(){var r=document.getElementById('macdown-preview-format').getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight;})()"] boolValue]);
+        XCTAssertTrue(([document applyPreviewEditPayload:@{@"token":token,@"id":@(index),@"action":@"bold",@"start":@0,@"end":@8}]));
+        XCTAssertTrue([editor.string containsString:@"**Editable** phrase é 日本語."]);
+        XCTAssertTrue([editor.string containsString:@"[Keep this link](https://example.com)"]);
+        XCTAssertFalse(([document applyPreviewEditPayload:@{@"token":token,@"id":@(index),@"action":@"replace",@"text":@"Stale overwrite"}]));
+        XCTAssertFalse([[renderer HTMLForExportWithStyles:YES highlighting:YES] containsString:@"macdown-preview-format"]);
+        XCTNSPredicateExpectation *updated = [[XCTNSPredicateExpectation alloc]
+            initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o, NSDictionary *b) {
+                return !web.isLoading && ![document.previewEditToken isEqualToString:token];
+            }] object:web];
+        [self waitForExpectations:@[updated] timeout:10];
+        [web stringByEvaluatingJavaScriptFromString:@"(function(){var e=Array.from(document.querySelectorAll('[data-mp-edit-id]')).filter(function(n){return n.textContent==='Editable';})[0],r=document.createRange();r.selectNodeContents(e);getSelection().removeAllRanges();getSelection().addRange(r);e.dispatchEvent(new MouseEvent('dblclick',{bubbles:true}));document.dispatchEvent(new Event('selectionchange'));})()"];
+        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"getSelection().toString()"], @"Editable");
+        XCTAssertFalse([[web stringByEvaluatingJavaScriptFromString:@"!!document.querySelector('[contenteditable]')"] boolValue]);
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:panel.predicate object:web]] timeout:5];
+        [web stringByEvaluatingJavaScriptFromString:@"Array.from(document.querySelectorAll('#macdown-preview-format button')).find(function(b){return b.textContent==='Modifier le texte';}).click();document.querySelector('[contenteditable]').textContent='Changed <safe>'"];
+
+        XCTAssertTrue(document.isDocumentEdited);
+        NSError *saveError = nil;
+        NSData *savedData = [document dataOfType:@"net.daringfireball.markdown" error:&saveError];
+        XCTAssertNil(saveError);
+        NSString *savedSource = [[NSString alloc] initWithData:savedData encoding:NSUTF8StringEncoding];
+        XCTAssertTrue([savedSource containsString:@"**Changed \\<safe\\>**"]);
+        XCTAssertEqualObjects(savedSource, editor.string);
+        XCTAssertFalse([[web stringByEvaluatingJavaScriptFromString:@"Boolean(window.macdownPreviewEditor.draft())"] boolValue]);
+        NSArray *cases = @[
+            @[@"block",@"h4",@"<h4"], @[@"block",@"unordered",@"<ul>"],
+            @[@"block",@"tasks",@"type=\"checkbox\""], @[@"block",@"quote",@"<blockquote>"],
+            @[@"block",@"callout",@"callout-note"], @[@"block",@"toggle-h2",@"<details"],
+            @[@"clear",@"",@"<p>Scenario heading</p>"],
+            @[@"clear",@"legacy",@"<p>Scenario heading</p>"],
+            @[@"bold",@"punct",@"<strong>[looks]</strong>"],
+            @[@"bold",@"",@"<strong>Scenario</strong>"], @[@"underline",@"",@"<u>Scenario</u>"],
+            @[@"italic",@"",@"<em>Scenario</em>"]];
+        for (NSArray *scenario in cases) {
+            editor.string = [scenario[1] isEqualToString:@"legacy"] ? @"<u>Scenario</u> heading\n\nUntouched neighbor.\n" : [scenario[1] isEqualToString:@"punct"] ? @"# [looks]\n\nUntouched neighbor.\n" : [scenario[0] isEqualToString:@"clear"] ? @"**Scenario** heading\n\nUntouched neighbor.\n" : @"# Scenario heading\n\nUntouched neighbor.\n";
+            [renderer parseMarkdown:editor.string]; [renderer render];
+            NSString *scenarioToken = renderer.checkboxBridgeToken;
+            XCTNSPredicateExpectation *ready = [[XCTNSPredicateExpectation alloc]
+                initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o, NSDictionary *b) {
+                    return !web.isLoading && [document.previewEditToken isEqualToString:scenarioToken];
+                }] object:web];
+            [self waitForExpectations:@[ready] timeout:10];
+            NSUInteger headingID = [document.previewEditRanges indexOfObjectPassingTest:^BOOL(NSDictionary *item, NSUInteger i, BOOL *stop) {
+                return [item[@"text"] isEqualToString:([scenario[1] isEqualToString:@"punct"] ? @"[looks]" : [scenario[0] isEqualToString:@"clear"] ? @"Scenario" : @"Scenario heading")];
+            }];
+            XCTAssertNotEqual(headingID, NSNotFound);
+            XCTAssertTrue(([document applyPreviewEditPayload:@{@"token":scenarioToken,@"id":@(headingID),@"action":scenario[0],@"value":scenario[1],@"start":@0,@"end":@([scenario[1] isEqualToString:@"punct"] ? 7 : 8)}]));
+            XCTAssertFalse([editor.string containsString:@"<"]);
+            XCTAssertFalse([editor.string containsString:@"<u>"]);
+            XCTAssertFalse([editor.string containsString:@"<span"]);
+            XCTAssertTrue([editor.string hasSuffix:@"\n\nUntouched neighbor.\n"], @"%@", scenario);
+            [renderer parseMarkdown:editor.string];
+            XCTAssertTrue([renderer.currentHtml containsString:scenario[2]], @"%@ : %@", scenario, renderer.currentHtml);
+            if ([scenario[1] isEqualToString:@"toggle-h2"]) XCTAssertFalse([editor.string containsString:@"## # Scenario"]);
+        }
+        // Mixed source runs share one selection and one style transaction.
+        // A drag may pause on an incomplete selection without opening the panel.
+        editor.string=@"test **mot** selection\n\nUntouched neighbor.\n";
+        [renderer parseMarkdown:editor.string];[renderer render];
+        NSString *mixedToken=renderer.checkboxBridgeToken;
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return !web.isLoading&&[document.previewEditToken isEqualToString:mixedToken];}] object:web]] timeout:10];
+        [web stringByEvaluatingJavaScriptFromString:@"(function(){var nodes=Array.from(document.querySelectorAll('[data-mp-edit-id]')),a=nodes.find(function(n){return n.textContent==='test ';}),b=nodes.find(function(n){return n.textContent==='mot';}),r=document.createRange();a.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,button:0}));r.setStart(a.firstChild,2);r.setEnd(b.firstChild,2);getSelection().removeAllRanges();getSelection().addRange(r);document.dispatchEvent(new Event('selectionchange'));window.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,button:0}));})()"];
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:panel.predicate object:web]] timeout:5];
+        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"getSelection().toString()"],@"st mo");
+        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"document.querySelector('[data-mp-style=bold]').getAttribute('aria-pressed')"],@"false");
+        [web stringByEvaluatingJavaScriptFromString:@"document.querySelector('[data-mp-style=bold]').click()"];
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return !web.isLoading&&[editor.string isEqualToString:@"te**st mot** selection\n\nUntouched neighbor.\n"]&&[[web stringByEvaluatingJavaScriptFromString:@"getSelection().toString()"] isEqualToString:@"st mo"];} ] object:web]] timeout:10];
+        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"document.querySelector('[data-mp-style=bold]').getAttribute('aria-pressed')"],@"true");
+        // Multiple identical inline whitespace nodes are source-bounded, so a
+        // plain gap between two bold words participates in the intersection.
+        editor.string=@"**a** **b** et **c** **d**\n\nUntouched neighbor.\n";
+        [renderer parseMarkdown:editor.string];[renderer render];
+        NSString *spaceToken=renderer.checkboxBridgeToken;
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return !web.isLoading&&[document.previewEditToken isEqualToString:spaceToken];}] object:web]] timeout:10];
+        [web stringByEvaluatingJavaScriptFromString:@"(function(){var nodes=Array.from(document.querySelectorAll('[data-mp-edit-id]')),a=nodes.find(function(n){return n.textContent==='a';}),b=nodes.find(function(n){return n.textContent==='b';}),r=document.createRange();r.setStart(a.firstChild,0);r.setEnd(b.firstChild,1);getSelection().removeAllRanges();getSelection().addRange(r);document.dispatchEvent(new Event('selectionchange'));})()"];
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:panel.predicate object:web]] timeout:5];
+        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"document.querySelector('[data-mp-style=bold]').getAttribute('aria-pressed')"],@"false");
+        [web stringByEvaluatingJavaScriptFromString:@"document.querySelector('[data-mp-style=bold]').click()"];
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return !web.isLoading&&[editor.string isEqualToString:@"**a b** et **c** **d**\n\nUntouched neighbor.\n"];} ] object:web]] timeout:10];
+        // A selection crossing paragraphs keeps its literal text and toggles
+        // the global common style, rather than toggling each paragraph alone.
+        editor.string=@"**first**\n\nsecond\n\nUntouched neighbor.\n";
+        [renderer parseMarkdown:editor.string];[renderer render];
+        NSString *blockToken=renderer.checkboxBridgeToken;
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return !web.isLoading&&[document.previewEditToken isEqualToString:blockToken];}] object:web]] timeout:10];
+        [web stringByEvaluatingJavaScriptFromString:@"(function(){var nodes=Array.from(document.querySelectorAll('[data-mp-edit-id]')),a=nodes.find(function(n){return n.textContent==='first';}),b=nodes.find(function(n){return n.textContent==='second';}),r=document.createRange();r.setStart(a.firstChild,0);r.setEnd(b.firstChild,6);getSelection().removeAllRanges();getSelection().addRange(r);document.dispatchEvent(new Event('selectionchange'));})()"];
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:panel.predicate object:web]] timeout:5];
+        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"document.querySelector('[data-mp-style=bold]').getAttribute('aria-pressed')"],@"false");
+        [web stringByEvaluatingJavaScriptFromString:@"document.querySelector('[data-mp-style=bold]').click()"];
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return !web.isLoading&&[editor.string isEqualToString:@"**first**\n\n**second**\n\nUntouched neighbor.\n"]&&[[web stringByEvaluatingJavaScriptFromString:@"document.querySelector('[data-mp-style=bold]').getAttribute('aria-pressed')"] isEqualToString:@"true"];} ] object:web]] timeout:10];
+        [web stringByEvaluatingJavaScriptFromString:@"document.querySelector('[data-mp-style=bold]').click()"];
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return !web.isLoading&&[editor.string isEqualToString:@"first\n\nsecond\n\nUntouched neighbor.\n"];} ] object:web]] timeout:10];
+        // All heading levels admit element-boundary selections. Exercise each
+        // style through the native toolbar with the editor cursor at EOF.
+        preferences.extensionStrikethough = YES;
+        NSArray *actions = @[@"bold",@"italic",@"underline",@"strike",@"bold",@"italic"];
+        NSArray *tags = @[@"strong",@"em",@"u",@"del",@"strong",@"em"];
+        for (NSUInteger level=1; level<=6; level++) {
+            NSString *prefix = [@"" stringByPaddingToLength:level withString:@"#" startingAtIndex:0];
+            editor.string = [NSString stringWithFormat:@"%@ Heading selection\n\nUntouched neighbor.\n",prefix];
+            [renderer parseMarkdown:editor.string]; [renderer render];
+            NSString *expectedToken = renderer.checkboxBridgeToken;
+            [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o, NSDictionary *b) {
+                return !web.isLoading && [document.previewEditToken isEqualToString:expectedToken];
+            }] object:web]] timeout:10];
+            [web stringByEvaluatingJavaScriptFromString:[NSString stringWithFormat:@"(function(){var r=document.createRange();r.selectNodeContents(document.querySelector('h%lu'));getSelection().removeAllRanges();getSelection().addRange(r);document.dispatchEvent(new Event('selectionchange'));})()",(unsigned long)level]];
+            [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:panel.predicate object:web]] timeout:5];
+            editor.selectedRange = NSMakeRange(editor.string.length,0);
+            XCTAssertTrue([window makeFirstResponder:web.mainFrame.frameView.documentView]);
+            NSString *action = actions[level-1];
+            if ([action isEqualToString:@"bold"]) [document toggleStrong:nil];
+            else if ([action isEqualToString:@"italic"]) [document toggleEmphasis:nil];
+            else if ([action isEqualToString:@"underline"]) [document toggleUnderline:nil];
+            else [document toggleStrikethrough:nil];
+            XCTAssertTrue([editor.string hasPrefix:[prefix stringByAppendingString:@" "]]);
+            XCTAssertTrue([editor.string hasSuffix:@"\n\nUntouched neighbor.\n"]);
+            [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o, NSDictionary *b) {
+                return !web.isLoading && ![document.previewEditToken isEqualToString:expectedToken];
+            }] object:web]] timeout:10];
+            NSString *check = [NSString stringWithFormat:@"document.querySelector('h%lu %@').textContent",(unsigned long)level,tags[level-1]];
+            XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:check], @"Heading selection");
+        }
+        // Repeat the reported partial-word selection through the real WebView,
+        // then format its freshly remapped rendered text again.
+        preferences.extensionIntraEmphasis = NO;
+        preferences.extensionUnderline = NO;
+        editor.string = @"test avec test";
+        [renderer parseMarkdown:editor.string]; [renderer render];
+        for (NSString *action in @[@"bold",@"underline"]) {
+            NSString *expectedToken = renderer.checkboxBridgeToken;
+            XCTNSPredicateExpectation *ready = [[XCTNSPredicateExpectation alloc]
+                initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o, NSDictionary *b) {
+                    return !web.isLoading && [document.previewEditToken isEqualToString:expectedToken];
+                }] object:web];
+            [self waitForExpectations:@[ready] timeout:10];
+            NSString *text = [action isEqualToString:@"bold"] ? @"test avec test" : @"est avec t";
+            NSUInteger identifier = [document.previewEditRanges indexOfObjectPassingTest:^BOOL(NSDictionary *item, NSUInteger i, BOOL *stop) {
+                return [item[@"text"] isEqualToString:text];
+            }];
+            XCTAssertNotEqual(identifier, NSNotFound);
+            if ([action isEqualToString:@"bold"]) {
+                [web stringByEvaluatingJavaScriptFromString:[NSString stringWithFormat:@"(function(){var e=document.querySelector('[data-mp-edit-id=\"%lu\"]'),r=document.createRange();r.setStart(e.firstChild,1);r.setEnd(e.firstChild,11);getSelection().removeAllRanges();getSelection().addRange(r);document.dispatchEvent(new Event('selectionchange'));})()", (unsigned long)identifier]];
+            } else XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"getSelection().toString()"], @"est avec t");
+            editor.selectedRange = NSMakeRange(editor.string.length, 0);
+            XCTAssertTrue([window makeFirstResponder:web.mainFrame.frameView.documentView]);
+            XCTAssertTrue([document previewHasFindFocus]);
+            [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:panel.predicate object:web]] timeout:5];
+            [web stringByEvaluatingJavaScriptFromString:[NSString stringWithFormat:@"document.querySelector('[data-mp-style=%@]').click()",action]];
+            XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"getComputedStyle(document.getElementById('macdown-preview-format')).display"], @"block");
+            XCTNSPredicateExpectation *rendered = [[XCTNSPredicateExpectation alloc]
+                initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o, NSDictionary *b) {
+                    return !web.isLoading && ![document.previewEditToken isEqualToString:expectedToken] &&
+                        [[web stringByEvaluatingJavaScriptFromString:@"document.querySelector('p').textContent"] isEqualToString:@"test avec test"];
+                }] object:web];
+            [self waitForExpectations:@[rendered] timeout:10];
+        }
+        XCTAssertTrue([[web stringByEvaluatingJavaScriptFromString:@"!!document.querySelector('strong u')"] boolValue]);
+        XCTAssertEqualObjects(editor.string, @"t**_est avec t_**est");
+        // Queue rapid style clicks on the first of two identical words, then
+        // change its block type without selecting again. Only that occurrence
+        // may change; the other word and neighboring paragraph remain intact.
+        editor.string = @"test avec test\n\nUntouched neighbor.\n";
+        [renderer parseMarkdown:editor.string]; [renderer render];
+        NSString *duplicateToken = renderer.checkboxBridgeToken;
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o, NSDictionary *b) {
+            return !web.isLoading && [document.previewEditToken isEqualToString:duplicateToken];
+        }] object:web]] timeout:10];
+        [web stringByEvaluatingJavaScriptFromString:@"(function(){var e=Array.from(document.querySelectorAll('[data-mp-edit-id]')).find(function(n){return n.textContent==='test avec test';}),r=document.createRange();r.setStart(e.firstChild,0);r.setEnd(e.firstChild,4);getSelection().removeAllRanges();getSelection().addRange(r);})()"];
+        XCTAssertTrue([window makeFirstResponder:web.mainFrame.frameView.documentView]);
+        [document toggleStrong:nil];
+        [document toggleEmphasis:nil];
+        [document toggleUnderline:nil];
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o, NSDictionary *b) {
+            return !web.isLoading && [editor.string isEqualToString:@"***_test_*** avec test\n\nUntouched neighbor.\n"] &&
+                [[web stringByEvaluatingJavaScriptFromString:@"!!document.querySelector('strong') && !!document.querySelector('em') && !!document.querySelector('u') && getSelection().toString()==='test'"] boolValue];
+        }] object:web]] timeout:15];
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:panel.predicate object:web]] timeout:5];
+        [web stringByEvaluatingJavaScriptFromString:@"window.__panelBeforeFormatting=document.getElementById('macdown-preview-format');window.__panelHiddenFrames=0;window.__panelSampling=true;(function sample(){if(!window.__panelSampling)return;if(!window.__panelBeforeFormatting.isConnected||getComputedStyle(window.__panelBeforeFormatting).display==='none')window.__panelHiddenFrames++;requestAnimationFrame(sample);})();"];
+        [document convertToH1:nil];
+        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"getComputedStyle(window.__panelBeforeFormatting).display"], @"block");
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o, NSDictionary *b) {
+            return !web.isLoading && [[web stringByEvaluatingJavaScriptFromString:@"!!document.querySelector('h1 u') && getSelection().toString()==='test'"] boolValue];
+        }] object:web]] timeout:10];
+        XCTAssertEqualObjects(editor.string, @"# ***_test_*** avec test\n\nUntouched neighbor.\n");
+        XCTAssertTrue([[web stringByEvaluatingJavaScriptFromString:@"window.__panelBeforeFormatting===document.getElementById('macdown-preview-format')"] boolValue]);
+        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"window.__panelSampling=false;String(window.__panelHiddenFrames)"], @"0");
+        XCTAssertTrue([[web stringByEvaluatingJavaScriptFromString:@"['bold','italic','underline'].every(function(s){var b=document.querySelector('[data-mp-style='+s+']');return b.getAttribute('aria-pressed')==='true' && getComputedStyle(b).color==='rgb(39, 132, 222)';})"] boolValue]);
+        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"document.querySelector('#macdown-preview-format select').value"], @"h1");
+        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"getComputedStyle(document.querySelector('#macdown-preview-format select')).color"], @"rgb(39, 132, 222)");
+        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"document.querySelector('[data-mp-style=strike]').getAttribute('aria-pressed')"], @"false");
+        [web stringByEvaluatingJavaScriptFromString:@"getSelection().removeAllRanges();document.activeElement.blur();document.dispatchEvent(new Event('selectionchange'));"];
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o, NSDictionary *b) {
+            return [[web stringByEvaluatingJavaScriptFromString:@"getComputedStyle(document.getElementById('macdown-preview-format')).display"] isEqualToString:@"none"];
+        }] object:web]] timeout:5];
+
+        // Changing selection while the first style is pending cancels the
+        // continuation, even when the newly selected word has identical text.
+        editor.string = @"test avec test\n\nUntouched neighbor.\n";
+        [renderer parseMarkdown:editor.string]; [renderer render];
+        NSString *cancelToken = renderer.checkboxBridgeToken;
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o, NSDictionary *b) {
+            return !web.isLoading && [document.previewEditToken isEqualToString:cancelToken];
+        }] object:web]] timeout:10];
+        NSString *selectFirst = @"(function(){var e=Array.from(document.querySelectorAll('[data-mp-edit-id]')).find(function(n){return n.textContent==='test avec test';}),r=document.createRange();r.setStart(e.firstChild,0);r.setEnd(e.firstChild,4);getSelection().removeAllRanges();getSelection().addRange(r);})()";
+        [web stringByEvaluatingJavaScriptFromString:selectFirst];
+        XCTAssertTrue([window makeFirstResponder:web.mainFrame.frameView.documentView]);
+        [document toggleStrong:nil];
+        [web stringByEvaluatingJavaScriptFromString:[selectFirst stringByReplacingOccurrencesOfString:@"0);r.setEnd(e.firstChild,4)" withString:@"10);r.setEnd(e.firstChild,14)"]];
+        [document toggleEmphasis:nil];
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o, NSDictionary *b) {
+            return !web.isLoading && ![document.previewEditToken isEqualToString:cancelToken];
+        }] object:web]] timeout:10];
+        XCTAssertEqualObjects(editor.string, @"**test** avec test\n\nUntouched neighbor.\n");
+        // A collapsed preview selection must never insert at the editor cursor.
+        [web stringByEvaluatingJavaScriptFromString:@"getSelection().removeAllRanges()"];
+        [document toggleStrong:nil];
+        XCTAssertEqualObjects(editor.string, @"**test** avec test\n\nUntouched neighbor.\n");
+    } @finally {
+        web.frameLoadDelegate = nil; web.policyDelegate = nil; [window close]; [document close];
+        preferences.htmlMathJax = oldMath; preferences.extensionSmartyPants = oldSmart;
+        preferences.htmlTaskList = oldTasks;
+        preferences.extensionUnderline = oldUnderline;
+        preferences.extensionIntraEmphasis = oldIntra;
+        preferences.extensionStrikethough = oldStrike;
     }
 }
 

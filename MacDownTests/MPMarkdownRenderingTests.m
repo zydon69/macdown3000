@@ -1177,12 +1177,11 @@
         editor.string = @"avant azerqzs après";
         editor.selectedRange = NSMakeRange(6, 7);
         [document toggleUnderline:nil];
-        XCTAssertEqualObjects(editor.string, enabled
-                              ? @"avant _azerqzs_ après"
-                              : @"avant <u>azerqzs</u> après");
+        XCTAssertEqualObjects(editor.string, @"avant _azerqzs_ après");
+        XCTAssertTrue(document.preferences.extensionUnderline);
         XCTAssertEqualObjects([editor.string substringWithRange:editor.selectedRange], @"azerqzs");
         NSString *html = [self renderMarkdown:editor.string
-                               withExtensions:enabled ? HOEDOWN_EXT_UNDERLINE : 0
+                               withExtensions:HOEDOWN_EXT_UNDERLINE
                                 rendererFlags:0];
         XCTAssertTrue([html containsString:@"<u>azerqzs</u>"], @"%@", html);
         XCTAssertFalse([html containsString:@"<em>azerqzs</em>"], @"%@", html);

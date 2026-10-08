@@ -37,6 +37,8 @@ typedef NS_ENUM(NSUInteger, MPCodeBlockAccessoryType)
 - (void)render;
 
 - (NSString *)currentHtml;
+/// Parse a snapshot with the current options without publishing or scheduling it.
+- (NSString *)HTMLForMarkdownSnapshot:(NSString *)markdown;
 - (NSString *)HTMLForExportWithStyles:(BOOL)withStyles
                          highlighting:(BOOL)withHighlighting;
 

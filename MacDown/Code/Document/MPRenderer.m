@@ -772,6 +772,11 @@ NS_INLINE NSString *MPPreviewHeadTags(NSString *checkboxBridgeToken)
              @"checkboxToken": NSUUID.UUID.UUIDString};
 }
 
+- (NSString *)HTMLForMarkdownSnapshot:(NSString *)markdown
+{
+    return [self parseResultForMarkdown:markdown options:[self parseOptions]][@"html"];
+}
+
 - (void)publishParseResult:(NSDictionary *)result options:(NSDictionary *)options
 {
     self.currentHtml = result[@"html"];

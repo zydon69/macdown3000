@@ -149,6 +149,141 @@ final class MacDownUITests: XCTestCase {
                        "Source Find must retain its native editor interface")
     }
 
+    func testPreviewDoubleClickEditingUpdatesSourceAndUndo() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("PreviewEditing.md")
+        let source = "# Preview heading\n\nEditable phrase\n\n[Preserved link](https://example.com)\n"
+        try source.write(to: file, atomically: true, encoding: .utf8)
+        app.terminate()
+        app.launchArguments = ["-ApplePersistenceIgnoreState", "YES",
+                               "-MPDisableUpdater", "YES",
+                               "-editorStartInPreviewMode", "NO",
+                               "-htmlMathJax", "NO",
+                               "-AppleLanguages", "(fr)"]
+        app.launch()
+        app.typeKey("o", modifierFlags: .command)
+        app.typeKey("g", modifierFlags: [.command, .shift])
+        app.typeText(file.path)
+        app.typeKey(XCUIKeyboardKey.return.rawValue, modifierFlags: [])
+        app.typeKey(XCUIKeyboardKey.return.rawValue, modifierFlags: [])
+        let window = app.windows["PreviewEditing.md"]
+        let editor = window.textViews.matching(identifier: "editor-text-view").firstMatch
+        XCTAssertTrue(editor.waitForExistence(timeout: 10))
+        let text = window.webViews.staticTexts.matching(NSPredicate(format: "label == %@ OR value == %@", "Editable phrase", "Editable phrase")).firstMatch
+        XCTAssertTrue(text.waitForExistence(timeout: 10), window.debugDescription)
+        text.doubleClick()
+        let modify = window.webViews.buttons["Modifier le texte"]
+        XCTAssertTrue(modify.waitForExistence(timeout: 5))
+        modify.click()
+        app.typeText("Changed phrase")
+        app.typeKey("s", modifierFlags: .command)
+        let expected = source.replacingOccurrences(of: "Editable phrase", with: "Changed phrase")
+        wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", expected), object: editor)], timeout: 5)
+        XCTAssertEqual(try String(contentsOf: file, encoding: .utf8), expected)
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertEqual(editor.value as? String, source)
+        let screenshot = XCTAttachment(screenshot: window.screenshot())
+        screenshot.name = "Source-backed editable preview"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        let selectable = window.webViews.staticTexts.matching(NSPredicate(format: "label == %@ OR value == %@", "Editable phrase", "Editable phrase")).firstMatch
+        XCTAssertTrue(selectable.waitForExistence(timeout: 10))
+        selectable.coordinate(withNormalizedOffset: CGVector(dx: 0.05, dy: 0.5)).press(forDuration: 0.1,
+            thenDragTo: selectable.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)))
+        // aria-pressed exposes these controls as toggles in WebKit accessibility.
+        let bold = window.webViews.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Gras")).firstMatch
+        XCTAssertTrue(bold.waitForExistence(timeout: 5), window.debugDescription)
+        let panelScreenshot = XCTAttachment(screenshot: window.screenshot())
+        panelScreenshot.name = "Preview selection formatting panel"
+        panelScreenshot.lifetime = .keepAlways
+        add(panelScreenshot)
+        app.toolbars.groups["text-formatting-group"].buttons.element(boundBy: 0).click()
+        wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value CONTAINS %@", "**"), object: editor)], timeout: 5)
+        XCTAssertTrue((editor.value as? String)?.contains("[Preserved link](https://example.com)") == true)
+        let formattedSource = try XCTUnwrap(editor.value as? String)
+        let fragments = formattedSource.components(separatedBy: "**")
+        XCTAssertEqual(fragments.count, 3)
+        guard fragments.count == 3 else { return }
+        let rendered = window.webViews.staticTexts.matching(NSPredicate(format: "label == %@ OR value == %@", fragments[1], fragments[1])).firstMatch
+        XCTAssertTrue(rendered.waitForExistence(timeout: 10), window.debugDescription)
+        // Heading AX values can be numeric. Evaluating CONTAINS remotely on
+        // every AX value throws inside XCTAutomationSupport, aborting the host.
+        func assertNoRawDelimiters() {
+            for element in window.webViews.staticTexts.allElementsBoundByIndex {
+                let value = element.value as? String ?? ""
+                XCTAssertFalse(element.label.contains("**") || value.contains("**"))
+                XCTAssertFalse(element.label.contains("_") || value.contains("_"))
+            }
+        }
+        assertNoRawDelimiters()
+        // Preserve the selection after rendering; do not drag/select again.
+        let underline = window.webViews.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Souligné")).firstMatch
+        XCTAssertTrue(underline.waitForExistence(timeout: 5), window.debugDescription)
+        app.toolbars.groups["text-formatting-group"].buttons.element(boundBy: 2).click()
+        wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value CONTAINS %@", "_"), object: editor)], timeout: 5)
+        XCTAssertFalse((editor.value as? String)?.contains("<u>") == true)
+        XCTAssertFalse((editor.value as? String)?.contains("<span") == true)
+        assertNoRawDelimiters()
+        app.toolbars.groups["text-formatting-group"].buttons.element(boundBy: 1).click()
+        wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value CONTAINS %@", "*_" + fragments[1] + "_*"), object: editor)], timeout: 5)
+        assertNoRawDelimiters()
+    }
+
+    func testPreviewMixedSelectionFormattingPreservesSelectionAndNeighbor() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("MixedSelection.md")
+        let source = "test **mot** selection\n\n[Preserved link](https://example.com)\n"
+        try source.write(to: file, atomically: true, encoding: .utf8)
+        app.terminate()
+        app.launchArguments = ["-ApplePersistenceIgnoreState", "YES", "-MPDisableUpdater", "YES",
+                               "-editorStartInPreviewMode", "NO", "-htmlMathJax", "NO",
+                               "-AppleLanguages", "(fr)"]
+        app.launch()
+        app.typeKey("o", modifierFlags: .command)
+        app.typeKey("g", modifierFlags: [.command, .shift])
+        app.typeText(file.path)
+        app.typeKey(XCUIKeyboardKey.return.rawValue, modifierFlags: [])
+        app.typeKey(XCUIKeyboardKey.return.rawValue, modifierFlags: [])
+        let window = app.windows["MixedSelection.md"]
+        let editor = window.textViews.matching(identifier: "editor-text-view").firstMatch
+        XCTAssertTrue(editor.waitForExistence(timeout: 10))
+        let plain = window.webViews.staticTexts.matching(NSPredicate(format: "label == %@ OR value == %@", "test ", "test ")).firstMatch
+        let styled = window.webViews.staticTexts.matching(NSPredicate(format: "label == %@ OR value == %@", "mot", "mot")).firstMatch
+        XCTAssertTrue(plain.waitForExistence(timeout: 10), window.debugDescription)
+        XCTAssertTrue(styled.waitForExistence(timeout: 10), window.debugDescription)
+        plain.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5)).press(forDuration: 0.1,
+            thenDragTo: styled.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5)))
+        let bold = window.webViews.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Gras")).firstMatch
+        XCTAssertTrue(bold.waitForExistence(timeout: 5), window.debugDescription)
+        bold.click()
+        let boldSource = "**test mot** selection\n\n[Preserved link](https://example.com)\n"
+        wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", boldSource), object: editor)], timeout: 10)
+        let italic = window.webViews.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Italique")).firstMatch
+        XCTAssertTrue(italic.waitForExistence(timeout: 5))
+        italic.click()
+        let combined = "***test mot*** selection\n\n[Preserved link](https://example.com)\n"
+        wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", combined), object: editor)], timeout: 10)
+        XCTAssertFalse((editor.value as? String ?? "").contains("<"))
+        for element in window.webViews.staticTexts.allElementsBoundByIndex {
+            XCTAssertFalse(element.label.contains("**"))
+            XCTAssertFalse((element.value as? String ?? "").contains("**"))
+        }
+        let screenshot = XCTAttachment(screenshot: window.screenshot())
+        screenshot.name = "Mixed selection with common bold and italic styles"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        app.typeKey("s", modifierFlags: .command)
+        XCTAssertEqual(try String(contentsOf: file, encoding: .utf8), combined)
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertEqual(editor.value as? String, boldSource)
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertEqual(editor.value as? String, source)
+    }
+
     func testNormalTextToolbarRemovesCurrentHeadingAndSupportsUndo() throws {
         app.terminate()
         app.launchArguments = ["-ApplePersistenceIgnoreState", "YES",
