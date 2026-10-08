@@ -169,3 +169,6 @@
 "Source file does not exist" = "Le fichier source n'existe pas";
 "A file already exists at the installation path" = "Un fichier existe déjà au chemin d'installation";
 "The macdown shell utility has been installed to %@.\n\nTo use it from Terminal, add this line to your shell configuration file (~/.zshrc or ~/.bash_profile):\n\n    export PATH=\"$HOME/.local/bin:$PATH\"" = "L'utilitaire terminal macdown a été installé dans %@.\n\nPour l'utiliser depuis le Terminal, ajoutez cette ligne à votre fichier de configuration shell (~/.zshrc ou ~/.bash_profile) :\n\n    export PATH=\"$HOME/.local/bin:$PATH\"";
+
+/* Convert heading to normal text toolbar button */
+"Normal Text" = "Texte normal";

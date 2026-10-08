@@ -783,6 +783,33 @@
     XCTAssertTrue(NSEqualRanges(view.selectedRange, NSMakeRange(0, 0)));
 }
 
+- (void)testNormalTextKeepsAdjacentLinesSelectionAndUndoForHeadingLevels {
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 500, 300)
+        styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
+    NSTextView *view = [[NSTextView alloc] initWithFrame:window.contentView.bounds];
+    [window.contentView addSubview:view];
+    view.allowsUndo = YES;
+    for (NSUInteger level = 1; level <= 3; level++) {
+        NSString *prefix = [[@"###" substringToIndex:level] stringByAppendingString:@" "];
+        NSString *source = [NSString stringWithFormat:@"# Previous\n%@Title é 日本語 **bold**\n### Following", prefix];
+        NSString *expected = @"# Previous\nTitle é 日本語 **bold**\n### Following";
+        view.string = source;
+        NSUInteger cursor = [source rangeOfString:@"日本語"].location;
+        view.selectedRange = NSMakeRange(cursor, 3);
+        [view.undoManager removeAllActions];
+        [view.undoManager beginUndoGrouping];
+        [view makeHeaderForSelectedLinesWithLevel:0];
+        [view.undoManager endUndoGrouping];
+        XCTAssertEqualObjects(view.string, expected);
+        XCTAssertTrue(NSEqualRanges(view.selectedRange, NSMakeRange(cursor-prefix.length, 3)));
+        XCTAssertTrue(view.undoManager.canUndo);
+        [view.undoManager undo];
+        XCTAssertEqualObjects(view.string, source);
+        [view.undoManager redo];
+        XCTAssertEqualObjects(view.string, expected);
+    }
+}
+
 - (void)testOrderedBlockToggleRemovesEntireMarkerAndPreservesSelectedText {
     NSTextView *view = [[NSTextView alloc] initWithFrame:NSZeroRect];
     view.string = @"12. first\n123. second";

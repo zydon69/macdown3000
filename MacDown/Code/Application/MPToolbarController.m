@@ -128,7 +128,8 @@ static NSArray<NSNumber *> *MPToolbarDocumentZoomLevels(void)
         [self toolbarItemGroupWithIdentifier:@"heading-group" separated:NO label:NSLocalizedString(@"Headings", @"") items:@[
             [self toolbarItemWithIdentifier:@"heading1" label:NSLocalizedString(@"Heading 1", @"Heading 1 toolbar button") icon:@"ToolbarIconHeading1" action:@selector(convertToH1:)],
             [self toolbarItemWithIdentifier:@"heading2" label:NSLocalizedString(@"Heading 2", @"Heading 2 toolbar button") icon:@"ToolbarIconHeading2" action:@selector(convertToH2:)],
-            [self toolbarItemWithIdentifier:@"heading3" label:NSLocalizedString(@"Heading 3", @"Heading 3 toolbar button") icon:@"ToolbarIconHeading3" action:@selector(convertToH3:)]
+            [self toolbarItemWithIdentifier:@"heading3" label:NSLocalizedString(@"Heading 3", @"Heading 3 toolbar button") icon:@"ToolbarIconHeading3" action:@selector(convertToH3:)],
+            [self toolbarItemWithIdentifier:@"normal-text" label:NSLocalizedString(@"Normal Text", @"Convert heading to normal text toolbar button") icon:nil action:@selector(convertToParagraph:)]
             ]
          ],
         [self toolbarItemGroupWithIdentifier:@"list-group" separated:YES label:NSLocalizedString(@"Ordered/Unordered List", @"") items:@[
@@ -382,8 +383,6 @@ static NSArray<NSNumber *> *MPToolbarDocumentZoomLevels(void)
     itemGroup.label = label;
     itemGroup.paletteLabel = label;
     
-    CGFloat itemGroupWidth = itemWidth * items.count;
-    
     NSSegmentedControl *segmentedControl = [[NSSegmentedControl alloc] init];
     segmentedControl.identifier = itemIdentifier;
     segmentedControl.segmentStyle = separated ? NSSegmentStyleSeparated : NSSegmentStyleTexturedRounded;
@@ -396,9 +395,15 @@ static NSArray<NSNumber *> *MPToolbarDocumentZoomLevels(void)
     
     for (NSToolbarItem *subItem in items)
     {
-        [segmentedControl setImage:subItem.image forSegment:segmentIndex];
-        [segmentedControl setImageScaling:NSImageScaleProportionallyDown forSegment:segmentIndex];
-        [segmentedControl setWidth:itemWidth-4 forSegment:segmentIndex];
+        if (subItem.image) {
+            [segmentedControl setImage:subItem.image forSegment:segmentIndex];
+            [segmentedControl setImageScaling:NSImageScaleProportionallyDown forSegment:segmentIndex];
+            [segmentedControl setWidth:itemWidth-4 forSegment:segmentIndex];
+        } else {
+            [segmentedControl setLabel:subItem.label forSegment:segmentIndex];
+            // Automatic width keeps localized text visible beside icon segments.
+            [segmentedControl setWidth:0 forSegment:segmentIndex];
+        }
         if (@available(macOS 10.13, *)) {
             [segmentedControl setToolTip:subItem.label forSegment:segmentIndex];
         }
@@ -433,7 +438,7 @@ static NSArray<NSNumber *> *MPToolbarDocumentZoomLevels(void)
     toolbarItem.paletteLabel = label;
     toolbarItem.toolTip = label;
 
-    NSImage *itemImage = [NSImage imageNamed:iconImageName];
+    NSImage *itemImage = iconImageName.length ? [NSImage imageNamed:iconImageName] : nil;
     [itemImage setTemplate:YES];
     [itemImage setSize:CGSizeMake(19, 19)];
     NSButton *itemButton = [[NSButton alloc] initWithFrame:NSMakeRect(0, 0, itemWidth, 27)];

@@ -791,9 +791,10 @@
         @[@"text-formatting-group", @0, @3, @"toggleStrong:"],
         @[@"text-formatting-group", @1, @3, @"toggleEmphasis:"],
         @[@"text-formatting-group", @2, @3, @"toggleUnderline:"],
-        @[@"heading-group", @0, @3, @"convertToH1:"],
-        @[@"heading-group", @1, @3, @"convertToH2:"],
-        @[@"heading-group", @2, @3, @"convertToH3:"],
+        @[@"heading-group", @0, @4, @"convertToH1:"],
+        @[@"heading-group", @1, @4, @"convertToH2:"],
+        @[@"heading-group", @2, @4, @"convertToH3:"],
+        @[@"heading-group", @3, @4, @"convertToParagraph:"],
         @[@"list-group", @0, @2, @"toggleUnorderedList:"],
         @[@"list-group", @1, @2, @"toggleOrderedList:"],
     ];

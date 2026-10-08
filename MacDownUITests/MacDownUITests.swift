@@ -149,6 +149,36 @@ final class MacDownUITests: XCTestCase {
                        "Source Find must retain its native editor interface")
     }
 
+    func testNormalTextToolbarRemovesCurrentHeadingAndSupportsUndo() throws {
+        app.terminate()
+        app.launchArguments = ["-ApplePersistenceIgnoreState", "YES",
+                               "-MPDisableUpdater", "YES",
+                               "-editorStartInPreviewMode", "NO",
+                               "-AppleLanguages", "(fr)"]
+        app.launch()
+        let editor = try XCTUnwrap(waitForEditor(timeout: 10))
+        let normalText = app.toolbars.buttons["Texte normal"]
+        XCTAssertTrue(normalText.waitForExistence(timeout: 5))
+        for level in 1...3 {
+            let source = "Avant\n" + String(repeating: "#", count: level) + " Titre é 日本語\nAprès"
+            editor.click()
+            editor.typeKey("a", modifierFlags: .command)
+            editor.typeText(source)
+            editor.typeKey(XCUIKeyboardKey.upArrow.rawValue, modifierFlags: [])
+            normalText.click()
+            XCTAssertEqual(editor.value as? String, "Avant\nTitre é 日本語\nAprès")
+            app.typeKey("z", modifierFlags: .command)
+            XCTAssertEqual(editor.value as? String, source)
+            app.typeKey("z", modifierFlags: [.command, .shift])
+            XCTAssertEqual(editor.value as? String, "Avant\nTitre é 日本語\nAprès")
+        }
+        let window = app.windows.containing(.textView, identifier: "editor-text-view").firstMatch
+        let screenshot = XCTAttachment(screenshot: window.screenshot())
+        screenshot.name = "Texte normal beside heading buttons"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
+
     func testReaderModeAppliesToEveryNewWindowAndKeepsProgressVisible() throws {
         app.terminate()
         app.launchArguments = ["-ApplePersistenceIgnoreState", "YES",
