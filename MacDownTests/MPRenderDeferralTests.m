@@ -16,7 +16,7 @@
 @interface MPDocument (RenderDeferralTesting)
 @property (nonatomic, strong) NSMutableArray *renderCompletionHandlers;
 @property (nonatomic, readonly) BOOL needsHtml;
-- (void)performAfterRender:(void (^)(void))handler;
+- (BOOL)performAfterRender:(void (^)(void))handler;
 - (void)finishPreviewRender;
 @property BOOL awaitingRequestedRender;
 @property BOOL alreadyRenderingInWeb;

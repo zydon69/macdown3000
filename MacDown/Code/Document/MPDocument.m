@@ -648,6 +648,7 @@ typedef NS_ENUM(NSInteger, MPReferenceKind) {
          previewTypes:(NSArray<NSNumber *> *)previewTypes
       alignedEditorYs:(NSArray<NSNumber *> **)outEditorYs
      alignedPreviewYs:(NSArray<NSNumber *> **)outPreviewYs;
+- (BOOL)performAfterRender:(void (^)(void))handler;
 - (void)invokeRenderCompletionHandlers;
 - (void)finishPreviewRender;
 + (NSInvocation *)printCompletionForDelegate:(id)delegate selector:(SEL)selector context:(void *)context;
@@ -1832,16 +1833,18 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     SEL printSelector = selector;
     void *context = contextInfo;
 
-    [self performAfterRender:^{
+    NSInvocation *invocation = [MPDocument printCompletionForDelegate:printDelegate
+                                                             selector:printSelector
+                                                              context:context];
+    BOOL accepted = [self performAfterRender:^{
         self.printing = YES;
-        NSInvocation *invocation = [MPDocument printCompletionForDelegate:printDelegate
-                                                                 selector:printSelector
-                                                                  context:context];
         [super printDocumentWithSettings:settings
                           showPrintPanel:showPanel delegate:self
                         didPrintSelector:@selector(document:didPrint:context:)
                              contextInfo:invocation ? (__bridge_retained void *)invocation : NULL];
     }];
+    if (!accepted)
+        [self document:self didPrint:NO context:invocation ? (__bridge_retained void *)invocation : NULL];
 }
 
 - (BOOL)validateUserInterfaceItem:(id<NSValidatedUserInterfaceItem>)item
@@ -3843,11 +3846,9 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
  *
  * Visibility does not imply freshness: always request a render and await completion.
  */
-- (void)performAfterRender:(void (^)(void))handler
+- (BOOL)performAfterRender:(void (^)(void))handler
 {
-    if (![self flushPreviewEditor]) return;
-    if (!handler || self.documentClosed)
-        return;
+    if (!handler || self.documentClosed || ![self flushPreviewEditor]) return NO;
 
     if (!self.renderCompletionHandlers)
         self.renderCompletionHandlers = [NSMutableArray array];
@@ -3861,6 +3862,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
         self.awaitingRequestedRender = YES;
         [self.renderer parseAndRenderNow];
     }
+    return YES;
 }
 
 /**

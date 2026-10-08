@@ -131,7 +131,7 @@
 - (void)willStartLiveScroll:(NSNotification *)notification;
 - (void)willStartPreviewLiveScroll:(NSNotification *)notification;
 - (void)processExternalFileChange;
-- (void)performAfterRender:(void (^)(void))handler;
+- (BOOL)performAfterRender:(void (^)(void))handler;
 - (void)renderer:(MPRenderer *)renderer didProduceHTMLOutput:(NSString *)html;
 - (void)resourceWatcherSet:(MPResourceWatcherSet *)set didDetectChangeAtPath:(NSString *)path;
 - (IBAction)exportPdf:(id)sender;
@@ -2684,11 +2684,70 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
     }
 }
 
+- (void)testPDFExportRefusedPreviewDraftReleasesSlotAndCompletesPrint
+{
+    MPDocument *document = [MPDocument new];
+    document.fileURL=self.testFileURL; document.fileType=@"net.daringfireball.markdown";
+    MPPreferences *preferences=document.preferences;
+    BOOL oldMath=preferences.htmlMathJax,oldSmart=preferences.extensionSmartyPants,oldNewline=preferences.editorEnsuresNewlineAtEndOfFile;
+    MPEditorView *editor=[[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+    WebView *web=[[WebView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+    MPRenderer *renderer=[MPRenderer new];
+    document.editor=editor;document.preview=web;document.renderer=renderer;
+    web.frameLoadDelegate=(id<WebFrameLoadDelegate>)document;
+    renderer.delegate=(id<MPRendererDelegate>)document;renderer.dataSource=(id<MPRendererDataSource>)document;
+    MPControlledExportPanel *panel=[MPControlledExportPanel new];
+    panel.URL=[NSURL fileURLWithPath:[self.testDirectory stringByAppendingPathComponent:@"export.pdf"]];
+    MPCurrentControlledExportPanel=panel;
+    Method factory=class_getClassMethod(NSSavePanel.class,@selector(savePanel));
+    IMP original=method_setImplementation(factory,(IMP)MPControlledExportPanelFactory);
+    @try {
+        preferences.htmlMathJax=NO;preferences.extensionSmartyPants=NO;preferences.editorEnsuresNewlineAtEndOfFile=YES;
+        renderer.rendererFlags=preferences.rendererFlags;
+        editor.string=@"Original text";
+        [renderer parseMarkdown:editor.string];[renderer render];
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:
+            [NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return !web.isLoading&&document.previewEditToken.length>0;}] object:web]] timeout:10];
+        XCTAssertTrue([[web stringByEvaluatingJavaScriptFromString:
+            @"(function(){var e=macdownPreviewEditor,s=e.elements().spans.find(function(s){return s.textContent==='Original text';});if(!s)return false;var r=document.createRange();r.selectNodeContents(s);getSelection().removeAllRanges();getSelection().addRange(r);window.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,button:0}));return true;})()"] boolValue]);
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:
+            [NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return [[web stringByEvaluatingJavaScriptFromString:@"getComputedStyle(macdownPreviewEditor.elements().panel).display"] isEqualToString:@"block"];} ] object:web]] timeout:5];
+        [web stringByEvaluatingJavaScriptFromString:@"Array.from(macdownPreviewEditor.elements().panel.querySelectorAll('button')).find(function(b){return b.textContent==='Modifier le texte';}).click();document.querySelector('[contenteditable]').textContent='Changed text'"];
+        XCTAssertTrue([[web stringByEvaluatingJavaScriptFromString:@"Boolean(macdownPreviewEditor.draft())"] boolValue]);
+        editor.string=@"Concurrent source";
+        [document exportPdf:nil];
+        XCTAssertEqual(panel.presentations,1u);
+        XCTAssertNotNil(panel.completion);
+        panel.completion(NSFileHandlingPanelOKButton);
+        XCTAssertFalse([[document valueForKey:@"pdfExportPending"] boolValue],@"A refused draft must release the PDF export slot");
+        XCTAssertNil([document valueForKey:@"pdfExportURL"]);
+        XCTAssertNil([document valueForKey:@"pdfExportTemporaryURL"]);
+        XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:panel.URL.path]);
+        XCTAssertEqualObjects(editor.string,@"Concurrent source");
+        XCTAssertTrue([[web stringByEvaluatingJavaScriptFromString:@"Boolean(macdownPreviewEditor.draft())"] boolValue]);
+        MPPrintDelegateProbe *probe=[MPPrintDelegateProbe new];
+        void *context=(__bridge void *)self;
+        [document printDocumentWithSettings:@{} showPrintPanel:NO delegate:probe
+            didPrintSelector:@selector(document:printed:context:) contextInfo:context];
+        XCTAssertEqual(probe.calls,1u,@"A refused print must finish with failure rather than silently dropping its delegate");
+        XCTAssertFalse(probe.success);
+        XCTAssertEqual(probe.document,document);
+        XCTAssertEqual(probe.context,context);
+        [web stringByEvaluatingJavaScriptFromString:@"macdownPreviewEditor.finish()"];
+        [document exportPdf:nil];
+        XCTAssertEqual(panel.presentations,2u,@"After recovering the draft, another export must be possible");
+        panel.completion(NSFileHandlingPanelCancelButton);
+    } @finally {
+        method_setImplementation(factory,original);MPCurrentControlledExportPanel=nil;
+        web.frameLoadDelegate=nil;[document close];
+        preferences.htmlMathJax=oldMath;preferences.extensionSmartyPants=oldSmart;preferences.editorEnsuresNewlineAtEndOfFile=oldNewline;
+    }
+}
+
 - (void)testPreviewParagraphSetextConversionPreservesFollowingUnderlineLiteral
 {
     [self assertPreviewBlockSource:@"Title\n---\n===\n\nNeighbor.\n" texts:@[@"Title"] value:@"paragraph"
         expected:@"Title\n\n===\n\nNeighbor.\n" HTML:@"<p>Title</p>"];
 }
-
 
 @end
