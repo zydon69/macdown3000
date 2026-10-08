@@ -1562,6 +1562,27 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
         expected:@"# first\n\n<!-- preserved comment -->\n\n![Image](keep.png)\n\n# second\n\nNeighbor.\n" HTML:@"<h1"];
 }
 
+- (void)testPreviewBlockConversionConsumesSetextUnderlineWithoutTouchingNeighborRule
+{
+    for (NSString *underline in @[@"====",@"----"]) {
+        for (NSArray *scenario in @[@[@"paragraph",@"",@"<p>Title</p>"],@[@"h3",@"### ",@"<h3"],@[@"quote",@"> ",@"<blockquote>"]]) {
+            [self assertPreviewBlockSource:[NSString stringWithFormat:@"Title\n%@\n\n---\n\nNeighbor.\n",underline]
+                texts:@[@"Title"] value:scenario[0]
+                expected:[NSString stringWithFormat:@"%@Title\n\n---\n\nNeighbor.\n",scenario[1]] HTML:scenario[2]];
+        }
+    }
+}
+
+
+- (void)testPreviewSetextConversionPreservesCRLFAndStandaloneRules
+{
+    [self assertPreviewBlockSource:@"Title\r\n====\r\n\r\nNeighbor.\r\n" texts:@[@"Title"] value:@"h3"
+        expected:@"### Title\r\n\r\nNeighbor.\r\n" HTML:@"<h3"];
+    [self assertPreviewBlockSource:@"Title\n====\n\nsecond\n\nNeighbor.\n" texts:@[@"Title",@"second"] value:@"h3"
+        expected:@"### Title\n\n### second\n\nNeighbor.\n" HTML:@"<h3"];
+}
+
+
 - (void)testPreviewMixedStylesApplyToAllSelectedCharactersAndPreserveOutsideStyles
 {
     MPDocument *document=[MPDocument new];

@@ -5779,33 +5779,82 @@ to link outside that scope.", \
         if (!value.length || ([value isEqualToString:@"tasks"] && !self.preferences.htmlTaskList) ||
             ([value isEqualToString:@"code-block"] && !self.preferences.extensionFencedCode)) return NO;
         NSRange lineRange = [source lineRangeForRange:range];
-        NSString *body = [source substringWithRange:lineRange];
-        BOOL newline = [body hasSuffix:@"\n"];
-        if (newline) body = [body substringToIndex:body.length-1];
+        NSMutableArray<NSMutableDictionary *> *sourceLines = [NSMutableArray array];
+        NSRegularExpression *setext = [NSRegularExpression regularExpressionWithPattern:@"^(?:=+|-+)[ ]*$" options:0 error:NULL];
+        NSRegularExpression *singleHeading = [NSRegularExpression regularExpressionWithPattern:@"^\\s*<h[12]\\b[^>]*>.*?</h[12]>\\s*$" options:NSRegularExpressionDotMatchesLineSeparators error:NULL];
+        NSUInteger offset = lineRange.location;
+        while (offset < NSMaxRange(lineRange)) {
+            NSUInteger start, end, contentsEnd;
+            [source getLineStart:&start end:&end contentsEnd:&contentsEnd forRange:NSMakeRange(offset,0)];
+            NSRange contents = NSMakeRange(start,contentsEnd-start);
+            BOOL selectedLine = NO;
+            for (NSValue *run in verified[@"runs"])
+                if (NSIntersectionRange(contents,run.rangeValue).length) { selectedLine = YES; break; }
+            [sourceLines addObject:[@{@"range":[NSValue valueWithRange:NSMakeRange(start,end-start)],
+                @"contents":[NSValue valueWithRange:contents],@"text":[source substringWithRange:contents],
+                @"ending":[source substringWithRange:NSMakeRange(contentsEnd,end-contentsEnd)],
+                @"selected":@(selectedLine)} mutableCopy]];
+            offset = end;
+        }
+        // A Setext title's visible text does not include its next source line.
+        // Consume that line only when the real renderer proves that the pair
+        // is one heading, so an unrelated thematic break is never removed.
+        if (offset < source.length && [sourceLines.lastObject[@"selected"] boolValue]) {
+            NSUInteger start, end, contentsEnd;
+            [source getLineStart:&start end:&end contentsEnd:&contentsEnd forRange:NSMakeRange(offset,0)];
+            NSString *text = [source substringWithRange:NSMakeRange(start,contentsEnd-start)];
+            NSDictionary *previous = sourceLines.lastObject;
+            if ([setext firstMatchInString:text options:0 range:NSMakeRange(0,text.length)]) {
+                NSRange pair = NSMakeRange([previous[@"range"] rangeValue].location,end-[previous[@"range"] rangeValue].location);
+                NSString *HTML = [self.renderer HTMLForMarkdownSnapshot:[source substringWithRange:pair]];
+                if ([singleHeading firstMatchInString:HTML options:0 range:NSMakeRange(0,HTML.length)]) {
+                    [sourceLines addObject:[@{@"range":[NSValue valueWithRange:NSMakeRange(start,end-start)],
+                        @"contents":[NSValue valueWithRange:NSMakeRange(start,contentsEnd-start)],@"text":text,
+                        @"ending":[source substringWithRange:NSMakeRange(contentsEnd,end-contentsEnd)],
+                        @"selected":@NO,@"setext":@YES} mutableCopy]];
+                    lineRange.length = end-lineRange.location;
+                }
+            }
+        }
+        NSMutableString *blockBody = [NSMutableString string];
+        for (NSUInteger i=0;i<sourceLines.count;i++) {
+            NSMutableDictionary *line = sourceLines[i];
+            if (i && ![line[@"setext"] boolValue] && [sourceLines[i-1][@"selected"] boolValue] &&
+                [setext firstMatchInString:line[@"text"] options:0 range:NSMakeRange(0,[line[@"text"] length])]) {
+                NSRange before = [sourceLines[i-1][@"range"] rangeValue], current = [line[@"range"] rangeValue];
+                NSString *HTML = [self.renderer HTMLForMarkdownSnapshot:[source substringWithRange:NSMakeRange(before.location,NSMaxRange(current)-before.location)]];
+                if ([singleHeading firstMatchInString:HTML options:0 range:NSMakeRange(0,HTML.length)]) line[@"setext"] = @YES;
+            }
+            if (![line[@"setext"] boolValue]) { [blockBody appendString:line[@"text"]]; [blockBody appendString:line[@"ending"]]; }
+        }
+        NSString *body = blockBody;
+        NSString *newline = @"";
+        if (body.length) {
+            NSUInteger contentsEnd;
+            [body getLineStart:NULL end:NULL contentsEnd:&contentsEnd forRange:NSMakeRange(body.length-1,1)];
+            newline = [body substringFromIndex:contentsEnd];
+            body = [body substringToIndex:contentsEnd];
+        }
         NSDictionary *prefixes = @{@"paragraph":@"", @"h1":@"# ", @"h2":@"## ", @"h3":@"### ", @"h4":@"#### ", @"h5":@"##### ", @"h6":@"###### ",
             @"unordered":@"- ", @"ordered":@"1. ", @"tasks":@"- [ ] ", @"quote":@"> "};
         NSString *prefix = prefixes[value];
         if (prefix != nil) {
             NSRegularExpression *markers = [NSRegularExpression regularExpressionWithPattern:
                 @"^ {0,3}(?:#{1,6}[ \\t]+|>[ \\t]?|[-+*][ \\t]+(?:\\[[ xX]\\][ \\t]+)?|[0-9]+[.)][ \\t]+)" options:0 error:NULL];
-            NSArray *lines = [body componentsSeparatedByString:@"\n"];
-            NSMutableArray *processed = [NSMutableArray array];
-            NSUInteger offset = lineRange.location;
-            for (NSString *line in lines) {
+            NSMutableString *processed = [NSMutableString string];
+            for (NSDictionary *line in sourceLines) {
+                if ([line[@"setext"] boolValue]) continue;
+                NSString *text = line[@"text"];
                 // A contiguous visual selection can cross blank separators,
                 // comments and images that have no selected text. Convert only
                 // source lines touched by an independently proven text run.
-                NSRange currentLine = NSMakeRange(offset,line.length);
-                BOOL selectedLine = NO;
-                for (NSValue *run in verified[@"runs"])
-                    if (NSIntersectionRange(currentLine,run.rangeValue).length) { selectedLine = YES; break; }
-                if (selectedLine && [line stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet].length) {
-                    NSString *plain = [markers stringByReplacingMatchesInString:line options:0 range:NSMakeRange(0,line.length) withTemplate:@""];
-                    [processed addObject:[prefix stringByAppendingString:plain]];
-                } else [processed addObject:line];
-                offset += line.length + 1;
+                if ([line[@"selected"] boolValue] && [text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet].length) {
+                    NSString *plain = [markers stringByReplacingMatchesInString:text options:0 range:NSMakeRange(0,text.length) withTemplate:@""];
+                    [processed appendString:[prefix stringByAppendingString:plain]];
+                } else [processed appendString:text];
+                [processed appendString:line[@"ending"]];
             }
-            body = [processed componentsJoinedByString:@"\n"];
+            body = newline.length && [processed hasSuffix:newline] ? [processed substringToIndex:processed.length-newline.length] : processed;
         } else if ([value isEqualToString:@"code-block"]) {
             NSUInteger longest = 0, run = 0;
             for (NSUInteger i=0;i<body.length;i++) { run=[body characterAtIndex:i]=='`'?run+1:0;longest=MAX(longest,run); }
@@ -5827,7 +5876,7 @@ to link outside that scope.", \
             if (!self.preferences.htmlMathJax || [body containsString:@"$$"]) return NO;
             body = [NSString stringWithFormat:@"\n$$\n%@\n$$\n",body];
         } else return NO;
-        if (newline) body = [body stringByAppendingString:@"\n"];
+        if (newline.length) body = [body stringByAppendingString:newline];
         return [self replacePreviewRange:lineRange withString:body preservingSelection:selectedRange];
     }
     if ([action isEqualToString:@"strike"] && !self.preferences.extensionStrikethough) return NO;
