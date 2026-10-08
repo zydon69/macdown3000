@@ -2633,4 +2633,55 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
     }
 }
 
+- (void)testPreviewDraftIsCommittedBeforeSaveAddsTrailingNewline
+{
+    MPDocument *document = [MPDocument new];
+    document.fileURL=self.testFileURL; document.fileType=@"net.daringfireball.markdown";
+    MPPreferences *preferences=document.preferences;
+    BOOL oldMath=preferences.htmlMathJax,oldSmart=preferences.extensionSmartyPants,oldNewline=preferences.editorEnsuresNewlineAtEndOfFile;
+    MPEditorView *editor=[[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+    WebView *web=[[WebView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+    MPRenderer *renderer=[MPRenderer new];
+    document.editor=editor;document.preview=web;document.renderer=renderer;
+    web.frameLoadDelegate=(id<WebFrameLoadDelegate>)document;
+    renderer.delegate=(id<MPRendererDelegate>)document;renderer.dataSource=(id<MPRendererDataSource>)document;
+    @try {
+        preferences.htmlMathJax=NO;preferences.extensionSmartyPants=NO;preferences.editorEnsuresNewlineAtEndOfFile=YES;
+        renderer.rendererFlags=preferences.rendererFlags;
+        editor.string=@"Original text";
+        [renderer parseMarkdown:editor.string];[renderer render];
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:
+            [NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return !web.isLoading&&document.previewEditToken.length>0;}] object:web]] timeout:10];
+        XCTAssertTrue([[web stringByEvaluatingJavaScriptFromString:
+            @"(function(){var e=macdownPreviewEditor,s=e.elements().spans.find(function(s){return s.textContent==='Original text';});if(!s)return false;var r=document.createRange();r.selectNodeContents(s);getSelection().removeAllRanges();getSelection().addRange(r);window.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,button:0}));return true;})()"] boolValue]);
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:
+            [NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return [[web stringByEvaluatingJavaScriptFromString:@"getComputedStyle(macdownPreviewEditor.elements().panel).display"] isEqualToString:@"block"];} ] object:web]] timeout:5];
+        [web stringByEvaluatingJavaScriptFromString:@"Array.from(macdownPreviewEditor.elements().panel.querySelectorAll('button')).find(function(b){return b.textContent==='Modifier le texte';}).click();document.querySelector('[contenteditable]').textContent='Changed text'"];
+        XCTAssertTrue([[web stringByEvaluatingJavaScriptFromString:@"Boolean(macdownPreviewEditor.draft())"] boolValue]);
+        // A stale draft refuses the save before appending a newline or marking
+        // the document as self-saving; the draft remains available to recover.
+        editor.string=@"Concurrent source";
+        NSUInteger generation=[[document valueForKey:@"saveGeneration"] unsignedIntegerValue];
+        BOOL selfSaving=[[document valueForKey:@"isSelfSaving"] boolValue];
+        NSError *error=nil;
+        XCTAssertFalse([document writeToURL:self.testFileURL ofType:document.fileType error:&error]);
+        XCTAssertEqual(error.code,NSFileWriteUnknownError);
+        XCTAssertEqualObjects(editor.string,@"Concurrent source");
+        XCTAssertEqual([[document valueForKey:@"saveGeneration"] unsignedIntegerValue],generation);
+        XCTAssertEqual([[document valueForKey:@"isSelfSaving"] boolValue],selfSaving);
+        XCTAssertFalse([[NSFileManager defaultManager] fileExistsAtPath:self.testFileURL.path]);
+        XCTAssertTrue([[web stringByEvaluatingJavaScriptFromString:@"Boolean(macdownPreviewEditor.draft())"] boolValue]);
+        editor.string=@"Original text";
+        error=nil;
+        XCTAssertTrue([document writeToURL:self.testFileURL ofType:document.fileType error:&error]);
+        XCTAssertNil(error);
+        XCTAssertEqualObjects(editor.string,@"Changed text\n");
+        XCTAssertEqualObjects([NSString stringWithContentsOfURL:self.testFileURL encoding:NSUTF8StringEncoding error:NULL],@"Changed text\n");
+        XCTAssertFalse([[web stringByEvaluatingJavaScriptFromString:@"Boolean(macdownPreviewEditor.draft())"] boolValue]);
+    } @finally {
+        web.frameLoadDelegate=nil;[document close];
+        preferences.htmlMathJax=oldMath;preferences.extensionSmartyPants=oldSmart;preferences.editorEnsuresNewlineAtEndOfFile=oldNewline;
+    }
+}
+
 @end

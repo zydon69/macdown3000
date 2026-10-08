@@ -1591,6 +1591,10 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 - (BOOL)writeToURL:(NSURL *)url ofType:(NSString *)typeName
              error:(NSError *__autoreleasing *)outError
 {
+    // Commit the draft against its original source before normalizing the file.
+    // A refused draft must leave both the source and save bookkeeping intact.
+    if (![self flushPreviewEditorForSaveWithError:outError]) return NO;
+
     // Issue #290: Mark that we're saving to avoid triggering reload
     self.isSelfSaving = YES;
     NSUInteger saveGeneration = ++self.saveGeneration;
@@ -1697,7 +1701,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     return url.isFileURL && !self.volumeLocalityChecker(url.path);
 }
 
-- (NSData *)dataOfType:(NSString *)typeName error:(NSError **)outError
+- (BOOL)flushPreviewEditorForSaveWithError:(NSError **)outError
 {
     __block BOOL flushed = YES;
     if (NSThread.isMainThread) flushed = [self flushPreviewEditor];
@@ -1705,8 +1709,14 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     if (!flushed) {
         if (outError) *outError = [NSError errorWithDomain:NSCocoaErrorDomain code:NSFileWriteUnknownError
             userInfo:@{NSLocalizedDescriptionKey:@"La modification dans l’aperçu ne peut pas être appliquée. Copiez le texte ou appuyez sur Échap pour l’annuler."}];
-        return nil;
+        return NO;
     }
+    return YES;
+}
+
+- (NSData *)dataOfType:(NSString *)typeName error:(NSError **)outError
+{
+    if (![self flushPreviewEditorForSaveWithError:outError]) return nil;
     NSString *content = self.editor ? self.editor.string : (self.loadedString ?: @"");
     return [content dataUsingEncoding:NSUTF8StringEncoding];
 }
