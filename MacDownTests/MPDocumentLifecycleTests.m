@@ -1501,6 +1501,13 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
                           value:(NSString *)value expected:(NSString *)expected
                            HTML:(NSString *)expectedHTML
 {
+    [self assertPreviewBlockSource:source texts:texts value:value expected:expected HTML:expectedHTML tasks:YES];
+}
+
+- (void)assertPreviewBlockSource:(NSString *)source texts:(NSArray<NSString *> *)texts
+                          value:(NSString *)value expected:(NSString *)expected
+                           HTML:(NSString *)expectedHTML tasks:(BOOL)tasks
+{
     MPDocument *document = [MPDocument new];
     MPEditorView *editor = [[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
     MPRenderer *renderer = [MPRenderer new];
@@ -1511,7 +1518,8 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
     BOOL oldTasks = document.preferences.htmlTaskList;
     @try {
         document.preferences.extensionSmartyPants = NO;
-        document.preferences.htmlTaskList = YES;
+        document.preferences.htmlTaskList = tasks;
+        renderer.rendererFlags=document.preferences.rendererFlags;
         editor.string = source;
         [renderer parseMarkdown:source];
         NSMutableArray *mapping = [NSMutableArray array], *runs = [NSMutableArray array];
@@ -2435,6 +2443,34 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
         document.preferences.extensionIntraEmphasis=oldIntra;
         document.preferences.htmlMermaid=oldMermaid; document.preferences.htmlGraphviz=oldGraphviz;
     }
+}
+
+- (void)testPreviewParagraphConversionRemovesATXClosingHashes
+{
+    [self assertPreviewBlockSource:@"# Title ###\n\nNeighbor.\n" texts:@[@"Title"] value:@"paragraph"
+        expected:@"Title\n\nNeighbor.\n" HTML:@"<p>Title</p>"];
+    [self assertPreviewBlockSource:@"# Literal # tail\n\nNeighbor.\n" texts:@[@"Literal # tail"] value:@"paragraph"
+        expected:@"Literal # tail\n\nNeighbor.\n" HTML:@"<p>Literal # tail</p>"];
+}
+
+- (void)testPreviewBlockConversionRespectsActualMarkdownMarkersAndOptions
+{
+    [self assertPreviewBlockSource:@"# Title\n---\n\nNeighbor.\n" texts:@[@"Title"] value:@"paragraph"
+        expected:@"Title\n\n---\n\nNeighbor.\n" HTML:@"<hr>"];
+    [self assertPreviewBlockSource:@"# Title\n===\n\nNeighbor.\n" texts:@[@"Title"] value:@"paragraph"
+        expected:@"Title\n\n===\n\nNeighbor.\n" HTML:@"<p>Title</p>"];
+    [self assertPreviewBlockSource:@"> # Title ###\n\nNeighbor.\n" texts:@[@"Title"] value:@"h1"
+        expected:@"# Title\n\nNeighbor.\n" HTML:@">Title</h1>"];
+    [self assertPreviewBlockSource:@"# > literal\n\nNeighbor.\n" texts:@[@"> literal"] value:@"paragraph"
+        expected:@"\\> literal\n\nNeighbor.\n" HTML:@"<p>&gt; literal</p>"];
+    [self assertPreviewBlockSource:@"> > Title\n\nNeighbor.\n" texts:@[@"Title"] value:@"h1"
+        expected:@"# Title\n\nNeighbor.\n" HTML:@">Title</h1>"];
+    [self assertPreviewBlockSource:@"# > literal\n\nNeighbor.\n" texts:@[@"> literal"] value:@"unordered"
+        expected:@"- > literal\n\nNeighbor.\n" HTML:@"&gt; literal</li>"];
+    [self assertPreviewBlockSource:@"2026) year\n\nNeighbor.\n" texts:@[@"2026) year"] value:@"h1"
+        expected:@"# 2026) year\n\nNeighbor.\n" HTML:@"2026) year</h1>"];
+    [self assertPreviewBlockSource:@"- [x] item\n\nNeighbor.\n" texts:@[@"[x] item"] value:@"h1"
+        expected:@"# [x] item\n\nNeighbor.\n" HTML:@"[x] item</h1>" tasks:NO];
 }
 
 @end

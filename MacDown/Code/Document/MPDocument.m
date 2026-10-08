@@ -5844,18 +5844,107 @@ to link outside that scope.", \
             @"unordered":@"- ", @"ordered":@"1. ", @"tasks":@"- [ ] ", @"quote":@"> "};
         NSString *prefix = prefixes[value];
         if (prefix != nil) {
-            NSRegularExpression *markers = [NSRegularExpression regularExpressionWithPattern:
-                @"^ {0,3}(?:#{1,6}[ \\t]+|>[ \\t]?|[-+*][ \\t]+(?:\\[[ xX]\\][ \\t]+)?|[0-9]+[.)][ \\t]+)" options:0 error:NULL];
+            NSString *taskMarker = self.preferences.htmlTaskList ? @"(?:\\[[ xX]\\][ \\t]+)?" : @"";
+            NSString *markerPattern = [NSString stringWithFormat:@"^ {0,3}(?:#{1,6}[ \\t]+|>[ \\t]?|[-+*][ \\t]+%@|[0-9]+\\.[ \\t]+)",taskMarker];
+            NSRegularExpression *markers = [NSRegularExpression regularExpressionWithPattern:markerPattern options:0 error:NULL];
+            NSRegularExpression *headingHTML = [NSRegularExpression regularExpressionWithPattern:@"^\\s*<h[1-6]\\b[^>]*>(.*?)</h[1-6]>\\s*$" options:NSRegularExpressionDotMatchesLineSeparators error:NULL];
+            void (^normalizeTaskSpacing)(NSXMLDocument *) = ^(NSXMLDocument *DOM) {
+                // The renderer leaves the Markdown separator after its generated
+                // checkbox. It is syntax spacing, not a character of the label.
+                for (NSXMLNode *input in [DOM nodesForXPath:@"//li[@class='task-list-item']/input[@type='checkbox']" error:NULL]) {
+                    NSXMLNode *sibling=input.nextSibling;
+                    if (sibling.kind!=NSXMLTextKind) continue;
+                    NSString *text=sibling.stringValue;
+                    NSUInteger offset=0;
+                    while (offset<text.length && ([text characterAtIndex:offset]==' ' || [text characterAtIndex:offset]=='\t')) offset++;
+                    if (offset) sibling.stringValue=[text substringFromIndex:offset];
+                }
+            };
             NSMutableString *processed = [NSMutableString string];
             for (NSDictionary *line in sourceLines) {
                 if ([line[@"setext"] boolValue]) continue;
                 NSString *text = line[@"text"];
+                NSString *outputText = text;
                 // A contiguous visual selection can cross blank separators,
                 // comments and images that have no selected text. Convert only
                 // source lines touched by an independently proven text run.
                 if ([line[@"selected"] boolValue] && [text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet].length) {
-                    NSString *plain = [markers stringByReplacingMatchesInString:text options:0 range:NSMakeRange(0,text.length) withTemplate:@""];
-                    [processed appendString:[prefix stringByAppendingString:plain]];
+                    NSString *plain = text;
+                    NSString *originalHTML = [self.renderer HTMLForMarkdownSnapshot:text];
+                    NSXMLDocument *originalDOM = MPPIParseHTML(originalHTML);
+                    normalizeTaskSpacing(originalDOM);
+                    NSArray *roots = [originalDOM nodesForXPath:@"//body/*" error:NULL];
+                    if (roots.count!=1) return NO;
+                    NSXMLNode *content = roots.firstObject;
+                    NSRegularExpression *quoteMarker = [NSRegularExpression regularExpressionWithPattern:@"^ {0,3}>[ \\t]?" options:0 error:NULL];
+                    NSRegularExpression *ATX = [NSRegularExpression regularExpressionWithPattern:@"^ {0,3}#{1,6}[ \\t]+" options:0 error:NULL];
+                    // Descend through the ORIGINAL block hierarchy. Once a
+                    // heading/paragraph is reached, a literal prefix in its
+                    // inline content must not be interpreted as another block.
+                    while (YES) {
+                        NSString *tag=content.name.lowercaseString;
+                        BOOL quote=[tag isEqualToString:@"blockquote"], list=[@[@"ul",@"ol"] containsObject:tag];
+                        BOOL isHeading=[@[@"h1",@"h2",@"h3",@"h4",@"h5",@"h6"] containsObject:tag];
+                        if (!quote && !list && !isHeading) break;
+                        NSRegularExpression *expression=quote ? quoteMarker : isHeading ? ATX : markers;
+                        NSTextCheckingResult *marker=[expression firstMatchInString:plain options:0 range:NSMakeRange(0,plain.length)];
+                        if (!marker) break;
+                        plain=[plain substringFromIndex:marker.range.length];
+                        if (isHeading) break;
+                        NSArray *children=[content nodesForXPath:@"./*" error:NULL];
+                        if (children.count!=1) return NO;
+                        content=children.firstObject;
+                        if (list) {
+                            if (![content.name.lowercaseString isEqualToString:@"li"]) return NO;
+                            NSArray *blocks=[content nodesForXPath:@"./p|./blockquote|./ul|./ol|./h1|./h2|./h3|./h4|./h5|./h6" error:NULL];
+                            if (blocks.count==1) content=blocks.firstObject; else break;
+                        }
+                    }
+                    originalHTML=content.XMLString;
+                    NSTextCheckingResult *heading=[headingHTML firstMatchInString:originalHTML options:0 range:NSMakeRange(0,originalHTML.length)];
+                    if (heading) {
+                        NSUInteger end=plain.length;
+                        while (end && [plain characterAtIndex:end-1]=='#') end--;
+                        while (end && [plain characterAtIndex:end-1]==' ') end--;
+                        NSString *candidate=[plain substringToIndex:end];
+                        NSString *HTML=[self.renderer HTMLForMarkdownSnapshot:[@"###### " stringByAppendingString:candidate]];
+                        NSTextCheckingResult *probe=[headingHTML firstMatchInString:HTML options:0 range:NSMakeRange(0,HTML.length)];
+                        if (probe && [[HTML substringWithRange:[probe rangeAtIndex:1]] isEqualToString:[originalHTML substringWithRange:[heading rangeAtIndex:1]]]) plain=candidate;
+                    }
+                    NSString *expectedText=[content.stringValue stringByTrimmingCharactersInSet:NSCharacterSet.newlineCharacterSet];
+                    NSString *expectedTag=[value hasPrefix:@"h"] ? value : [value isEqualToString:@"paragraph"] ? @"p" : [value isEqualToString:@"quote"] ? @"blockquote" : [value isEqualToString:@"ordered"] ? @"ol" : @"ul";
+                    BOOL proved=NO;
+                    for (NSUInteger attempt=0;attempt<2;attempt++) {
+                        NSString *candidate=[prefix stringByAppendingString:plain];
+                        NSXMLDocument *DOM=MPPIParseHTML([self.renderer HTMLForMarkdownSnapshot:candidate]);
+                        normalizeTaskSpacing(DOM);
+                        NSArray<NSXMLNode *> *elements=[DOM nodesForXPath:@"//body/*" error:NULL];
+                        NSXMLNode *body=[[DOM nodesForXPath:@"//body" error:NULL] firstObject];
+                        NSString *actualText=[body.stringValue stringByTrimmingCharactersInSet:NSCharacterSet.newlineCharacterSet];
+                        if (elements.count==1 && [elements.firstObject.name.lowercaseString isEqualToString:expectedTag] && [actualText isEqualToString:expectedText]) { proved=YES; break; }
+                        if (attempt) break;
+                        NSRegularExpression *literalMarker=[NSRegularExpression regularExpressionWithPattern:@"^ {0,3}(?:(>)|([#*+-])(?:[ \\t]|$)|[0-9]+(\\.)(?:[ \\t]|$)|(`{3,}|~{3,}))" options:0 error:NULL];
+                        NSTextCheckingResult *literal=[literalMarker firstMatchInString:plain options:0 range:NSMakeRange(0,plain.length)];
+                        if (!literal) break;
+                        NSRange punctuation=NSMakeRange(NSNotFound,0);
+                        for (NSUInteger group=1;group<literal.numberOfRanges;group++) if ([literal rangeAtIndex:group].location!=NSNotFound) { punctuation=[literal rangeAtIndex:group]; break; }
+                        if (punctuation.location==NSNotFound) break;
+                        plain=[plain stringByReplacingCharactersInRange:NSMakeRange(punctuation.location,0) withString:@"\\"];
+                    }
+                    if (!proved) return NO;
+                    outputText = [prefix stringByAppendingString:plain];
+                    [processed appendString:outputText];
+                    // Removing an ATX prefix must not turn its following
+                    // thematic break into a Setext underline.
+                    NSRange originalLine = [line[@"range"] rangeValue];
+                    if (!prefix.length && heading && NSMaxRange(originalLine)<source.length) {
+                        NSUInteger nextStart, nextEnd, nextContentsEnd;
+                        [source getLineStart:&nextStart end:&nextEnd contentsEnd:&nextContentsEnd forRange:NSMakeRange(NSMaxRange(originalLine),0)];
+                        NSString *nextText = [source substringWithRange:NSMakeRange(nextStart,nextContentsEnd-nextStart)];
+                        if ([setext firstMatchInString:nextText options:0 range:NSMakeRange(0,nextText.length)]) {
+                            [processed appendString:line[@"ending"]];
+                        }
+                    }
                 } else [processed appendString:text];
                 [processed appendString:line[@"ending"]];
             }
