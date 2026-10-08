@@ -1710,6 +1710,7 @@
 			inputPaths = (
 				"$(SRCROOT)/Dependency/prism/components/",
 				"$(SRCROOT)/Dependency/prism/themes/",
+				"$(SRCROOT)/MacDown/Resources/CommunityPrismThemes/",
 				"$(SRCROOT)/Dependency/prism/plugins/",
 				"$(SRCROOT)/Dependency/prism/components.js",
 			);
@@ -1719,7 +1720,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -e\nSOURCE=\"${SRCROOT}/Dependency/prism\"\nTARGET=\"${SRCROOT}/MacDown/Resources/Prism\"\nrm -rf \"$TARGET\"\nmkdir -p \"$TARGET\"\ncp -R \"$SOURCE/components\" \"$TARGET\"\ncp -R \"$SOURCE/themes\" \"$TARGET\"\ncp -R \"$SOURCE/plugins\" \"$TARGET\"\ncp \"$SOURCE/components.js\" \"$TARGET\"\n";
+			shellScript = "set -e\nSOURCE=\"${SRCROOT}/Dependency/prism\"\nTARGET=\"${SRCROOT}/MacDown/Resources/Prism\"\nrm -rf \"$TARGET\"\nmkdir -p \"$TARGET\"\ncp -R \"$SOURCE/components\" \"$TARGET\"\ncp -R \"$SOURCE/themes\" \"$TARGET\"\ncp -R \"${SRCROOT}/MacDown/Resources/CommunityPrismThemes/\" \"$TARGET/themes/\"\ncp -R \"$SOURCE/plugins\" \"$TARGET\"\ncp \"$SOURCE/components.js\" \"$TARGET\"\n";
 			showEnvVarsInLog = 0;
 		};
 		3FE464D54AEF370ED9587A37 /* [CP] Check Pods Manifest.lock */ = {
@@ -1827,6 +1828,7 @@
 			inputPaths = (
 				"$(SRCROOT)/Dependency/prism/components/",
 				"$(SRCROOT)/Dependency/prism/themes/",
+				"$(SRCROOT)/MacDown/Resources/CommunityPrismThemes/",
 				"$(SRCROOT)/Dependency/prism/plugins/",
 				"$(SRCROOT)/Dependency/prism/components.js",
 				"$(SRCROOT)/MacDown/Resources/Styles/",
@@ -1840,7 +1842,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -e\nRESOURCES_DIR=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}\"\n\n# Generation is complete through the MacDownResources dependency.\nrm -rf \"${RESOURCES_DIR}/Styles\" \"${RESOURCES_DIR}/Prism\"\n# Copy Styles from generated source\nmkdir -p \"${RESOURCES_DIR}/Styles\"\ncp -R \"${SRCROOT}/MacDown/Resources/Styles/\" \"${RESOURCES_DIR}/Styles/\"\n\n# Copy Prism from vendor source (same source as MacDown's \"Fetch Prism Resources\")\nPRISM_SRC=\"${SRCROOT}/Dependency/prism\"\nmkdir -p \"${RESOURCES_DIR}/Prism\"\ncp -R \"${PRISM_SRC}/components\" \"${RESOURCES_DIR}/Prism/\"\ncp -R \"${PRISM_SRC}/themes\" \"${RESOURCES_DIR}/Prism/\"\ncp -R \"${PRISM_SRC}/plugins\" \"${RESOURCES_DIR}/Prism/\"\ncp \"${PRISM_SRC}/components.js\" \"${RESOURCES_DIR}/Prism/\"\n";
+			shellScript = "set -e\nRESOURCES_DIR=\"${TARGET_BUILD_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}\"\n\n# Generation is complete through the MacDownResources dependency.\nrm -rf \"${RESOURCES_DIR}/Styles\" \"${RESOURCES_DIR}/Prism\"\n# Copy Styles from generated source\nmkdir -p \"${RESOURCES_DIR}/Styles\"\ncp -R \"${SRCROOT}/MacDown/Resources/Styles/\" \"${RESOURCES_DIR}/Styles/\"\n\n# Copy Prism from vendor source (same source as MacDown's \"Fetch Prism Resources\")\nPRISM_SRC=\"${SRCROOT}/Dependency/prism\"\nmkdir -p \"${RESOURCES_DIR}/Prism\"\ncp -R \"${PRISM_SRC}/components\" \"${RESOURCES_DIR}/Prism/\"\ncp -R \"${PRISM_SRC}/themes\" \"${RESOURCES_DIR}/Prism/\"\ncp -R \"${SRCROOT}/MacDown/Resources/CommunityPrismThemes/\" \"${RESOURCES_DIR}/Prism/themes/\"\ncp -R \"${PRISM_SRC}/plugins\" \"${RESOURCES_DIR}/Prism/\"\ncp \"${PRISM_SRC}/components.js\" \"${RESOURCES_DIR}/Prism/\"\n";
 		};
 		C5CE5250ABE88F046B768B9D /* [CP] Check Pods Manifest.lock */ = {
 			isa = PBXShellScriptBuildPhase;

@@ -55,6 +55,6 @@ int main(int argc, const char *argv[])
         }
         printf("styles=%lu failures=%lu\n", (unsigned long)styles,
                (unsigned long)failures);
-        return styles == 11 && failures == 0 ? 0 : 1;
+        return styles == 48 && failures == 0 ? 0 : 1;
     }
 }
