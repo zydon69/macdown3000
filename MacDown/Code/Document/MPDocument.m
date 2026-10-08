@@ -5820,6 +5820,7 @@ to link outside that scope.", \
             }
         }
         NSMutableString *blockBody = [NSMutableString string];
+        NSUInteger blockStart=NSNotFound, blockEnd=NSNotFound;
         for (NSUInteger i=0;i<sourceLines.count;i++) {
             NSMutableDictionary *line = sourceLines[i];
             if (i && ![line[@"setext"] boolValue] && [sourceLines[i-1][@"selected"] boolValue] &&
@@ -5830,7 +5831,14 @@ to link outside that scope.", \
                 if ([singleParagraph firstMatchInString:beforeHTML options:0 range:NSMakeRange(0,beforeHTML.length)] &&
                     [singleHeading firstMatchInString:HTML options:0 range:NSMakeRange(0,HTML.length)]) line[@"setext"] = @YES;
             }
-            if (![line[@"setext"] boolValue]) { [blockBody appendString:line[@"text"]]; [blockBody appendString:line[@"ending"]]; }
+            if (![line[@"setext"] boolValue]) {
+                NSRange original=[line[@"range"] rangeValue];
+                if (selectedRange.location>=original.location && selectedRange.location<NSMaxRange(original))
+                    blockStart=blockBody.length+selectedRange.location-original.location;
+                if (NSMaxRange(selectedRange)>original.location && NSMaxRange(selectedRange)<=NSMaxRange(original))
+                    blockEnd=blockBody.length+NSMaxRange(selectedRange)-original.location;
+                [blockBody appendString:line[@"text"]]; [blockBody appendString:line[@"ending"]];
+            }
         }
         NSString *body = blockBody;
         NSString *newline = @"";
@@ -5843,6 +5851,8 @@ to link outside that scope.", \
         NSDictionary *prefixes = @{@"paragraph":@"", @"h1":@"# ", @"h2":@"## ", @"h3":@"### ", @"h4":@"#### ", @"h5":@"##### ", @"h6":@"###### ",
             @"unordered":@"- ", @"ordered":@"1. ", @"tasks":@"- [ ] ", @"quote":@"> "};
         NSString *prefix = prefixes[value];
+        NSRange restoredSelection = blockStart!=NSNotFound && blockEnd!=NSNotFound && blockEnd>=blockStart
+            ? NSMakeRange(blockStart,blockEnd-blockStart) : NSMakeRange(NSNotFound,0);
         if (prefix != nil) {
             NSString *taskMarker = self.preferences.htmlTaskList ? @"(?:\\[[ xX]\\][ \\t]+)?" : @"";
             NSString *markerPattern = [NSString stringWithFormat:@"^ {0,3}(?:#{1,6}[ \\t]+|>[ \\t]?|[-+*][ \\t]+%@|[0-9]+\\.[ \\t]+)",taskMarker];
@@ -5861,14 +5871,17 @@ to link outside that scope.", \
                 }
             };
             NSMutableString *processed = [NSMutableString string];
+            NSUInteger restoredStart = NSNotFound, restoredEnd = NSNotFound;
             for (NSDictionary *line in sourceLines) {
                 if ([line[@"setext"] boolValue]) continue;
                 NSString *text = line[@"text"];
+                NSUInteger outputStart = processed.length, removedPrefix = 0, addedPrefix = 0, literalEscape = NSNotFound;
                 NSString *outputText = text;
                 // A contiguous visual selection can cross blank separators,
                 // comments and images that have no selected text. Convert only
                 // source lines touched by an independently proven text run.
                 if ([line[@"selected"] boolValue] && [text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet].length) {
+                    addedPrefix=prefix.length;
                     NSString *plain = text;
                     NSString *originalHTML = [self.renderer HTMLForMarkdownSnapshot:text];
                     NSXMLDocument *originalDOM = MPPIParseHTML(originalHTML);
@@ -5889,6 +5902,7 @@ to link outside that scope.", \
                         NSRegularExpression *expression=quote ? quoteMarker : isHeading ? ATX : markers;
                         NSTextCheckingResult *marker=[expression firstMatchInString:plain options:0 range:NSMakeRange(0,plain.length)];
                         if (!marker) break;
+                        removedPrefix+=marker.range.length;
                         plain=[plain substringFromIndex:marker.range.length];
                         if (isHeading) break;
                         NSArray *children=[content nodesForXPath:@"./*" error:NULL];
@@ -5929,6 +5943,7 @@ to link outside that scope.", \
                         NSRange punctuation=NSMakeRange(NSNotFound,0);
                         for (NSUInteger group=1;group<literal.numberOfRanges;group++) if ([literal rangeAtIndex:group].location!=NSNotFound) { punctuation=[literal rangeAtIndex:group]; break; }
                         if (punctuation.location==NSNotFound) break;
+                        literalEscape=punctuation.location;
                         plain=[plain stringByReplacingCharactersInRange:NSMakeRange(punctuation.location,0) withString:@"\\"];
                     }
                     if (!proved) return NO;
@@ -5946,10 +5961,31 @@ to link outside that scope.", \
                         }
                     }
                 } else [processed appendString:text];
+                // Carry exact source endpoints through each line's prefix and
+                // suffix edits. Searching the old union text cannot work when
+                // another selected paragraph gained markup inside that union.
+                NSRange original = [line[@"range"] rangeValue];
+                NSUInteger positions[] = {selectedRange.location,NSMaxRange(selectedRange)};
+                for (NSUInteger boundary=0;boundary<2;boundary++) {
+                    NSUInteger position = positions[boundary];
+                    BOOL belongs = boundary == 0 ? position>=original.location && position<NSMaxRange(original)
+                        : position>original.location && position<=NSMaxRange(original);
+                    if (!belongs) continue;
+                    NSUInteger relative = position-original.location, mapped;
+                    if (relative>text.length) mapped = outputText.length+relative-text.length;
+                    else {
+                        NSUInteger plainPosition=MIN(relative>removedPrefix ? relative-removedPrefix : 0,outputText.length-addedPrefix-(literalEscape!=NSNotFound ? 1 : 0));
+                        mapped=addedPrefix+plainPosition+(literalEscape!=NSNotFound && plainPosition>=literalEscape ? 1 : 0);
+                    }
+                    if (boundary==0) restoredStart=outputStart+mapped; else restoredEnd=outputStart+mapped;
+                }
                 [processed appendString:line[@"ending"]];
             }
+            if (restoredStart!=NSNotFound && restoredEnd!=NSNotFound && restoredEnd>=restoredStart)
+                restoredSelection=NSMakeRange(restoredStart,restoredEnd-restoredStart);
             body = newline.length && [processed hasSuffix:newline] ? [processed substringToIndex:processed.length-newline.length] : processed;
         } else if ([value isEqualToString:@"code-block"]) {
+            restoredSelection=NSMakeRange(NSNotFound,0); // Code blocks leave the editable text domain.
             NSUInteger longest = 0, run = 0;
             for (NSUInteger i=0;i<body.length;i++) { run=[body characterAtIndex:i]=='`'?run+1:0;longest=MAX(longest,run); }
             NSString *fence = [@"" stringByPaddingToLength:MAX((NSUInteger)3,longest+1) withString:@"`" startingAtIndex:0];
@@ -5961,17 +5997,27 @@ to link outside that scope.", \
                 NSUInteger level = [[value substringFromIndex:8] integerValue];
                 heading = [[@"####" substringToIndex:level] stringByAppendingString:@" "];
                 NSRegularExpression *existingHeading = [NSRegularExpression regularExpressionWithPattern:@"^ {0,3}#{1,6}[ \\t]+" options:0 error:NULL];
-                body = [existingHeading stringByReplacingMatchesInString:body options:0 range:NSMakeRange(0,body.length) withTemplate:@""];
+                NSTextCheckingResult *marker=[existingHeading firstMatchInString:body options:0 range:NSMakeRange(0,body.length)];
+                NSUInteger removed=marker ? marker.range.length : 0;
+                body=[body substringFromIndex:removed];
+                if (restoredSelection.location!=NSNotFound) {
+                    NSUInteger start=restoredSelection.location>removed ? restoredSelection.location-removed : 0;
+                    NSUInteger end=NSMaxRange(restoredSelection)>removed ? NSMaxRange(restoredSelection)-removed : 0;
+                    restoredSelection=NSMakeRange(start,end-start);
+                }
             }
             if ([body containsString:@":::"]) return NO;
-            body = [NSString stringWithFormat:@"\n::: {.callout-note%@}\n%@%@\n:::\n",
-                [value isEqualToString:@"callout"]?@"":@" collapse=\"true\"",heading,body];
+            NSString *opening=[NSString stringWithFormat:@"\n::: {.callout-note%@}\n%@",
+                [value isEqualToString:@"callout"]?@"":@" collapse=\"true\"",heading];
+            if (restoredSelection.location!=NSNotFound) restoredSelection.location+=opening.length;
+            body=[NSString stringWithFormat:@"%@%@\n:::\n",opening,body];
         } else if ([value isEqualToString:@"math-block"]) {
+            restoredSelection=NSMakeRange(NSNotFound,0); // Generated math is not mapped for editing.
             if (!self.preferences.htmlMathJax || [body containsString:@"$$"]) return NO;
             body = [NSString stringWithFormat:@"\n$$\n%@\n$$\n",body];
         } else return NO;
         if (newline.length) body = [body stringByAppendingString:newline];
-        return [self replacePreviewRange:lineRange withString:body preservingSelection:selectedRange];
+        return [self replacePreviewRange:lineRange withString:body preservingSelection:selectedRange restoringRange:restoredSelection];
     }
     if ([action isEqualToString:@"strike"] && !self.preferences.extensionStrikethough) return NO;
     BOOL emphasis = [@[@"bold",@"italic",@"underline",@"strike"] containsObject:action];
