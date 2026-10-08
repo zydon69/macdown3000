@@ -25,6 +25,7 @@
 #import <JavaScriptCore/JavaScriptCore.h>
 #import "MPResourceWatcherSet.h"
 #import "MPHTMLResourceURLs.h"
+#import "MPUtilities.h"
 
 
 @interface MPPreferences (PreviewEditingTests)
@@ -2748,6 +2749,109 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
 {
     [self assertPreviewBlockSource:@"Title\n---\n===\n\nNeighbor.\n" texts:@[@"Title"] value:@"paragraph"
         expected:@"Title\n\n===\n\nNeighbor.\n" HTML:@"<p>Title</p>"];
+}
+
+
+- (void)testHTMLExportIncludesSelectedCustomStyleRegardlessOfStringAllocation
+{
+    MPDocumentExportAuditProbe *document=[MPDocumentExportAuditProbe new];
+    MPPreferences *preferences=document.preferences;
+    NSString *oldStyle=preferences.htmlStyleName;
+    BOOL oldMath=preferences.htmlMathJax,oldHighlight=preferences.htmlSyntaxHighlighting;
+    BOOL oldMermaid=preferences.htmlMermaid,oldGraphviz=preferences.htmlGraphviz;
+    NSMutableArray<NSString *> *retainedPreferenceStrings=[NSMutableArray array];
+    NSString *customStylePath=nil;
+    MPEditorView *editor=[[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+    WebView *web=[[WebView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+    MPRenderer *renderer=[MPRenderer new];
+    document.editor=editor;document.preview=web;document.renderer=renderer;
+    web.frameLoadDelegate=(id<WebFrameLoadDelegate>)document;
+    renderer.delegate=(id<MPRendererDelegate>)document;renderer.dataSource=(id<MPRendererDataSource>)document;
+    MPControlledExportPanel *panel=[MPControlledExportPanel new];
+    MPCurrentControlledExportPanel=panel;
+    Method factory=class_getClassMethod(NSSavePanel.class,@selector(savePanel));
+    IMP original=method_setImplementation(factory,(IMP)MPControlledExportPanelFactory);
+    @try {
+        preferences.htmlMathJax=NO;preferences.htmlSyntaxHighlighting=NO;
+        preferences.htmlMermaid=NO;preferences.htmlGraphviz=NO;
+        NSString *prefix=[@"MacDownExportAllocation-" stringByAppendingString:NSUUID.UUID.UUIDString];
+        NSString *selectedStyle=nil;
+        // Real preferences and ordinary Foundation strings, never a fabricated
+        // object address or replaced preference getter. Retain observed values
+        // so allocations can visit different alignment offsets. The bounded
+        // search selects the natural allocation exposing Intel BOOL truncation.
+        for (NSUInteger i=0;i<1024;i++) {
+            preferences.htmlStyleName=[NSString stringWithFormat:@"%@-%lu",prefix,(unsigned long)i];
+            NSString *returned=preferences.htmlStyleName;
+            if (returned) [retainedPreferenceStrings addObject:returned];
+            if (returned && (((uintptr_t)(__bridge void *)returned)&0xff)==0) {
+                selectedStyle=returned;
+                break;
+            }
+        }
+        XCTAssertNotNil(selectedStyle,@"The fixture must observe a real preference string with a zero low address byte");
+        if (!selectedStyle) return;
+        XCTAssertEqual(preferences.htmlStyleName,selectedStyle,@"The production getter must return the observed allocation");
+#if defined(__x86_64__)
+        NSString *fixtureArchitecture=@"x86_64";
+#elif defined(__arm64__)
+        NSString *fixtureArchitecture=@"arm64";
+#else
+        NSString *fixtureArchitecture=@"other";
+#endif
+        NSLog(@"HTML style allocation fixture: architecture=%@ OBJC_BOOL_IS_BOOL=%d lowByte=%lu",
+            fixtureArchitecture,OBJC_BOOL_IS_BOOL,(unsigned long)(((uintptr_t)(__bridge void *)selectedStyle)&0xff));
+        customStylePath=MPStylePathForName(selectedStyle);
+        XCTAssertTrue([NSFileManager.defaultManager createDirectoryAtPath:customStylePath.stringByDeletingLastPathComponent
+            withIntermediateDirectories:YES attributes:nil error:NULL]);
+        XCTAssertFalse([NSFileManager.defaultManager fileExistsAtPath:customStylePath]);
+        NSString *CSS=@".macdown-export-allocation-regression { color: #123456; }";
+        XCTAssertTrue([CSS writeToFile:customStylePath atomically:YES encoding:NSUTF8StringEncoding error:NULL]);
+        editor.string=@"# Exported content\n\nPreserved source.\n";
+        renderer.rendererFlags=preferences.rendererFlags;
+        // Selected style defaults on; the user can still uncheck it, and no
+        // selected style defaults off. Each case consumes actual exported HTML.
+        for (NSUInteger scenario=0;scenario<3;scenario++) {
+            if (scenario==2) preferences.htmlStyleName=nil;
+            panel.URL=[NSURL fileURLWithPath:[self.testDirectory stringByAppendingPathComponent:
+                [NSString stringWithFormat:@"style-%lu.html",(unsigned long)scenario]]];
+            panel.completion=nil;
+            NSLog(@"HTML style allocation export: scenario=%lu currentLowByte=%lu",
+                (unsigned long)scenario,(unsigned long)(((uintptr_t)(__bridge void *)preferences.htmlStyleName)&0xff));
+            [document exportHtml:nil];
+            NSButton *styleButton=nil;
+            for (NSView *view in panel.accessoryView.subviews) {
+                if (![view isKindOfClass:NSButton.class]) continue;
+                NSDictionary *binding=[view infoForBinding:NSValueBinding];
+                if ([binding[NSObservedKeyPathKey] isEqualToString:@"self.stylesIncluded"]) {
+                    styleButton=(NSButton *)view;break;
+                }
+            }
+            XCTAssertNotNil(styleButton);
+            XCTAssertNotNil(panel.completion);
+            if (!styleButton || !panel.completion) return;
+            XCTAssertEqual(styleButton.state,scenario==2 ? NSControlStateValueOff : NSControlStateValueOn);
+            if (scenario==1) [styleButton performClick:nil];
+            panel.completion(NSFileHandlingPanelOKButton);
+            [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:
+                [NSPredicate predicateWithBlock:^BOOL(id object,NSDictionary *bindings) {
+                    return [NSFileManager.defaultManager fileExistsAtPath:panel.URL.path] || document.presentedError!=nil;
+                }] object:document]] timeout:10];
+            XCTAssertNil(document.presentedError);
+            NSString *HTML=[NSString stringWithContentsOfURL:panel.URL encoding:NSUTF8StringEncoding error:NULL];
+            XCTAssertNotNil(HTML);
+            XCTAssertTrue([HTML containsString:@"Exported content"]);
+            XCTAssertEqual([HTML containsString:@".macdown-export-allocation-regression"],scenario==0);
+            XCTAssertEqualObjects(editor.string,@"# Exported content\n\nPreserved source.\n");
+        }
+    } @finally {
+        method_setImplementation(factory,original);MPCurrentControlledExportPanel=nil;
+        web.frameLoadDelegate=nil;[document close];
+        preferences.htmlStyleName=oldStyle;
+        preferences.htmlMathJax=oldMath;preferences.htmlSyntaxHighlighting=oldHighlight;
+        preferences.htmlMermaid=oldMermaid;preferences.htmlGraphviz=oldGraphviz;
+        if (customStylePath) [NSFileManager.defaultManager removeItemAtPath:customStylePath error:NULL];
+    }
 }
 
 @end

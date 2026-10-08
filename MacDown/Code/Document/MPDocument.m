@@ -3265,7 +3265,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 
     MPExportPanelAccessoryViewController *controller =
         [[MPExportPanelAccessoryViewController alloc] init];
-    controller.stylesIncluded = (BOOL)self.preferences.htmlStyleName;
+    controller.stylesIncluded = self.preferences.htmlStyleName != nil;
     controller.highlightingIncluded = self.preferences.htmlSyntaxHighlighting;
     panel.accessoryView = controller.view;
 
