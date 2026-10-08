@@ -665,6 +665,7 @@ typedef NS_ENUM(NSInteger, MPReferenceKind) {
 - (BOOL)replacePreviewRange:(NSRange)range withString:(NSString *)replacement preservingSelection:(NSRange)selection;
 - (void)applyPreviewZoom;
 - (BOOL)performPreviewFormattingAction:(NSString *)action value:(NSString *)value;
+- (BOOL)queuePendingPreviewFormattingPayload:(NSDictionary *)payload;
 - (void)stepDocumentZoomDirection:(NSInteger)direction;
 // Fix #4: Extracted from -windowControllerDidLoadNib:/-close so a headless
 // test can register/unregister the shared-preference (zoom) KVO observer
@@ -6053,15 +6054,19 @@ to link outside that scope.", \
     return [self replacePreviewRange:range withString:[NSString stringWithFormat:@"%@%@%@",before,selected,after] preservingSelection:selectedRange];
 }
 
-// A toolbar click retains the preview's first responder. Consume its verified
-// selection through the same transaction as the floating panel; never fall back
-// to the editor's unrelated insertion point when that selection is unsupported.
-- (BOOL)performPreviewFormattingAction:(NSString *)action value:(NSString *)value
+// Both native buttons and popup bridge requests continue through one queue.
+// The pending source is newer than the visible DOM, so validate the old DOM's
+// token and proven selection before replaying only formatting commands.
+- (BOOL)queuePendingPreviewFormattingPayload:(NSDictionary *)payload
 {
-    if (![self previewHasFindFocus]) return NO;
-    JSContext *context = self.preview.mainFrame.javaScriptContext;
-    JSValue *function = context[@"window"][@"macdownPreviewEditor"][@"selectionPayload"];
-    NSDictionary *payload = [[function callWithArguments:@[action, value ?: NSNull.null]] toDictionary];
+    if (![payload isKindOfClass:NSDictionary.class]) return NO;
+    NSString *action = payload[@"action"], *value = payload[@"value"];
+    if (self.documentClosed || self.printing ||
+        ![payload[@"token"] isKindOfClass:NSString.class] ||
+        ![payload[@"token"] isEqualToString:self.previewEditToken] ||
+        ![action isKindOfClass:NSString.class] ||
+        ![@[@"block",@"bold",@"italic",@"underline",@"strike",@"clear",@"code",@"link",@"math"] containsObject:action] ||
+        (value && ![value isKindOfClass:NSString.class])) return NO;
     if (self.previewSelectionToRestore && [self.previewSelectionToRestore[@"source"] isEqualToString:self.editor.string]) {
         // If the user selected another run in the still-visible old DOM,
         // cancel the continuation instead of formatting the previous passage.
@@ -6085,6 +6090,19 @@ to link outside that scope.", \
         [self.previewQueuedFormatting addObject:request];
         return YES;
     }
+    return NO;
+}
+
+// A toolbar click retains the preview's first responder. Consume its verified
+// selection through the same transaction as the floating panel; never fall back
+// to the editor's unrelated insertion point when that selection is unsupported.
+- (BOOL)performPreviewFormattingAction:(NSString *)action value:(NSString *)value
+{
+    if (![self previewHasFindFocus]) return NO;
+    JSContext *context = self.preview.mainFrame.javaScriptContext;
+    JSValue *function = context[@"window"][@"macdownPreviewEditor"][@"selectionPayload"];
+    NSDictionary *payload = [[function callWithArguments:@[action, value ?: NSNull.null]] toDictionary];
+    if ([self queuePendingPreviewFormattingPayload:payload]) return YES;
     if ([self applyPreviewEditPayload:payload])
         [context evaluateScript:@"window.macdownPreviewEditor.finish()"];
     else {
@@ -6103,6 +6121,7 @@ to link outside that scope.", \
     if ([payload[@"action"] isEqual:@"refresh"] && [payload[@"token"] isEqual:self.previewEditToken] && ![self previewDraft]) {
         [self.renderer parseAndRenderNow]; return;
     }
+    if ([self queuePendingPreviewFormattingPayload:payload]) return;
     if ([self applyPreviewEditPayload:payload]) {
         [self.preview.mainFrame.javaScriptContext evaluateScript:@"window.macdownPreviewEditor.finish()"];
     } else {

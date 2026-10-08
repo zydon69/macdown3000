@@ -2531,4 +2531,106 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
     }
 }
 
+- (void)testPreviewPopupQueuesRapidFormattingWithoutReselecting
+{
+    MPDocument *document = [MPDocument new];
+    document.fileURL = self.testFileURL;
+    MPPreferences *preferences = document.preferences;
+    BOOL oldMath = preferences.htmlMathJax;
+    BOOL oldSmart = preferences.extensionSmartyPants;
+    BOOL oldIntra = preferences.extensionIntraEmphasis;
+    MPEditorView *editor = [[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+    WebView *web = [[WebView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:web.frame styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+    window.releasedWhenClosed = NO;
+    window.contentView = web;
+    document.editor = editor; document.preview = web;
+    web.frameLoadDelegate = (id<WebFrameLoadDelegate>)document;
+    web.policyDelegate = (id<WebPolicyDelegate>)document;
+    MPRenderer *renderer = [MPRenderer new];
+    renderer.delegate = (id<MPRendererDelegate>)document;
+    renderer.dataSource = (id<MPRendererDataSource>)document;
+    document.renderer = renderer;
+    NSOperationQueue *parseQueue = [renderer valueForKey:@"parseQueue"];
+    @try {
+        preferences.htmlMathJax = NO;
+        preferences.extensionSmartyPants = NO;
+        preferences.extensionIntraEmphasis = YES;
+        renderer.rendererFlags = preferences.rendererFlags;
+        editor.string = @"Selected passage\n\nNeighbor unchanged.\n";
+        [renderer parseMarkdown:editor.string]; [renderer render];
+        XCTNSPredicateExpectation *loaded = [[XCTNSPredicateExpectation alloc]
+            initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o, NSDictionary *b) {
+                return !web.isLoading && !document.alreadyRenderingInWeb && document.previewEditRanges.count > 0;
+            }] object:document];
+        [self waitForExpectations:@[loaded] timeout:10];
+        XCTAssertNotNil(document.previewEditToken);
+        if (!document.previewEditToken) return;
+        XCTAssertTrue([window makeFirstResponder:web]);
+        XCTAssertTrue([document previewHasFindFocus]);
+        NSString *initialToken = [document.previewEditToken copy];
+        XCTAssertTrue([[web stringByEvaluatingJavaScriptFromString:
+            @"(function(){var e=window.macdownPreviewEditor,s=e.elements().spans.find(function(s){return s.textContent==='Selected passage';});if(!s)return false;var r=document.createRange();r.setStart(s.firstChild,0);r.setEnd(s.firstChild,8);var selection=getSelection();selection.removeAllRanges();selection.addRange(r);window.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,button:0}));return true;})()"] boolValue]);
+        XCTNSPredicateExpectation *panel = [[XCTNSPredicateExpectation alloc]
+            initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o, NSDictionary *b) {
+                return [[web stringByEvaluatingJavaScriptFromString:@"getComputedStyle(macdownPreviewEditor.elements().panel).display"] isEqualToString:@"block"];
+            }] object:web];
+        [self waitForExpectations:@[panel] timeout:5];
+        // Delay only the real background parser: both commands still traverse
+        // actual popup listeners, WebView policy routing and native source edits.
+        parseQueue.suspended = YES;
+        [web stringByEvaluatingJavaScriptFromString:@"macdownPreviewEditor.elements().panel.querySelector('button[data-mp-style=bold]').click()"];
+        XCTNSPredicateExpectation *firstApplied = [[XCTNSPredicateExpectation alloc]
+            initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o, NSDictionary *b) {
+                return [editor.string isEqualToString:@"**Selected** passage\n\nNeighbor unchanged.\n"];
+            }] object:editor];
+        [self waitForExpectations:@[firstApplied] timeout:5];
+        XCTAssertEqualObjects(document.previewEditToken, initialToken);
+        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"getSelection().toString()"], @"Selected");
+        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"getComputedStyle(macdownPreviewEditor.elements().panel).display"], @"block");
+        // Forged/stale bridge requests must not become a continuation of the
+        // fresh selection, or consume the valid pending formatting operation.
+        NSDictionary *selectionPayload = [[web.mainFrame.javaScriptContext[@"window"][@"macdownPreviewEditor"][@"selectionPayload"]
+            callWithArguments:@[@"italic",NSNull.null]] toDictionary];
+        NSDictionary *pending = [[document valueForKey:@"previewSelectionToRestore"] copy];
+        for (NSDictionary *invalidFields in @[@{@"token":@"expired-token"},@{@"action":@"replace"},@{@"value":@17}]) {
+            NSMutableDictionary *invalid = [selectionPayload mutableCopy];
+            [invalid addEntriesFromDictionary:invalidFields];
+            NSString *JSON = [[NSString alloc] initWithData:[NSJSONSerialization dataWithJSONObject:invalid options:0 error:NULL] encoding:NSUTF8StringEncoding];
+            NSURLComponents *URL = [NSURLComponents componentsWithString:@"x-macdown-preview://edit"];
+            URL.queryItems = @[[NSURLQueryItem queryItemWithName:@"payload" value:JSON]];
+            [document handlePreviewEdit:URL.URL];
+            XCTAssertEqualObjects(editor.string,@"**Selected** passage\n\nNeighbor unchanged.\n");
+            XCTAssertEqualObjects([document valueForKey:@"previewSelectionToRestore"],pending);
+            XCTAssertEqual([[document valueForKey:@"previewQueuedFormatting"] count],0u);
+        }
+        [web stringByEvaluatingJavaScriptFromString:@"macdownPreviewEditor.elements().panel.querySelector('button[data-mp-style=italic]').click()"];
+        XCTNSPredicateExpectation *secondRouted = [[XCTNSPredicateExpectation alloc]
+            initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o, NSDictionary *b) {
+                return [[document valueForKey:@"previewQueuedFormatting"] count] > 0 ||
+                    [[web stringByEvaluatingJavaScriptFromString:@"macdownPreviewEditor.elements().panel.textContent.indexOf('refus')>=0"] boolValue];
+            }] object:document];
+        [self waitForExpectations:@[secondRouted] timeout:5];
+        parseQueue.suspended = NO;
+        XCTNSPredicateExpectation *finished = [[XCTNSPredicateExpectation alloc]
+            initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o, NSDictionary *b) {
+                return !web.isLoading && !document.alreadyRenderingInWeb &&
+                    ![document.previewEditToken isEqualToString:initialToken] &&
+                    ![[document valueForKey:@"previewQueuedFormatting"] count] &&
+                    ![document valueForKey:@"previewSelectionToRestore"];
+            }] object:document];
+        [self waitForExpectations:@[finished] timeout:10];
+        XCTAssertEqualObjects(editor.string, @"***Selected*** passage\n\nNeighbor unchanged.\n");
+        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"getSelection().toString()"], @"Selected");
+        XCTAssertTrue([[web stringByEvaluatingJavaScriptFromString:@"(function(){var p=macdownPreviewEditor.elements().panel;return p.querySelector('[data-mp-style=bold]').getAttribute('aria-pressed')==='true'&&p.querySelector('[data-mp-style=italic]').getAttribute('aria-pressed')==='true';})()"] boolValue]);
+    } @finally {
+        parseQueue.suspended = NO;
+        web.frameLoadDelegate = nil; web.policyDelegate = nil;
+        [window close]; [document close];
+        preferences.htmlMathJax = oldMath;
+        preferences.extensionSmartyPants = oldSmart;
+        preferences.extensionIntraEmphasis = oldIntra;
+    }
+}
+
 @end
