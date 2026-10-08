@@ -30,6 +30,7 @@
 @interface MPPreferences (PreviewEditingTests)
 - (int)rendererFlags;
 
+
 @end
 
 // A real loopback HTTP response exercises WebKit navigation and its delegates.
@@ -2348,6 +2349,92 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
 {
     [self assertPreviewBlockSource:@"# Title\n===\n\nNeighbor.\n" texts:@[@"Title"] value:@"h3"
         expected:@"### Title\n===\n\nNeighbor.\n" HTML:@">Title</h3>"];
+}
+
+- (void)testPreviewControlsPreserveAuthoredIDsAndRunAttributes
+{
+    MPDocument *document = [MPDocument new];
+    document.fileURL = self.testFileURL;
+    MPEditorView *editor = [[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+    WebView *web = [[WebView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+    MPRenderer *renderer = [MPRenderer new];
+    document.editor=editor; document.preview=web; document.renderer=renderer;
+    renderer.delegate=(id<MPRendererDelegate>)document;
+    renderer.dataSource=(id<MPRendererDataSource>)document;
+    web.frameLoadDelegate=(id<WebFrameLoadDelegate>)document;
+    web.policyDelegate=(id<WebPolicyDelegate>)document;
+    BOOL oldMath=document.preferences.htmlMathJax;
+    BOOL oldSmart=document.preferences.extensionSmartyPants;
+    BOOL oldHighlight=document.preferences.htmlSyntaxHighlighting;
+    BOOL oldTasks=document.preferences.htmlTaskList;
+    BOOL oldIntra=document.preferences.extensionIntraEmphasis;
+    BOOL oldMermaid=document.preferences.htmlMermaid, oldGraphviz=document.preferences.htmlGraphviz;
+    @try {
+        document.preferences.htmlMathJax=NO;
+        document.preferences.htmlSyntaxHighlighting=NO;
+        document.preferences.htmlTaskList=YES;
+        document.preferences.extensionIntraEmphasis=YES;
+        document.preferences.htmlMermaid=NO; document.preferences.htmlGraphviz=NO;
+        document.preferences.extensionSmartyPants=NO;
+        NSString *source=@"<div id=\"macdownPreviewEditor\">Authored editor name</div>\n\n<div id=\"Prism\">Authored Prism name</div>\n\n<form id=\"MathJax\"><input name=\"Hub\"></form>\n\n<div id=\"macdown-preview-edit-style\">Authored style text</div>\n\n<div id=\"macdown-preview-format\">Authored panel text</div>\n\n<div id=\"macdown-preview-edit-error\">Authored error text</div>\n\n<span id=\"authored-run\" data-mp-edit-id=\"0\">Authored run text</span>\n\nEditable passage\n\n- [ ] Task box\n";
+        renderer.rendererFlags=document.preferences.rendererFlags;
+        editor.string=source;
+        [renderer parseMarkdown:source];[renderer render];
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:
+            [NSPredicate predicateWithBlock:^BOOL(id object,NSDictionary *bindings){
+                return !web.isLoading && document.previewEditToken.length>0;
+            }] object:web]] timeout:10];
+        void (^assertAuthoredText)(void)=^{
+            XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"document.getElementById('Prism').textContent"],@"Authored Prism name");
+            XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"document.getElementById('macdownPreviewEditor').textContent"],@"Authored editor name");
+            XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"document.querySelector('div#macdown-preview-edit-style').textContent"],@"Authored style text");
+            XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"document.querySelector('div#macdown-preview-format').textContent"],@"Authored panel text");
+            XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"document.querySelector('div#macdown-preview-edit-error').textContent"],@"Authored error text");
+            XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"document.getElementById('authored-run').textContent"],@"Authored run text");
+        };
+        assertAuthoredText();
+        XCTAssertTrue([[web stringByEvaluatingJavaScriptFromString:@"!!document.querySelector('input[type=checkbox]')&&!document.querySelector('input[type=checkbox]').disabled"] boolValue],@"The initial real task checkbox must be interactive");
+        BOOL hasOwnedElements=[[web stringByEvaluatingJavaScriptFromString:@"!!window.macdownPreviewEditor && typeof window.macdownPreviewEditor.elements==='function'"] boolValue];
+        XCTAssertTrue(hasOwnedElements,@"Preview controls must have their own DOM identity");
+        if (!hasOwnedElements) return;
+        XCTAssertTrue([[web stringByEvaluatingJavaScriptFromString:@"(function(){var ui=macdownPreviewEditor.elements();return ui.style.tagName==='STYLE' && ui.panel!==document.querySelector('div#macdown-preview-format') && !ui.spans.includes(document.getElementById('authored-run'));})()"] boolValue]);
+        [web stringByEvaluatingJavaScriptFromString:@"(function(){var span=macdownPreviewEditor.elements().spans.find(function(n){return n.textContent==='Editable passage';});if(!span)return;var r=document.createRange();r.selectNodeContents(span);getSelection().removeAllRanges();getSelection().addRange(r);window.dispatchEvent(new Event('scroll'));})()"];
+        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"getSelection().toString()"],@"Editable passage");
+        JSValue *selected=[web.mainFrame.javaScriptContext evaluateScript:@"macdownPreviewEditor.selectionPayload('bold')"];
+        NSDictionary *payload=selected.isNull||selected.isUndefined?nil:selected.toDictionary;
+        XCTAssertNotNil(payload);
+        if (!payload) return;
+        NSString *oldToken=document.previewEditToken;
+        [web stringByEvaluatingJavaScriptFromString:@"window.__mpIdentitySentinel=1;"];
+        XCTAssertTrue([document applyPreviewEditPayload:payload]);
+        XCTAssertEqualObjects(editor.string,[source stringByReplacingOccurrencesOfString:@"Editable passage" withString:@"**Editable passage**"]);
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:
+            [NSPredicate predicateWithBlock:^BOOL(id object,NSDictionary *bindings){
+                return !web.isLoading && ![document.previewEditToken isEqualToString:oldToken];
+            }] object:web]] timeout:10];
+        assertAuthoredText();
+        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"window.__mpIdentitySentinel"],@"1",@"This regression must consume the fast body replacement path");
+        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"getSelection().toString()"],@"Editable passage");
+        [web stringByEvaluatingJavaScriptFromString:@"macdownPreviewEditor.showFormattingError();window.dispatchEvent(new Event('scroll'));"];
+        assertAuthoredText();
+        XCTAssertTrue([[web stringByEvaluatingJavaScriptFromString:@"!!macdownPreviewEditor.elements().panel.querySelector('#macdown-preview-edit-error')"] boolValue]);
+        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"getComputedStyle(macdownPreviewEditor.elements().panel).display"],@"block");
+        BOOL taskEnabled=[[web stringByEvaluatingJavaScriptFromString:@"(function(){var e=document.querySelector('input[type=checkbox]');return !!e&&!e.disabled;})()"] boolValue];
+        XCTAssertTrue(taskEnabled,@"Optional globals must not interrupt task-list initialization after DOM replacement");
+        if (taskEnabled) {
+            [web stringByEvaluatingJavaScriptFromString:@"document.querySelector('input[type=checkbox]').click();"];
+            [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:
+                [NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return [editor.string containsString:@"- [x] Task box"];} ] object:editor]] timeout:5];
+        }
+    } @finally {
+        web.frameLoadDelegate=nil; web.policyDelegate=nil; [document close];
+        document.preferences.htmlMathJax=oldMath;
+        document.preferences.extensionSmartyPants=oldSmart;
+        document.preferences.htmlSyntaxHighlighting=oldHighlight;
+        document.preferences.htmlTaskList=oldTasks;
+        document.preferences.extensionIntraEmphasis=oldIntra;
+        document.preferences.htmlMermaid=oldMermaid; document.preferences.htmlGraphviz=oldGraphviz;
+    }
 }
 
 @end

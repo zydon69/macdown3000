@@ -2628,15 +2628,15 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
                     @"  if(tokenMeta){tokenMeta.content=window.__macdownTempCheckboxToken;}"
                     @"  delete window.__macdownTempCheckboxToken;"
                     @"  var body = document.body;"
-                    @"  var panel=document.getElementById('macdown-preview-format');"
-                    @"  var editStyle=document.getElementById('macdown-preview-edit-style');"
+                    @"  var ui=window.macdownPreviewEditor&&typeof window.macdownPreviewEditor.elements==='function'&&window.macdownPreviewEditor.elements();"
+                    @"  var panel=ui&&ui.panel,editStyle=ui&&ui.style;"
                     @"  if(panel)panel.remove();if(editStyle)editStyle.remove();"
                     @"  body.innerHTML = html;"
                     @"  if(editStyle)body.appendChild(editStyle);if(panel)body.appendChild(panel);"
-                    @"  if(window.Prism){Prism.highlightAll();}"
+                    @"  if(window.Prism&&typeof Prism.highlightAll==='function'){Prism.highlightAll();}"
                     @"  if(typeof window.macdownInitTaskList==='function'){window.macdownInitTaskList();}"
                     @"  if(typeof window.macdownInitTableResize==='function'){window.macdownInitTableResize();}"
-                    @"  if(window.MathJax&&MathJax.Hub){"
+                    @"  if(window.MathJax&&MathJax.Hub&&typeof MathJax.Hub.Queue==='function'){"
                     @"    MathJax.Hub.Queue(['Typeset',MathJax.Hub]);"
                     @"    MathJax.Hub.Queue(function(){"
                     @"      window.scrollTo(0,scrollY);"
@@ -5444,12 +5444,12 @@ to link outside that scope.", \
     JSContext *context = self.preview.mainFrame.javaScriptContext;
     if (!context || ![self.preview.mainFrame.dataSource.request.URL isEqual:self.currentBaseUrl]) return;
     if ([self.previewEditToken isEqualToString:self.renderer.checkboxBridgeToken] &&
-        [[context evaluateScript:@"Boolean(document.querySelector('[data-mp-edit-id]'))"] toBool]) return;
+        [[context evaluateScript:@"Boolean(window.macdownPreviewEditor&&typeof window.macdownPreviewEditor.elements==='function'&&window.macdownPreviewEditor.elements().spans.some(function(n){return n.isConnected;}))"] toBool]) return;
     NSString *token = [[context evaluateScript:@"(function(){var m=document.querySelector('meta[name=\"macdown-checkbox-token\"]');return m?m.content:'';})()"] toString];
     if (![token isEqualToString:self.renderer.checkboxBridgeToken]) return;
     // Collect document text and inline code, excluding generated diagrams,
     // code blocks, navigation and controls. Every source match is proven below.
-    NSString *scan = @"(function(){var a=[],w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,null,false),n;while((n=w.nextNode())){var p=n.parentElement;if(!p||(!n.nodeValue.trim()&&(!p.closest('p,h1,h2,h3,h4,h5,h6,li,summary')||/[\\r\\n]/.test(n.nodeValue)))||p.closest('script,style,pre,nav,textarea,button,select,svg,math,.MathJax,.MathJax_Display,#macdown-preview-format,[data-mp-edit-id]'))continue;if(a.length>=2000)return '[]';a.push(n);}window.__macdownPreviewEditNodes=a;return JSON.stringify(a.map(function(n){return n.nodeValue;}));})()";
+    NSString *scan = @"(function(){var a=[],ui=window.macdownPreviewEditor&&typeof window.macdownPreviewEditor.elements==='function'&&window.macdownPreviewEditor.elements(),owned=ui?[ui.panel,ui.style].concat(ui.spans).filter(function(e){return e&&e.isConnected;}):[],w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,null,false),n;while((n=w.nextNode())){var p=n.parentElement;if(!p||owned.some(function(e){return e&&e.contains(n);})||(!n.nodeValue.trim()&&(!p.closest('p,h1,h2,h3,h4,h5,h6,li,summary')||/[\\r\\n]/.test(n.nodeValue)))||p.closest('script,style,pre,nav,textarea,button,select,svg,math,.MathJax,.MathJax_Display'))continue;if(a.length>=2000)return '[]';a.push(n);}window.__macdownPreviewEditNodes=a;return JSON.stringify(a.map(function(n){return n.nodeValue;}));})()";
     NSString *json = [[context evaluateScript:scan] toString];
     NSArray *texts = json ? [NSJSONSerialization JSONObjectWithData:[json dataUsingEncoding:NSUTF8StringEncoding]
                                                    options:0 error:NULL] : nil;

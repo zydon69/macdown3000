@@ -2,11 +2,14 @@
 (function () {
   'use strict';
   var config = window.__macdownPreviewEditConfig;
-  var retainedPanel = config && config.selection ? document.getElementById('macdown-preview-format') : null;
-  if (window.macdownPreviewEditor) window.macdownPreviewEditor.destroy(!!retainedPanel);
+  var previousEditor = window.macdownPreviewEditor;
+  var retainedUI = config && config.selection && previousEditor && typeof previousEditor.elements==='function' ? previousEditor.elements() : null;
+  var retainedPanel = retainedUI ? retainedUI.panel : null;
+  if (previousEditor && typeof previousEditor.destroy==='function') previousEditor.destroy(!!retainedPanel);
   delete window.__macdownPreviewEditConfig;
   if (!config || !config.nodes) return;
-  var panel = null, active = null, saved = null, timer = null, errorSelection = null;
+  var panel = null, panelStyle = null, errorMessage = null, active = null, saved = null, timer = null, errorSelection = null;
+  var mappedSpans = [], panelClass = 'macdown-preview-ui-' + config.token.replace(/[^a-zA-Z0-9_-]/g,''), runClass = panelClass + '-run';
   var handlers = [], rendering = false, selectingWithMouse = false;
   function listen(target, name, fn) {
     target.addEventListener(name, fn, false);
@@ -29,13 +32,17 @@
     var payload = draft();
     if (payload) send(payload); else finish();
   }
+  function mappedSpan(id) {
+    return mappedSpans.find(function(span){return span._mpID===id && span.isConnected;});
+  }
   function currentSelection() {
     var selection=window.getSelection();
     if(active || !selection || selection.isCollapsed || !selection.rangeCount) return null;
     var range=selection.getRangeAt(0), matches=[], spans=[];
     // WebKit can put heading/word-selection boundaries on elements rather
     // than text nodes. Resolve the intersection without guessing source runs.
-    document.querySelectorAll('[data-mp-edit-id]').forEach(function(span){
+    mappedSpans.forEach(function(span){
+      if(!span.isConnected) return;
       if(!range.intersectsNode(span)) return;
       var prefix=document.createRange(), start=0, end=span.textContent.length;
       prefix.selectNodeContents(span);
@@ -64,7 +71,7 @@
         var start=node===range.startContainer?range.startOffset:0;
         var end=node===range.endContainer?range.endOffset:node.nodeValue.length;
         var selectedText=node.nodeValue.substring(start,end);
-        if(!selectedText || node.parentElement.closest('[data-mp-edit-id]')) continue;
+        if(!selectedText || spans.some(function(span){return span.contains(node);})) continue;
         if(/\S/.test(selectedText) || !/[\r\n]/.test(selectedText) ||
           node.parentElement.closest('p,h1,h2,h3,h4,h5,h6,li')) return null;
         var before=null, after=null;
@@ -113,6 +120,7 @@
   }
   function createPanel() {
     panel = retainedPanel || document.createElement('div'); panel.id = 'macdown-preview-format';
+    panel.className=panelClass;
     panel.setAttribute('data-mp-preview-ui',config.token);
     var previousStyle = retainedPanel ? retainedPanel.style.cssText : null;
     panel.textContent = '';
@@ -137,14 +145,15 @@
     button('Lien',function(){var url=window.prompt('Adresse du lien (https://…)','https://');if(url) command('link',url);},'link');
     var editButton=button('Modifier le texte',function(){
       if(!saved || (saved.runs && saved.runs.length!==1)) return;
-      var span=document.querySelector('[data-mp-edit-id="'+saved.id+'"]');
+      var span=mappedSpan(saved.id);
       if(span && span.closest('code')) return;
       hide(); if(span) begin(span);
     });
     editButton.setAttribute('data-mp-edit-text','');
-    var style = document.getElementById('macdown-preview-edit-style') || document.createElement('style'); style.id='macdown-preview-edit-style';
-    style.textContent='#macdown-preview-format button,#macdown-preview-format select{font:inherit;color:#fff;background:#3c3c3c;border:1px solid #666;border-radius:4px;margin:2px;padding:5px;cursor:pointer} #macdown-preview-format button:disabled{opacity:.5;cursor:default} #macdown-preview-format [aria-pressed="true"],#macdown-preview-format select[data-mp-active],#macdown-preview-format option[data-mp-active]{color:#2784DE} [data-mp-edit-id][contenteditable]{outline:2px solid #4385be;outline-offset:3px} @media print{#macdown-preview-format{display:none!important}}';
-    document.body.appendChild(style); document.body.appendChild(panel);
+    panelStyle = retainedUI ? retainedUI.style : document.createElement('style'); panelStyle.id='macdown-preview-edit-style';
+    var selector='.'+panelClass;
+    panelStyle.textContent=selector+' button,'+selector+' select{font:inherit;color:#fff;background:#3c3c3c;border:1px solid #666;border-radius:4px;margin:2px;padding:5px;cursor:pointer} '+selector+' button:disabled{opacity:.5;cursor:default} '+selector+' [aria-pressed="true"],'+selector+' select[data-mp-active],'+selector+' option[data-mp-active]{color:#2784DE} .'+runClass+'[contenteditable]{outline:2px solid #4385be;outline-offset:3px} @media print{'+selector+'{display:none!important}}';
+    document.body.appendChild(panelStyle); document.body.appendChild(panel);
   }
   function begin(span) {
     if (active === span) return;
@@ -160,8 +169,10 @@
     var node = window.__macdownPreviewEditNodes[item.node];
     if (!node || !node.parentNode || node.nodeValue !== item.text) return;
     var span=document.createElement('span'); span.setAttribute('data-mp-edit-id',String(item.id));
+    span.className=runClass;
     span._mpID=item.id; span.setAttribute('title','Sélectionner pour mettre en forme ou choisir Modifier le texte.');
     node.parentNode.replaceChild(span,node); span.appendChild(node);
+    mappedSpans.push(span);
     listen(span,'blur',commit);
     listen(span,'keydown',function(e){
       if(e.isComposing) return;
@@ -176,7 +187,7 @@
   createPanel();
   function updateStyles(selected) {
     var runs=selected ? (selected.runs || [selected]) : [];
-    var spans=runs.map(function(run){return document.querySelector('[data-mp-edit-id="'+run.id+'"]');});
+    var spans=runs.map(function(run){return mappedSpan(run.id);});
     var selectors={bold:'strong,b',italic:'em,i',underline:'u',strike:'del,s,strike',code:'code',link:'a[href]',math:'.MathJax,.MathJax_Display'};
     panel.querySelectorAll('[data-mp-style]').forEach(function(control){
       var style=control.getAttribute('data-mp-style'), selector=selectors[style];
@@ -210,9 +221,8 @@
   function updatePanel() {
     if(active || rendering || selectingWithMouse) return;
     var selected=currentSelection();
-    var message=document.getElementById('macdown-preview-edit-error');
-    if(message && JSON.stringify(selected)!==errorSelection) {
-      message.remove(); errorSelection=null;
+    if(errorMessage && JSON.stringify(selected)!==errorSelection) {
+      errorMessage.remove(); errorMessage=null; errorSelection=null;
     }
     if(!selected){if(!panel.contains(document.activeElement)){saved=null;hide();}return;}
     saved=selected; updateStyles(selected);
@@ -242,15 +252,14 @@
   function showEditError(text) {
     errorSelection=JSON.stringify(currentSelection() || saved);
     panel.style.display='block'; panel.style.left='12px'; panel.style.top='12px';
-    var message=document.getElementById('macdown-preview-edit-error');
-    if(!message){message=document.createElement('div');message.id='macdown-preview-edit-error';panel.insertBefore(message,panel.firstChild);}
-    message.textContent=text;
+    if(!errorMessage){errorMessage=document.createElement('div');errorMessage.id='macdown-preview-edit-error';panel.insertBefore(errorMessage,panel.firstChild);}
+    errorMessage.textContent=text;
   }
   function restoreSelection(selected) {
     if(!selected) return;
     var runs=selected.runs || [selected], spans=[];
     if(!runs.length || !runs.every(function(run){
-      var span=document.querySelector('[data-mp-edit-id="'+run.id+'"]');
+      var span=mappedSpan(run.id);
       if(!span || !span.firstChild || span.firstChild.nodeType!==3 ||
         !Number.isInteger(run.start) || !Number.isInteger(run.end) ||
         run.start<0 || run.end>span.textContent.length || run.end<=run.start ||
@@ -268,7 +277,7 @@
   function normalizedSelectionText(text) {
     return text.replace(/\r\n?/g,'\n').replace(/\n+/g,'\n');
   }
-  window.macdownPreviewEditor={prepareForRender:function(){saved=currentSelection() || saved;rendering=true;clearTimeout(timer);},draft:draft,finish:finish,selectionPayload:selectionPayload,showError:function(){
+  window.macdownPreviewEditor={elements:function(){return {panel:panel,style:panelStyle,spans:mappedSpans.slice()};},prepareForRender:function(){saved=currentSelection() || saved;rendering=true;clearTimeout(timer);},draft:draft,finish:finish,selectionPayload:selectionPayload,showError:function(){
     showEditError('Modification refusée : la source a changé. Copiez votre texte, puis appuyez sur Échap pour annuler.');
   },showFormattingError:function(){
     showEditError('Mise en forme refusée : cette sélection ne peut pas être représentée correctement en Markdown. Sélectionnez un passage plus court.');
@@ -276,7 +285,7 @@
     clearTimeout(timer); active=null;
     handlers.forEach(function(h){h[0].removeEventListener(h[1],h[2],false);});
     if(!preservePanel && panel && panel.parentNode) panel.parentNode.removeChild(panel);
-    var style=document.getElementById('macdown-preview-edit-style');if(style && !preservePanel)style.remove();
+    if(panelStyle && !preservePanel)panelStyle.remove();
   }};
   restoreSelection(config.selection);
   updatePanel();
