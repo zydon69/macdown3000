@@ -257,10 +257,11 @@
                 </popUpButton>
                 <button translatesAutoresizingMaskIntoConstraints="NO" id="reader-wrap">
                     <rect key="frame" x="106" y="100" width="356" height="18"/>
-                    <buttonCell key="cell" type="check" title="Wrap long code lines" lineBreakMode="wordWrap" bezelStyle="regularSquare" imagePosition="left" id="reader-wrap-cell">
+                    <buttonCell key="cell" type="check" title="Wrap long code lines" lineBreakMode="wordWrap" bezelStyle="regularSquare" imagePosition="left" state="off" inset="2" id="reader-wrap-cell">
                         <behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/>
                         <font key="font" metaFont="system"/>
                     </buttonCell>
+                    <userDefinedRuntimeAttributes><userDefinedRuntimeAttribute type="string" keyPath="accessibilityIdentifier" value="code-wrap-setting"/></userDefinedRuntimeAttributes>
                     <connections><binding destination="-2" name="value" keyPath="self.preferences.htmlWrapCodeBlocks" id="reader-wrap-binding"/></connections>
                 </button>
             </subviews>

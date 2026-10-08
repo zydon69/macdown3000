@@ -63,6 +63,7 @@
                                         <menuItem title="Appearance: Dark" id="app-appearance-dark"/>
                                     </items></menu>
                                 </popUpButtonCell>
+                                <userDefinedRuntimeAttributes><userDefinedRuntimeAttribute type="string" keyPath="accessibilityIdentifier" value="application-appearance"/></userDefinedRuntimeAttributes>
                                 <connections><binding destination="-2" name="selectedIndex" keyPath="self.preferences.applicationAppearance" id="app-appearance-binding"/></connections>
                             </popUpButton>
 
@@ -143,7 +144,8 @@
                             </button>
                             <button translatesAutoresizingMaskIntoConstraints="NO" id="reader-progress-toggle">
                                 <rect key="frame" x="16" y="30" width="285" height="18"/>
-                                <buttonCell key="cell" type="check" title="Show reading position" lineBreakMode="wordWrap" bezelStyle="regularSquare" imagePosition="left" id="reader-progress-cell"><behavior key="behavior" changeContents="YES" doesNotDimImage="YES"/><font key="font" metaFont="system"/></buttonCell>
+                                <buttonCell key="cell" type="check" title="Show reading position" lineBreakMode="wordWrap" bezelStyle="regularSquare" imagePosition="left" state="off" inset="2" id="reader-progress-cell"><behavior key="behavior" changeContents="YES" doesNotDimImage="YES" lightByContents="YES"/><font key="font" metaFont="system"/></buttonCell>
+                                <userDefinedRuntimeAttributes><userDefinedRuntimeAttribute type="string" keyPath="accessibilityIdentifier" value="reading-progress-setting"/></userDefinedRuntimeAttributes>
                                 <connections><binding destination="-2" name="value" keyPath="self.preferences.editorShowReadingProgress" id="reader-progress-binding"/></connections>
                             </button>
                             <button translatesAutoresizingMaskIntoConstraints="NO" id="UZT-HE-EaK">
