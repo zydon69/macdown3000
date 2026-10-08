@@ -2684,4 +2684,11 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
     }
 }
 
+- (void)testPreviewParagraphSetextConversionPreservesFollowingUnderlineLiteral
+{
+    [self assertPreviewBlockSource:@"Title\n---\n===\n\nNeighbor.\n" texts:@[@"Title"] value:@"paragraph"
+        expected:@"Title\n\n===\n\nNeighbor.\n" HTML:@"<p>Title</p>"];
+}
+
+
 @end

@@ -919,6 +919,47 @@
     } @finally { [window close]; }
 }
 
+- (void)testNormalTextSetextConversionPreservesConsecutiveUnderlineContext {
+    MPRenderer *renderer=[[MPRenderer alloc] init];
+    MPMockRendererDelegate *delegate=[[MPMockRendererDelegate alloc] init];
+    renderer.delegate=delegate;
+    NSWindow *window=[[NSWindow alloc] initWithContentRect:NSMakeRect(0,0,500,300)
+        styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
+    window.releasedWhenClosed=NO;
+    NSTextView *view=[[NSTextView alloc] initWithFrame:window.contentView.bounds];
+    [window.contentView addSubview:view]; view.allowsUndo=YES;
+    @try {
+    for(NSString *ending in @[@"\n",@"\r\n"]) {
+        NSString *source=[NSString stringWithFormat:@"Title%@---%@===%@",ending,ending,ending];
+        NSString *expected=[NSString stringWithFormat:@"Title%@%@===%@",ending,ending,ending];
+        NSString *before=[renderer HTMLForMarkdownSnapshot:source];
+        XCTAssertTrue([before containsString:@">Title</h2>"]);
+        XCTAssertTrue([before containsString:@"<h1 id=\"section\"></h1>"]);
+        for(NSNumber *length in @[@5,@(5+ending.length+3)]) {
+            view.string=source; view.selectedRange=NSMakeRange(0,length.unsignedIntegerValue);
+            [view.undoManager removeAllActions];
+            [view.undoManager beginUndoGrouping];
+            [view makeHeaderForSelectedLinesWithLevel:0 renderMarkdown:^NSString *(NSString *markdown){
+                return [renderer HTMLForMarkdownSnapshot:markdown];
+            }];
+            [view.undoManager endUndoGrouping];
+            XCTAssertEqualObjects(view.string,expected);
+            NSString *html=[renderer HTMLForMarkdownSnapshot:view.string];
+            XCTAssertTrue([html containsString:@"<p>Title</p>"],@"%@",html);
+            XCTAssertFalse([html containsString:@">Title</h"]);
+            XCTAssertTrue([html containsString:@"<h1 id=\"section\"></h1>"]);
+            XCTAssertLessThanOrEqual(NSMaxRange(view.selectedRange),view.string.length);
+            XCTAssertTrue([[view.string substringWithRange:view.selectedRange] hasPrefix:@"Title"]);
+            XCTAssertTrue(view.undoManager.canUndo);
+            if(view.undoManager.canUndo) {
+                [view.undoManager undo]; XCTAssertEqualObjects(view.string,source);
+                [view.undoManager redo]; XCTAssertEqualObjects(view.string,expected);
+            }
+        }
+    }
+    } @finally { [window close]; }
+}
+
 - (void)testNormalTextLargeHeadingSelectionUsesActualParserAndKeepsContents {
     NSMutableString *source=[NSMutableString string],*expected=[NSMutableString string];
     for(NSUInteger i=0;i<1000;i++) {

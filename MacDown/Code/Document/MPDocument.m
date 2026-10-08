@@ -5849,6 +5849,8 @@ to link outside that scope.", \
                 if ([singleParagraph firstMatchInString:beforeHTML options:0 range:NSMakeRange(0,beforeHTML.length)] &&
                     [singleHeading firstMatchInString:HTML options:0 range:NSMakeRange(0,HTML.length)]) line[@"setext"] = @YES;
             }
+            if ([line[@"setext"] boolValue] && i)
+                sourceLines[i-1][@"consumedSetextEnd"]=@(NSMaxRange([line[@"range"] rangeValue]));
             if (![line[@"setext"] boolValue]) {
                 NSRange original=[line[@"range"] rangeValue];
                 if (selectedRange.location>=original.location && selectedRange.location<NSMaxRange(original))
@@ -5967,12 +5969,14 @@ to link outside that scope.", \
                     if (!proved) return NO;
                     outputText = [prefix stringByAppendingString:plain];
                     [processed appendString:outputText];
-                    // Removing an ATX prefix must not turn its following
-                    // thematic break into a Setext underline.
+                    // Look past consumed Setext metadata: the first remaining
+                    // neighbor must not turn the requested paragraph into a heading.
                     NSRange originalLine = [line[@"range"] rangeValue];
-                    if (!prefix.length && heading && NSMaxRange(originalLine)<source.length) {
+                    NSNumber *consumedEnd=line[@"consumedSetextEnd"];
+                    NSUInteger nextOffset=consumedEnd ? consumedEnd.unsignedIntegerValue : NSMaxRange(originalLine);
+                    if (!prefix.length && (heading || consumedEnd) && nextOffset<source.length) {
                         NSUInteger nextStart, nextEnd, nextContentsEnd;
-                        [source getLineStart:&nextStart end:&nextEnd contentsEnd:&nextContentsEnd forRange:NSMakeRange(NSMaxRange(originalLine),0)];
+                        [source getLineStart:&nextStart end:&nextEnd contentsEnd:&nextContentsEnd forRange:NSMakeRange(nextOffset,0)];
                         NSString *nextText = [source substringWithRange:NSMakeRange(nextStart,nextContentsEnd-nextStart)];
                         if ([setext firstMatchInString:nextText options:0 range:NSMakeRange(0,nextText.length)]) {
                             [processed appendString:line[@"ending"]];

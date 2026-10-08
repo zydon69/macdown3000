@@ -691,6 +691,9 @@ static NSString * const kMPBlockquoteLinePattern = @"^((?:\\> ?)+).*$";
         BOOL underline=index+1<lines.count && [setext firstMatchInString:lines[index+1][@"text"]
             options:0 range:NSMakeRange(0,[lines[index+1][@"text"] length])]!=nil;
         if((!prefix || !selected) && !underline) continue;
+        // An underline is a delimiter, not another title candidate. Marking
+        // it would destroy the preceding heading in the batch parser probe.
+        if(!prefix && [setext firstMatchInString:text options:0 range:NSMakeRange(0,text.length)]) continue;
         NSString *marker=[@"macdownHeadingProbe" stringByAppendingString:NSUUID.UUID.UUIDString];
         markers[@(index)]=marker;
         NSUInteger insertion=prefix ? prefix.range.length : text.length;
@@ -777,8 +780,10 @@ static NSString * const kMPBlockquoteLinePattern = @"^((?:\\> ?)+).*$";
             }
             // A neighboring rule must stay a rule after removing an ATX
             // prefix. Without the blank separator it would become Setext.
-            extraSeparator=ending.length && i+1<lines.count && ![lines[i+1][@"underline"] boolValue] &&
-                [setext firstMatchInString:lines[i+1][@"text"] options:0 range:NSMakeRange(0,[lines[i+1][@"text"] length])]!=nil;
+            NSUInteger neighbor=i+1;
+            while(neighbor<lines.count && [lines[neighbor][@"underline"] boolValue]) neighbor++;
+            extraSeparator=ending.length && neighbor<lines.count &&
+                [setext firstMatchInString:lines[neighbor][@"text"] options:0 range:NSMakeRange(0,[lines[neighbor][@"text"] length])]!=nil;
         }
         if(!remove) [replacement appendFormat:@"%@%@%@%@",added,lineContent,ending,extraSeparator?ending:@""];
         NSUInteger boundaries[]={selection.location,NSMaxRange(selection)};
