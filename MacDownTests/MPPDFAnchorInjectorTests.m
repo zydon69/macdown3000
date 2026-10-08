@@ -6,6 +6,7 @@
 #import <sys/socket.h>
 #import <unistd.h>
 #import "MPDocument.h"
+#import "../MacDownCore/MPQuickLookRenderer.h"
 #import "MPPDFAnchorInjector.h"
 
 @interface MPDocument (NativePDFTests)
@@ -170,6 +171,22 @@
             XCTAssertNotEqualObjects(annotation.URL.host, @"macdown-pdf.invalid");
     }
 }
+- (void)testCollapsedCalloutBodyIsIncludedInPrintedPDF
+{
+    NSString *body = [[MPQuickLookRenderer new] renderMarkdown:
+        @"::: {.callout-note collapse=true}\n## Printable title\n\nHidden callout content 8675309.\n:::"];
+    MPNativePDFDocument *document = [self documentWithBody:body CSS:@""];
+    WebView *web = [document valueForKey:@"preview"];
+    XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:
+        @"String(document.querySelector('details').open)"], @"false");
+    PDFDocument *pdf = [self printTemporaryPDF:document];
+    XCTAssertTrue([pdf.string containsString:@"Hidden callout content 8675309"]);
+    XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:
+        @"String(document.querySelector('details').open)"], @"false",
+        @"Printing must preserve the preview collapse state");
+    [document close];
+}
+
 - (void)testCSSReorderingKeepsLinkSourceAndHeadingDestinationAfterReopening
 {
     MPNativePDFDocument *document = [self documentWithBody:
