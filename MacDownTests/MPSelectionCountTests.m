@@ -211,4 +211,34 @@
     }
 }
 
+- (void)testPreviewFormattingControlsDoNotChangeDocumentTextCounts
+{
+    WebView *web=[[WebView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+    @try {
+        [web.mainFrame loadHTMLString:@"<html><head><meta name=\"macdown-checkbox-token\" content=\"count-fixture\"></head><body><p>hello world</p><code>inline words</code><pre><code>excluded code</code></pre></body></html>" baseURL:nil];
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:
+            [NSPredicate predicateWithBlock:^BOOL(id object,NSDictionary *bindings){return !web.isLoading && web.mainFrame.DOMDocument.body!=nil;}] object:web]] timeout:10];
+        DOMNodeTextCount original=web.mainFrame.DOMDocument.textCount;
+        XCTAssertEqual(original.words,(NSUInteger)3);
+        NSString *script=[NSString stringWithContentsOfURL:[NSBundle.mainBundle URLForResource:@"preview-edit" withExtension:@"js" subdirectory:@"Extensions"] encoding:NSUTF8StringEncoding error:NULL];
+        XCTAssertNotNil(script);
+        [web stringByEvaluatingJavaScriptFromString:@"window.__macdownPreviewEditConfig={token:'count-fixture',nodes:[],math:false,strike:true,tasks:true,fenced:true};window.__macdownPreviewEditNodes=[];"];
+        [web stringByEvaluatingJavaScriptFromString:script];
+        for(NSString *display in @[@"none",@"block"]) {
+            [web stringByEvaluatingJavaScriptFromString:[NSString stringWithFormat:@"window.macdownPreviewEditor.elements ? window.macdownPreviewEditor.elements().panel.style.display='%@' : document.getElementById('macdown-preview-format').style.display='%@'",display,display]];
+            DOMNodeTextCount actual=web.mainFrame.DOMDocument.textCount;
+            XCTAssertEqual(actual.words,original.words,@"%@",display);
+            XCTAssertEqual(actual.characters,original.characters,@"%@",display);
+            XCTAssertEqual(actual.characterWithoutSpaces,original.characterWithoutSpaces,@"%@",display);
+        }
+        // Authored content with the same ID remains countable: ownership is
+        // tied to the live renderer nonce, not a globally reserved HTML ID.
+        [web stringByEvaluatingJavaScriptFromString:@"var authored=document.createElement('div');authored.id='macdown-preview-format';authored.textContent='author words';authored.setAttribute('data-mp-preview-ui','different-token');document.body.appendChild(authored);"];
+        DOMNodeTextCount withAuthor=web.mainFrame.DOMDocument.textCount;
+        XCTAssertEqual(withAuthor.words,original.words+2);
+        XCTAssertEqual(withAuthor.characters,original.characters+12);
+        XCTAssertEqual(withAuthor.characterWithoutSpaces,original.characterWithoutSpaces+11);
+    } @finally { [web close]; }
+}
+
 @end

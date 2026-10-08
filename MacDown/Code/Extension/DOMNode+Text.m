@@ -97,6 +97,18 @@ NS_INLINE MPAccumulatedTextCount MPGetNodeAccumulatedTextCount(DOMNode *node)
         case 11:
             if ([node respondsToSelector:@selector(tagName)])
             {
+                DOMElement *element = (DOMElement *)node;
+                NSString *controlToken = [element getAttribute:@"data-mp-preview-ui"];
+                if (controlToken.length) {
+                    DOMNodeList *metadata = [node.ownerDocument getElementsByTagName:@"meta"];
+                    for (NSUInteger i = 0; i < metadata.length; i++) {
+                        DOMElement *meta = (DOMElement *)[metadata item:(unsigned)i];
+                        if ([meta.parentElement.tagName isEqualToString:@"HEAD"] &&
+                            [[meta getAttribute:@"name"] isEqualToString:@"macdown-checkbox-token"] &&
+                            [[meta getAttribute:@"content"] isEqualToString:controlToken])
+                            return MPAccumulatedTextCountZero();
+                    }
+                }
                 NSString *tagName = [(id)node tagName].uppercaseString;
                 if ([tagName isEqualToString:@"SCRIPT"]
                         || [tagName isEqualToString:@"STYLE"]

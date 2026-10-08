@@ -113,6 +113,7 @@
   }
   function createPanel() {
     panel = retainedPanel || document.createElement('div'); panel.id = 'macdown-preview-format';
+    panel.setAttribute('data-mp-preview-ui',config.token);
     var previousStyle = retainedPanel ? retainedPanel.style.cssText : null;
     panel.textContent = '';
     panel.setAttribute('role','toolbar'); panel.setAttribute('aria-label','Mise en forme du texte sélectionné');
