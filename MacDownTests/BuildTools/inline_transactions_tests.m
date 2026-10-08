@@ -39,6 +39,12 @@ int main(void)
         BOOL bounded=!oversizedChange && oversizedRenderCalls==0;
         fprintf(bounded?stdout:stderr,"%s oversized paragraph refused before rendering\n",bounded?"PASS":"FAIL");
         if(!bounded) failures++;
+        NSString *longSpaces=[@"" stringByPaddingToLength:12000 withString:@" " startingAtIndex:0];
+        NSString *spacedText=[NSString stringWithFormat:@"a%@b",longSpaces];
+        NSDictionary *spacedChange=MPPreviewInlineChange(spacedText,NSMakeRange(0,spacedText.length),@"bold",nil,^NSString *(NSString *s){return Render(s);},^NSString *(NSString *s){return Escape(s);});
+        BOOL spacesPreserved=[spacedChange[@"replacement"] isEqualToString:[NSString stringWithFormat:@"**%@**",spacedText]] && [spacedChange[@"text"] isEqualToString:spacedText];
+        fprintf(spacesPreserved?stdout:stderr,"%s long whitespace run preserves text and full selection formatting\n",spacesPreserved?"PASS":"FAIL");
+        if(!spacesPreserved) failures++;
         NSString *legacyNeighbor=@"<span style=\"color:#175cd3\">outside</span> selected";
         NSDictionary *legacyNeighborChange=MPPreviewInlineChange(legacyNeighbor,[legacyNeighbor rangeOfString:@"selected"],@"bold",nil,^NSString *(NSString *s){return Render(s);},^NSString *(NSString *s){return Escape(s);});
         BOOL preserved=[legacyNeighborChange[@"replacement"] isEqualToString:@"<span style=\"color:#175cd3\">outside</span> **selected**"];

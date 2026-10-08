@@ -133,18 +133,24 @@ static NSDictionary *MPPISerialize(NSString *text, NSArray<NSNumber *> *styles,
         [outsideForLink addObject:@(common)];
     }
     NSCharacterSet *whitespace=NSCharacterSet.whitespaceAndNewlineCharacterSet;
+    NSUInteger whitespaceEnd=0, whitespaceMask=0;
     for (NSUInteger i=0;i<text.length;i++) {
         NSUInteger mask=[styles[i] unsignedIntegerValue];
         // Leading/trailing whitespace cannot sit directly inside delimiters.
         // Whitespace between two characters with a common style keeps it.
         if ([whitespace characterIsMember:[text characterAtIndex:i]]) {
-            NSUInteger left=i, right=i;
-            while(left && [whitespace characterIsMember:[text characterAtIndex:left-1]]) left--;
-            while(right<text.length && [whitespace characterIsMember:[text characterAtIndex:right]]) right++;
-            mask=left && right<text.length ? mask&[styles[left-1] unsignedIntegerValue]&[styles[right] unsignedIntegerValue] : 0;
-            // Hoedown trims whitespace at code-span edges. A space between
-            // differently styled code runs remains ordinary separating text.
-            if(left && right<text.length && ![styles[left-1] isEqual:styles[right]]) mask&=~MPPICode;
+            // Resolve each whitespace run once, including its neighboring
+            // styles. Long spaces must not rescan the entire run per character.
+            if(i>=whitespaceEnd) {
+                NSUInteger left=i;
+                whitespaceEnd=i;
+                while(whitespaceEnd<text.length && [whitespace characterIsMember:[text characterAtIndex:whitespaceEnd]]) whitespaceEnd++;
+                whitespaceMask=left && whitespaceEnd<text.length ? [styles[left-1] unsignedIntegerValue]&[styles[whitespaceEnd] unsignedIntegerValue] : 0;
+                // Hoedown trims whitespace at code-span edges. A space between
+                // differently styled code runs remains ordinary separating text.
+                if(left && whitespaceEnd<text.length && ![styles[left-1] isEqual:styles[whitespaceEnd]]) whitespaceMask&=~MPPICode;
+            }
+            mask&=whitespaceMask;
 
         }
         NSMutableArray *desired=[NSMutableArray array];
