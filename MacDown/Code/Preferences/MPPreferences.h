@@ -53,6 +53,7 @@ extern NSString * const MPDidDetectFreshInstallationNotification;
 @property (assign) BOOL editorOnRight;
 @property (assign) BOOL editorStartInPreviewMode;
 @property (assign) BOOL editorShowWordCount;
+@property (assign) BOOL editorShowReadingProgress;
 @property (assign) NSInteger editorWordCountType;
 @property (assign) BOOL editorAutoSave;
 @property (assign) BOOL editorScrollsPastEnd;

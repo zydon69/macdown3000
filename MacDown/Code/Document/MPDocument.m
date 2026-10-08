@@ -236,6 +236,7 @@ NS_INLINE NSSet *MPEditorPreferencesToObserve()
             @"editorHorizontalInset", @"editorVerticalInset",
             @"editorWidthLimited", @"editorMaximumWidth", @"editorLineSpacing",
             @"editorOnRight", @"editorStyleName", @"editorShowWordCount",
+            @"editorShowReadingProgress",
             @"editorScrollsPastEnd", @"editorShowsInvisibleCharacters",
             @"htmlMathJax", @"htmlMathJaxInlineDollar",
             @"documentZoomLevel", nil
@@ -483,6 +484,11 @@ typedef NS_ENUM(NSInteger, MPReferenceKind) {
 @property (strong) MPPreviewFindPanel *previewFindPanel;
 @property (strong) NSSearchField *previewFindField;
 @property (weak) IBOutlet NSPopUpButton *wordCountWidget;
+@property (strong) NSTextField *readingProgressLabel;
+@property (strong) NSArray<NSLayoutConstraint *> *readingProgressConstraints;
+@property (weak) NSView *readingProgressDocumentView;
+@property BOOL readingProgressFromPreview;
+@property BOOL readingProgressUpdatePending;
 @property (strong) IBOutlet MPToolbarController *toolbarController;
 @property (copy, nonatomic) NSString *autosaveName;
 @property (strong) HGMarkdownHighlighter *highlighter;
@@ -1463,6 +1469,13 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     self.previewFindField = nil;
     self.previewFindPanel = nil;
     self.documentClosed = YES;
+    [NSObject cancelPreviousPerformRequestsWithTarget:self
+        selector:@selector(updateReadingProgress) object:nil];
+    [NSNotificationCenter.defaultCenter removeObserver:self
+        name:NSViewFrameDidChangeNotification object:self.readingProgressDocumentView];
+    [self.readingProgressLabel removeFromSuperview];
+    self.readingProgressLabel = nil;
+    self.readingProgressConstraints = nil;
     [self stopFileWatching];
     [self.renderCompletionHandlers removeAllObjects];
     if (!self.printing) {
@@ -1874,6 +1887,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 {
     [self redrawDivider];
     self.editor.editable = self.editorVisible;
+    [self setupReadingProgress];
     // Issue #377: Track divider-drag collapses. When the ratio transitions from
     // a non-collapsed value to 0 or 1, save the pre-collapse ratio to
     // previousSplitRatio so the menu item remains visible (not hidden).
@@ -2098,6 +2112,8 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 {
     if (self.documentClosed) return;
     self.isPreviewReady = YES;
+    [self observeReadingProgressDocumentView];
+    [self scheduleReadingProgressUpdate];
     self.alreadyRenderingInWeb = NO;
     if (self.preferences.editorShowWordCount) [self updateWordCount];
     if (self.renderToWebPending)
@@ -2762,6 +2778,8 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 // revert to the document-wide totals.
 - (void)editorSelectionDidChange:(NSNotification *)notification
 {
+    self.readingProgressFromPreview = NO;
+    [self scheduleReadingProgressUpdate];
     // When Sync Panes is on, moving the cursor (click or arrow keys) refines the
     // preview's scroll position to follow it, on top of the usual viewport-based
     // sync. Runs independently of the word-count display preference below, since
@@ -2888,6 +2906,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 
 - (void)editorFrameDidChange:(NSNotification *)notification
 {
+    [self scheduleReadingProgressUpdate];
     if (self.preferences.editorWidthLimited)
         [self adjustEditorInsets];
     // Commit 6 (gap 3): Coalesce header cache refresh after editor frame changes.
@@ -2900,6 +2919,8 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 
 - (void)willStartLiveScroll:(NSNotification *)notification
 {
+    self.readingProgressFromPreview = NO;
+    [self scheduleReadingProgressUpdate];
     [self updateHeaderLocations];
 }
 
@@ -2913,6 +2934,8 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 
 - (void)willStartPreviewLiveScroll:(NSNotification *)notification
 {
+    self.readingProgressFromPreview = YES;
+    [self scheduleReadingProgressUpdate];
     // Update header locations before claiming ownership so that
     // syncScrollersReverse (called at end of live-scroll) uses current positions.
     [self updateHeaderLocations];
@@ -2939,6 +2962,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 
 - (void)refreshHeaderCacheAfterResize
 {
+    [self scheduleReadingProgressUpdate];
     if (!self.renderer || !self.preferences.editorSyncScrolling)
         return;
     [self updateHeaderLocations];
@@ -2964,6 +2988,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 
 - (void)editorBoundsDidChange:(NSNotification *)notification
 {
+    [self scheduleReadingProgressUpdate];
     // Issue #342: Only sync in quiescent state. Editor ownership means the render
     // pipeline is active (typing); preview ownership means the user is live-scrolling
     // the preview. Both cases must not trigger forward sync here.
@@ -2992,6 +3017,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 
 - (void)previewBoundsDidChange:(NSNotification *)notification
 {
+    [self scheduleReadingProgressUpdate];
     // Issue #342: Only trigger reverse sync when the user is explicitly scrolling
     // the preview. Editor ownership and Neither ownership both suppress this to
     // prevent deferred WebKit notifications (from DOM replacement window.scrollTo)
@@ -3005,6 +3031,87 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     }
 }
 
+
+// Geometry only, coalesced to at most one update per 50 ms; no Markdown parse.
+- (void)scheduleReadingProgressUpdate
+{
+    if (self.documentClosed || !self.preferences.editorShowReadingProgress ||
+        self.readingProgressUpdatePending) return;
+    self.readingProgressUpdatePending = YES;
+    [self performSelector:@selector(updateReadingProgress) withObject:nil afterDelay:0.05];
+}
+
+- (void)observeReadingProgressDocumentView
+{
+    NSView *view = self.preview.mainFrame.frameView.documentView;
+    if (view == self.readingProgressDocumentView) return;
+    NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
+    if (self.readingProgressDocumentView)
+        [center removeObserver:self name:NSViewFrameDidChangeNotification
+                        object:self.readingProgressDocumentView];
+    self.readingProgressDocumentView = view;
+    if (view) {
+        view.postsFrameChangedNotifications = YES;
+        [center addObserver:self selector:@selector(readingProgressDocumentDidChange:)
+            name:NSViewFrameDidChangeNotification object:view];
+    }
+}
+
+- (void)readingProgressDocumentDidChange:(NSNotification *)notification
+{
+    [self scheduleReadingProgressUpdate];
+}
+
+- (void)setupReadingProgress
+{
+    NSView *container = self.windowForSheet.contentView;
+    if (!container || self.documentClosed) return;
+    if (!self.readingProgressLabel) {
+        NSTextField *label = [NSTextField labelWithString:@"100%"];
+        label.translatesAutoresizingMaskIntoConstraints = NO;
+        label.font = [NSFont monospacedDigitSystemFontOfSize:11 weight:NSFontWeightRegular];
+        label.textColor = NSColor.secondaryLabelColor;
+        label.accessibilityIdentifier = @"reading-progress";
+        label.toolTip = NSLocalizedString(@"Position in the document", nil);
+        [container addSubview:label];
+        self.readingProgressLabel = label;
+    }
+    self.readingProgressLabel.hidden = !self.preferences.editorShowReadingProgress;
+    [NSLayoutConstraint deactivateConstraints:self.readingProgressConstraints ?: @[]];
+    if (self.editorVisible && self.preferences.editorShowWordCount && self.wordCountWidget) {
+        self.readingProgressConstraints = @[
+            [self.readingProgressLabel.leadingAnchor constraintEqualToAnchor:self.wordCountWidget.trailingAnchor constant:10],
+            [self.readingProgressLabel.centerYAnchor constraintEqualToAnchor:self.wordCountWidget.centerYAnchor],
+        ];
+    } else {
+        self.readingProgressConstraints = @[
+            [self.readingProgressLabel.trailingAnchor constraintEqualToAnchor:container.trailingAnchor constant:-12],
+            [self.readingProgressLabel.bottomAnchor constraintEqualToAnchor:container.bottomAnchor constant:-8],
+        ];
+    }
+    [NSLayoutConstraint activateConstraints:self.readingProgressConstraints];
+    [self updateReadingProgress];
+}
+
+- (void)updateReadingProgress
+{
+    self.readingProgressUpdatePending = NO;
+    if (self.documentClosed || !self.preferences.editorShowReadingProgress) return;
+    BOOL fromPreview = !self.editorVisible ||
+        (self.previewVisible && self.readingProgressFromPreview);
+    NSScrollView *scroll = fromPreview ? self.preview.enclosingScrollView :
+        self.editor.enclosingScrollView;
+    if (!scroll.documentView) return;
+    NSRect visible = scroll.documentVisibleRect;
+    NSRect bounds = scroll.documentView.bounds;
+    CGFloat distance = NSHeight(bounds) - NSHeight(visible);
+    CGFloat offset = scroll.documentView.isFlipped ? NSMinY(visible)-NSMinY(bounds) :
+        NSMaxY(bounds)-NSMaxY(visible);
+    CGFloat ratio = distance > 0 ? offset/distance : 1;
+    if (!isfinite(ratio)) ratio = 1;
+    NSInteger percent = lround(MAX(0, MIN(1, ratio))*100);
+    self.readingProgressLabel.stringValue = [NSString stringWithFormat:@"%ld%%", (long)percent];
+}
 
 #pragma mark - KVO
 
@@ -3792,10 +3899,18 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
         else
         {
             self.wordCountWidget.hidden = YES;
-            self.editorPaddingBottom.constant = 0.0;
+            self.editorPaddingBottom.constant = self.preferences.editorShowReadingProgress ? 35.0 : 0.0;
             // Issue #452: Reset selection mode so re-enabling starts on totals.
             self.showingSelectionCount = NO;
         }
+    }
+
+    if (!changedKey || [changedKey isEqualToString:@"editorShowReadingProgress"] ||
+        [changedKey isEqualToString:@"editorShowWordCount"])
+    {
+        self.editorPaddingBottom.constant =
+            (self.preferences.editorShowWordCount || self.preferences.editorShowReadingProgress) ? 35.0 : 0.0;
+        [self setupReadingProgress];
     }
 
     if (!changedKey || [changedKey isEqualToString:@"editorScrollsPastEnd"])
@@ -4890,6 +5005,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     }
 
     [self setupEditor:NSStringFromSelector(@selector(editorHorizontalInset))];
+    [self setupReadingProgress];
 }
 
 - (NSString *)presumedFileName

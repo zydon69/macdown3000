@@ -108,6 +108,11 @@
 @property (weak) WebView *preview;
 @property (strong) MPResourceWatcherSet *resourceWatcherSet;
 @property (strong) NSSearchField *previewFindField;
+@property (strong) NSTextField *readingProgressLabel;
+- (void)setupReadingProgress;
+- (void)updateReadingProgress;
+- (void)willStartLiveScroll:(NSNotification *)notification;
+- (void)willStartPreviewLiveScroll:(NSNotification *)notification;
 - (void)processExternalFileChange;
 - (void)performAfterRender:(void (^)(void))handler;
 - (void)renderer:(MPRenderer *)renderer didProduceHTMLOutput:(NSString *)html;
@@ -1367,6 +1372,83 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
         if (originalItems.count) [pasteboard writeObjects:originalItems];
         [document updateChangeCount:NSChangeCleared];
         [document close];
+    }
+}
+
+- (void)testReadingProgressUsesVisiblePaneGeometryAndClampsBoundaries
+{
+    MPDocument *document = [MPDocument new];
+    MPPreferences *preferences = document.preferences;
+    BOOL oldProgress = preferences.editorShowReadingProgress;
+    BOOL oldCount = preferences.editorShowWordCount;
+    BOOL oldSync = preferences.editorSyncScrolling;
+    BOOL oldReader = preferences.editorStartInPreviewMode;
+    @try {
+        preferences.editorShowReadingProgress = YES;
+        preferences.editorShowWordCount = YES;
+        preferences.editorSyncScrolling = NO;
+        preferences.editorStartInPreviewMode = NO;
+        [document makeWindowControllers]; [document showWindows];
+        XCTestExpectation *setup = [self expectationWithDescription:@"Deferred editor setup"];
+        [NSOperationQueue.mainQueue addOperationWithBlock:^{ [setup fulfill]; }];
+        [self waitForExpectations:@[setup] timeout:5];
+        document.editor.string = [@"Reading position line\n" stringByPaddingToLength:10000
+            withString:@"Reading position line\n" startingAtIndex:0];
+        [document.editor.layoutManager ensureLayoutForTextContainer:document.editor.textContainer];
+        [document.editor sizeToFit];
+        [document setupReadingProgress];
+        NSScrollView *scroll = document.editor.enclosingScrollView;
+        [document willStartLiveScroll:nil];
+        [scroll.documentView scrollPoint:NSMakePoint(0,0)];
+        [document updateReadingProgress];
+        XCTAssertEqualObjects(document.readingProgressLabel.stringValue, @"0%");
+        CGFloat maximum = NSHeight(scroll.documentView.bounds)-NSHeight(scroll.documentVisibleRect);
+        XCTAssertGreaterThan(maximum, 0);
+        [scroll.documentView scrollPoint:NSMakePoint(0,maximum/2)];
+        [document updateReadingProgress];
+        XCTAssertEqualObjects(document.readingProgressLabel.stringValue, @"50%");
+        [scroll.documentView scrollPoint:NSMakePoint(0,maximum)];
+        [document updateReadingProgress];
+        XCTAssertEqualObjects(document.readingProgressLabel.stringValue, @"100%");
+        // A real short preview has no remaining reading distance.
+        [document.preview.mainFrame loadHTMLString:@"<html><body>Short preview.</body></html>" baseURL:nil];
+        XCTNSPredicateExpectation *loaded = [[XCTNSPredicateExpectation alloc]
+            initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o, NSDictionary *b) {
+                return !document.preview.isLoading &&
+                    [[document.preview stringByEvaluatingJavaScriptFromString:@"document.body.textContent"]
+                        isEqualToString:@"Short preview."];
+            }] object:document];
+        [self waitForExpectations:@[loaded] timeout:10];
+        [document willStartPreviewLiveScroll:nil];
+        [document updateReadingProgress];
+        XCTAssertEqualObjects(document.readingProgressLabel.stringValue, @"100%");
+        [document.preview stringByEvaluatingJavaScriptFromString:@"document.body.style.height='2400px'"];
+        NSScrollView *previewScroll = document.preview.enclosingScrollView;
+        XCTNSPredicateExpectation *resized = [[XCTNSPredicateExpectation alloc]
+            initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o, NSDictionary *b) {
+                return NSHeight(previewScroll.documentView.bounds) > NSHeight(previewScroll.documentVisibleRect)+100;
+            }] object:document];
+        [self waitForExpectations:@[resized] timeout:5];
+        CGFloat previewMaximum = NSHeight(previewScroll.documentView.bounds)-NSHeight(previewScroll.documentVisibleRect);
+        XCTAssertGreaterThan(previewMaximum, 0);
+        [previewScroll.documentView scrollPoint:NSMakePoint(0, previewMaximum/2)];
+        [document updateReadingProgress];
+        XCTAssertEqualObjects(document.readingProgressLabel.stringValue, @"50%");
+        [previewScroll.documentView scrollPoint:NSMakePoint(0, previewMaximum)];
+        [document updateReadingProgress];
+        XCTAssertEqualObjects(document.readingProgressLabel.stringValue, @"100%");
+        preferences.editorShowWordCount = NO;
+        [document setupReadingProgress];
+        XCTAssertFalse(document.readingProgressLabel.hidden);
+        preferences.editorShowReadingProgress = NO;
+        [document setupReadingProgress];
+        XCTAssertTrue(document.readingProgressLabel.hidden);
+    } @finally {
+        [document updateChangeCount:NSChangeCleared]; [document close];
+        preferences.editorShowReadingProgress = oldProgress;
+        preferences.editorShowWordCount = oldCount;
+        preferences.editorSyncScrolling = oldSync;
+        preferences.editorStartInPreviewMode = oldReader;
     }
 }
 
