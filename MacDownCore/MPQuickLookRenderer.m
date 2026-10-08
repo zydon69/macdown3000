@@ -8,6 +8,7 @@
 
 #import "MPQuickLookRenderer.h"
 #import "MPQuickLookPreferences.h"
+#import "MPReaderStyles.h"
 #import <hoedown/html.h>
 #import <hoedown/document.h>
 #import <hoedown/escape.h>
@@ -329,6 +330,8 @@ NS_INLINE NSString *MPQuickLookContentSecurityPolicy(void)
 
     // Embed CSS styles
     [html appendString:[self embeddedStyles]];
+    if (self.preferences.wrapCodeBlocks)
+        [html appendString:MPCodeWrappingStyleTag()];
 
     [html appendString:@"</head>\n<body>\n"];
 

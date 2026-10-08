@@ -2427,6 +2427,11 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     return self.preferences.htmlDetectFrontMatter;
 }
 
+- (BOOL)rendererWrapsCodeBlocks:(MPRenderer *)renderer
+{
+    return self.preferences.htmlWrapCodeBlocks;
+}
+
 - (BOOL)rendererHasSyntaxHighlighting:(MPRenderer *)renderer
 {
     return self.preferences.htmlSyntaxHighlighting;

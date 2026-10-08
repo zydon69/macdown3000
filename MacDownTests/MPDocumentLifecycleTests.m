@@ -1370,6 +1370,64 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
     }
 }
 
+- (void)testCodeWrappingChangesLayoutWithoutChangingCodeAndExports
+{
+    MPDocument *document = [MPDocument new];
+    MPPreferences *preferences = document.preferences;
+    BOOL oldWrap = preferences.htmlWrapCodeBlocks;
+    BOOL oldSyntax = preferences.htmlSyntaxHighlighting;
+    BOOL oldFences = preferences.extensionFencedCode;
+    BOOL oldMath = preferences.htmlMathJax;
+    NSString *oldStyle = preferences.htmlStyleName;
+    MPEditorView *editor = [[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,240,300)];
+    WebView *web = [[WebView alloc] initWithFrame:NSMakeRect(0,0,240,300)];
+    document.editor = editor; document.preview = web;
+    web.frameLoadDelegate = (id<WebFrameLoadDelegate>)document;
+    MPRenderer *renderer = [MPRenderer new];
+    renderer.delegate = (id<MPRendererDelegate>)document;
+    renderer.dataSource = (id<MPRendererDataSource>)document;
+    document.renderer = renderer;
+    NSString *code = [@"x" stringByPaddingToLength:500 withString:@"x" startingAtIndex:0];
+    editor.string = [NSString stringWithFormat:@"```bash\n%@\n```", code];
+    @try {
+        preferences.htmlSyntaxHighlighting = YES;
+        preferences.extensionFencedCode = YES;
+        preferences.htmlMathJax = NO;
+        preferences.htmlStyleName = @"GitHub2";
+        for (NSNumber *enabled in @[@NO, @YES, @NO]) {
+            preferences.htmlWrapCodeBlocks = enabled.boolValue;
+            [renderer parseMarkdown:editor.string];
+            [renderer render];
+            NSString *expected = enabled.boolValue ? @"pre-wrap" : @"pre";
+            XCTNSPredicateExpectation *loaded = [[XCTNSPredicateExpectation alloc]
+                initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id object, NSDictionary *bindings) {
+                    if (web.isLoading) return NO;
+                    NSString *spacing = [web stringByEvaluatingJavaScriptFromString:
+                        @"document.querySelector('pre') ? getComputedStyle(document.querySelector('pre')).whiteSpace : ''"];
+                    return [spacing isEqualToString:expected];
+                }] object:web];
+            [self waitForExpectations:@[loaded] timeout:10];
+            XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:
+                @"document.querySelector('pre code').textContent.trim()"], code);
+            if (enabled.boolValue) {
+                XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:
+                    @"String(document.querySelector('pre').scrollWidth <= document.querySelector('pre').clientWidth+1)"], @"true");
+            }
+            NSString *html = [renderer HTMLForExportWithStyles:YES highlighting:YES];
+            XCTAssertEqual([html containsString:@"id=\"macdown-code-wrapping\""], enabled.boolValue);
+            XCTAssertFalse([[renderer HTMLForExportWithStyles:NO highlighting:NO]
+                containsString:@"id=\"macdown-code-wrapping\""]);
+        }
+    } @finally {
+        web.frameLoadDelegate = nil; [document close];
+        preferences.htmlWrapCodeBlocks = oldWrap;
+        preferences.htmlSyntaxHighlighting = oldSyntax;
+        preferences.extensionFencedCode = oldFences;
+        preferences.htmlMathJax = oldMath;
+        preferences.htmlStyleName = oldStyle;
+    }
+}
+
 - (void)testFirstRealCodeRenderAfterEmptyPreviewLoadsPrismGrammarAndTokens
 {
     MPPreferences *preferences = self.document.preferences;

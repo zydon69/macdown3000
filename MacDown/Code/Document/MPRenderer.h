@@ -74,6 +74,7 @@ typedef NS_ENUM(NSUInteger, MPCodeBlockAccessoryType)
 - (void)renderer:(MPRenderer *)renderer didProduceHTMLOutput:(NSString *)html;
 
 @optional
+- (BOOL)rendererWrapsCodeBlocks:(MPRenderer *)renderer;
 /// Return the base URL for resolving relative resource paths.
 /// Used for cache-busting local resource URLs (issue #110).
 - (NSURL *)rendererBaseURL:(MPRenderer *)renderer;

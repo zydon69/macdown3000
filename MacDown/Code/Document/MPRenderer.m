@@ -7,6 +7,7 @@
 //
 
 #import "MPRenderer.h"
+#import "../../../MacDownCore/MPReaderStyles.h"
 #import <limits.h>
 #import <hoedown/html.h>
 #import <hoedown/document.h>
@@ -239,6 +240,7 @@ NS_INLINE BOOL MPAreNilableStringsEqual(NSString *s1, NSString *s2)
 @property (copy) NSString *styleName;
 @property BOOL frontMatter;
 @property BOOL syntaxHighlighting;
+@property BOOL wrapsCodeBlocks;
 @property BOOL mermaid;
 @property BOOL graphviz;
 @property BOOL mathJax;
@@ -794,11 +796,19 @@ NS_INLINE NSString *MPPreviewHeadTags(NSString *checkboxBridgeToken)
                     options:options];
 }
 
+- (BOOL)delegateWrapsCodeBlocks
+{
+    return [self.delegate respondsToSelector:@selector(rendererWrapsCodeBlocks:)] &&
+        [self.delegate rendererWrapsCodeBlocks:self];
+}
+
 - (void)renderIfPreferencesChanged
 {
     BOOL changed = NO;
     id<MPRendererDelegate> d = self.delegate;
-    if ([d rendererHasSyntaxHighlighting:self] != self.syntaxHighlighting)
+    if ([self delegateWrapsCodeBlocks] != self.wrapsCodeBlocks)
+        changed = YES;
+    else if ([d rendererHasSyntaxHighlighting:self] != self.syntaxHighlighting)
         changed = YES;
     else if ([d rendererHasMermaid:self] != self.mermaid)
         changed = YES;
@@ -830,6 +840,8 @@ NS_INLINE NSString *MPPreviewHeadTags(NSString *checkboxBridgeToken)
     if (!self.checkboxBridgeToken.length)
         self.checkboxBridgeToken = NSUUID.UUID.UUIDString;
     NSString *headTags = MPPreviewHeadTags(self.checkboxBridgeToken);
+    if ([self delegateWrapsCodeBlocks])
+        headTags = [headTags stringByAppendingString:MPCodeWrappingStyleTag()];
     NSString *html = MPGetHTML(
         title, headTags, previewBody,
         self.stylesheets, MPAssetFullLink,
@@ -854,6 +866,7 @@ NS_INLINE NSString *MPPreviewHeadTags(NSString *checkboxBridgeToken)
 
     self.styleName = [delegate rendererStyleName:self];
     self.syntaxHighlighting = [delegate rendererHasSyntaxHighlighting:self];
+    self.wrapsCodeBlocks = [self delegateWrapsCodeBlocks];
     self.mermaid = [delegate rendererHasMermaid:self];
     self.graphviz = [delegate rendererHasGraphviz:self];
     self.mathJax = [delegate rendererHasMathJax:self];
@@ -926,7 +939,8 @@ NS_INLINE NSString *MPPreviewHeadTags(NSString *checkboxBridgeToken)
     if (!title)
         title = @"";
     NSString *html = MPGetHTML(
-        title, nil, self.currentHtml, styles, stylesOption, scripts,
+        title, withStyles && [self delegateWrapsCodeBlocks] ? MPCodeWrappingStyleTag() : nil,
+        self.currentHtml, styles, stylesOption, scripts,
         scriptsOption);
     return html;
 }

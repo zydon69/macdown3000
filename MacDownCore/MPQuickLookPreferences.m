@@ -94,6 +94,11 @@ static NSString * const kMPDefaultHighlightingThemeName = @"tomorrow";
                            defaultValue:kMPDefaultHighlightingThemeName];
 }
 
+- (BOOL)wrapCodeBlocks
+{
+    return [self boolPreferenceForKey:@"htmlWrapCodeBlocks" defaultValue:NO];
+}
+
 - (BOOL)syntaxHighlightingEnabled
 {
     return [self boolPreferenceForKey:kMPHtmlSyntaxHighlightingKey
