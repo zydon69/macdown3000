@@ -241,4 +241,35 @@
     } @finally { [web close]; }
 }
 
+- (void)testDocumentWordCountUsesContinuousInlineTextAndSeparateBlocks
+{
+    WebView *web = [[WebView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+    @try {
+        [web.mainFrame loadHTMLString:@"<html><body><p>hello world</p></body></html>" baseURL:nil];
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:
+            [NSPredicate predicateWithBlock:^BOOL(id object, NSDictionary *bindings) {
+                return !web.isLoading && web.mainFrame.DOMDocument.body != nil;
+            }] object:web]] timeout:10];
+        NSArray *cases = @[
+            @[@"<p>hello world</p>", @2, @11, @10],
+            @[@"<p>hel<strong>lo</strong> world</p>", @2, @11, @10],
+            @[@"<p>he<em>ll</em>o world</p>", @2, @11, @10],
+            @[@"<p>hel<a href='https://example.com'>lo</a> world</p>", @2, @11, @10],
+            @[@"<p>he<span data-mp-edit-id='0'>ll</span>o world</p>", @2, @11, @10],
+            @[@"<p>he<strong><em>ll</em></strong>o world</p>", @2, @11, @10],
+            @[@"<p>hello</p><p>world</p>", @2, @10, @10],
+            @[@"<p>hello<br>world</p>", @2, @10, @10],
+            @[@"<ul><li>hello</li><li>world</li></ul>", @2, @10, @10],
+            @[@"<p><code>inline words</code> tail</p><pre><code>excluded words</code></pre>", @2, @17, @15]
+        ];
+        for (NSArray *testCase in cases) {
+            web.mainFrame.DOMDocument.body.innerHTML = testCase[0];
+            DOMNodeTextCount count = web.mainFrame.DOMDocument.textCount;
+            XCTAssertEqual(count.words, [testCase[1] unsignedIntegerValue], @"%@", testCase[0]);
+            XCTAssertEqual(count.characters, [testCase[2] unsignedIntegerValue], @"%@", testCase[0]);
+            XCTAssertEqual(count.characterWithoutSpaces, [testCase[3] unsignedIntegerValue], @"%@", testCase[0]);
+        }
+    } @finally { [web close]; }
+}
+
 @end
