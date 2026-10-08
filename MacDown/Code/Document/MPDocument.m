@@ -3038,7 +3038,8 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     if (self.documentClosed || !self.preferences.editorShowReadingProgress ||
         self.readingProgressUpdatePending) return;
     self.readingProgressUpdatePending = YES;
-    [self performSelector:@selector(updateReadingProgress) withObject:nil afterDelay:0.05];
+    [self performSelector:@selector(updateReadingProgress) withObject:nil afterDelay:0.05
+                  inModes:@[NSRunLoopCommonModes]];
 }
 
 - (void)observeReadingProgressDocumentView
@@ -3095,6 +3096,8 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 
 - (void)updateReadingProgress
 {
+    [NSObject cancelPreviousPerformRequestsWithTarget:self
+        selector:@selector(updateReadingProgress) object:nil];
     self.readingProgressUpdatePending = NO;
     if (self.documentClosed || !self.preferences.editorShowReadingProgress) return;
     BOOL fromPreview = !self.editorVisible ||
