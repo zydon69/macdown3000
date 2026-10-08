@@ -56,6 +56,13 @@ int main(void)
         }
         Check(@"<span style=\"color:#175cd3\">selected</span> outside",@"selected",@"bold",nil,NO);
         Check(@"<span style=\"color:#175cd3\">selected</span> <span style=\"color:#067647\">neighbor</span>",@"selected",@"clear",@"selected",YES);
+        Check(@"<span style=\"color:#175cd3\">outside <span style=\"color:#067647\">nested</span></span> selected",@"selected",@"bold",nil,NO);
+        Check(@"[<span style=\"color:#175cd3\">colored</span> selected](https://example.com)",@"selected",@"bold",nil,NO);
+        NSString *opaqueNested=@"[<span style=\"color:#175cd3\">outside <span style=\"color:#067647\">nested</span></span>](https://example.com) selected";
+        NSDictionary *opaqueNestedChange=MPPreviewInlineChange(opaqueNested,[opaqueNested rangeOfString:@"selected"],@"bold",nil,^NSString *(NSString *s){return Render(s);},^NSString *(NSString *s){return Escape(s);});
+        BOOL opaqueNestedPreserved=[opaqueNestedChange[@"replacement"] isEqualToString:[opaqueNested stringByReplacingOccurrencesOfString:@" selected" withString:@" **selected**"]];
+        fprintf(opaqueNestedPreserved?stdout:stderr,"%s nested legacy colors in untouched link remain unchanged\n",opaqueNestedPreserved?"PASS":"FAIL");
+        if(!opaqueNestedPreserved) failures++;
         Check(@"test **mot** selection",@"test **mot",@"bold",@"test mot",YES);
         Check(@"test **mot** selection",@"st **mo",@"bold",@"st mo",YES);
         Check(@"test **mot** selection",@"ot** selection",@"bold",@"ot selection",YES);

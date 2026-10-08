@@ -280,6 +280,21 @@ static NSString *MPPIMaskOpaque(NSString *body, NSRange selection, NSUInteger ba
         [colorOpenings componentsJoinedByString:@"|"]];
     NSRegularExpression *expression=[NSRegularExpression regularExpressionWithPattern:pattern options:0 error:NULL];
     NSArray *matches=[expression matchesInString:body options:0 range:NSMakeRange(0,body.length)];
+    NSRegularExpression *legacyOpening=[NSRegularExpression regularExpressionWithPattern:
+        [colorOpenings componentsJoinedByString:@"|"] options:0 error:NULL];
+    // The shallow atom grammar cannot prove ownership of nested colors or a
+    // color inside a link being rewritten. Refuse these cases before removing
+    // legacy tags; an untouched opaque link/code atom remains safe verbatim.
+    for (NSTextCheckingResult *opening in [legacyOpening matchesInString:body options:0 range:NSMakeRange(0,body.length)]) {
+        BOOL protected = NO;
+        for (NSTextCheckingResult *match in matches) {
+            if (opening.range.location < match.range.location || NSMaxRange(opening.range) > NSMaxRange(match.range)) continue;
+            BOOL opaqueOutside = !NSIntersectionRange(NSMakeRange(base+match.range.location,match.range.length),selection).length;
+            protected = [body characterAtIndex:match.range.location]=='<' || opaqueOutside;
+            break;
+        }
+        if (!protected) return nil;
+    }
     NSMutableString *result=[NSMutableString string]; NSUInteger cursor=0;
     for(NSTextCheckingResult *match in matches) {
         NSRange range=match.range;
