@@ -1493,6 +1493,75 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
     }
 }
 
+// Keep Hoedown and the native transaction real; only the already-proven DOM
+// mapping is supplied so block source transformations can be isolated.
+- (void)assertPreviewBlockSource:(NSString *)source texts:(NSArray<NSString *> *)texts
+                          value:(NSString *)value expected:(NSString *)expected
+                           HTML:(NSString *)expectedHTML
+{
+    MPDocument *document = [MPDocument new];
+    MPEditorView *editor = [[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+    MPRenderer *renderer = [MPRenderer new];
+    document.editor = editor; document.renderer = renderer;
+    renderer.delegate = (id<MPRendererDelegate>)document;
+    renderer.dataSource = (id<MPRendererDataSource>)document;
+    BOOL oldSmarty = document.preferences.extensionSmartyPants;
+    BOOL oldTasks = document.preferences.htmlTaskList;
+    @try {
+        document.preferences.extensionSmartyPants = NO;
+        document.preferences.htmlTaskList = YES;
+        editor.string = source;
+        [renderer parseMarkdown:source];
+        NSMutableArray *mapping = [NSMutableArray array], *runs = [NSMutableArray array];
+        NSMutableString *visible = [NSMutableString string];
+        NSUInteger cursor = 0;
+        for (NSString *text in texts) {
+            NSRange found = [source rangeOfString:text options:NSLiteralSearch range:NSMakeRange(cursor,source.length-cursor)];
+            XCTAssertNotEqual(found.location, NSNotFound);
+            if (found.location == NSNotFound) return;
+            if (mapping.count) {
+                for (NSUInteger i=cursor;i<found.location;i++) {
+                    unichar c = [source characterAtIndex:i];
+                    if (c=='\n' || c=='\r') [visible appendFormat:@"%C",c];
+                }
+            }
+            [visible appendString:text];
+            [runs addObject:@{@"id":@(mapping.count),@"start":@0,@"end":@(text.length)}];
+            [mapping addObject:@{@"location":@(found.location),@"length":@(found.length),@"text":text}];
+            cursor = NSMaxRange(found);
+        }
+        document.previewEditRanges = mapping;
+        document.previewEditSource = source;
+        document.previewEditToken = renderer.checkboxBridgeToken;
+        NSMutableDictionary *payload = [runs.firstObject mutableCopy];
+        payload[@"runs"] = runs; payload[@"text"] = visible;
+        payload[@"token"] = document.previewEditToken; payload[@"action"] = @"block"; payload[@"value"] = value;
+        XCTAssertTrue([document applyPreviewEditPayload:payload], @"%@ -> %@",source,value);
+        XCTAssertEqualObjects(editor.string, expected);
+        XCTAssertTrue([[renderer HTMLForMarkdownSnapshot:editor.string] containsString:expectedHTML]);
+    } @finally {
+        [document close];
+        document.preferences.extensionSmartyPants = oldSmarty;
+        document.preferences.htmlTaskList = oldTasks;
+    }
+}
+
+- (void)testPreviewBlockConversionPreservesBlankSeparators
+{
+    for (NSArray *scenario in @[@[@"h1",@"# ",@"<h1"],@[@"unordered",@"- ",@"<ul>"],@[@"tasks",@"- [ ] ",@"<ul>"],@[@"quote",@"> ",@"<blockquote>"]]) {
+        NSString *prefix = scenario[1];
+        [self assertPreviewBlockSource:@"first\n\n \t\nsecond\n\nNeighbor.\n" texts:@[@"first",@"second"] value:scenario[0]
+            expected:[NSString stringWithFormat:@"%@first\n\n \t\n%@second\n\nNeighbor.\n",prefix,prefix] HTML:scenario[2]];
+    }
+}
+
+- (void)testPreviewBlockConversionLeavesUnselectedSourceBetweenParagraphsUnchanged
+{
+    [self assertPreviewBlockSource:@"first\n\n<!-- preserved comment -->\n\n![Image](keep.png)\n\nsecond\n\nNeighbor.\n"
+        texts:@[@"first",@"second"] value:@"h1"
+        expected:@"# first\n\n<!-- preserved comment -->\n\n![Image](keep.png)\n\n# second\n\nNeighbor.\n" HTML:@"<h1"];
+}
+
 - (void)testPreviewMixedStylesApplyToAllSelectedCharactersAndPreserveOutsideStyles
 {
     MPDocument *document=[MPDocument new];

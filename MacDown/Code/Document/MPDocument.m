@@ -5790,9 +5790,20 @@ to link outside that scope.", \
                 @"^ {0,3}(?:#{1,6}[ \\t]+|>[ \\t]?|[-+*][ \\t]+(?:\\[[ xX]\\][ \\t]+)?|[0-9]+[.)][ \\t]+)" options:0 error:NULL];
             NSArray *lines = [body componentsSeparatedByString:@"\n"];
             NSMutableArray *processed = [NSMutableArray array];
+            NSUInteger offset = lineRange.location;
             for (NSString *line in lines) {
-                NSString *plain = [markers stringByReplacingMatchesInString:line options:0 range:NSMakeRange(0,line.length) withTemplate:@""];
-                [processed addObject:[prefix stringByAppendingString:plain]];
+                // A contiguous visual selection can cross blank separators,
+                // comments and images that have no selected text. Convert only
+                // source lines touched by an independently proven text run.
+                NSRange currentLine = NSMakeRange(offset,line.length);
+                BOOL selectedLine = NO;
+                for (NSValue *run in verified[@"runs"])
+                    if (NSIntersectionRange(currentLine,run.rangeValue).length) { selectedLine = YES; break; }
+                if (selectedLine && [line stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet].length) {
+                    NSString *plain = [markers stringByReplacingMatchesInString:line options:0 range:NSMakeRange(0,line.length) withTemplate:@""];
+                    [processed addObject:[prefix stringByAppendingString:plain]];
+                } else [processed addObject:line];
+                offset += line.length + 1;
             }
             body = [processed componentsJoinedByString:@"\n"];
         } else if ([value isEqualToString:@"code-block"]) {
