@@ -649,81 +649,157 @@ static NSString * const kMPBlockquoteLinePattern = @"^((?:\\> ?)+).*$";
 }
 
 - (void)makeHeaderForSelectedLinesWithLevel:(NSUInteger)level
+                            renderMarkdown:(NSString *(^)(NSString *))renderMarkdown
 {
     NSAssert(level <= 6, @"Should be 1-6, or 0 (convert to paragraph).");
+    if (level > 6 || !renderMarkdown) return;
     NSString *content = self.string;
-    NSRange selectedRange = self.selectedRange;
-    NSRange lineRange = [content lineRangeForRange:selectedRange];
-
-    NSString *header = [@"###### " substringFromIndex:6 - level];
-    if (level == 0)
-        header = [header substringToIndex:header.length - 1];
-    NSUInteger headerLength = header.length;
-    NSUInteger options = NSRegularExpressionDotMatchesLineSeparators;
-    NSRegularExpression *regex =
-        [[NSRegularExpression alloc] initWithPattern:@"^(#+ )*.*?$"
-                                             options:options error:NULL];
-
-    NSMutableArray *processedLines = [NSMutableArray array];
-    NSString *toProcess = [content substringWithRange:lineRange];
-    NSArray *lines = [toProcess componentsSeparatedByString:@"\n"];
-    NSUInteger lineCount = lines.count;
-    NSMutableArray<NSValue *> *markerRanges = [NSMutableArray array];
-    NSMutableArray<NSNumber *> *insertedLengths = [NSMutableArray array];
-    [lines enumerateObjectsUsingBlock:^(id obj, NSUInteger index, BOOL *stop) {
-        NSString *line = obj;
-        NSTextCheckingResult *result =
-            [regex firstMatchInString:line options:0
-                                range:NSMakeRange(0, line.length)];
-        NSUInteger rangeCount = result.numberOfRanges;
-
-        // Don't process empty/whitespace-only lines unless it's the only line.
-        if (lineCount > 1)
-        {
-            NSUInteger sentinel = [line
-                locationOfFirstNonWhitespaceCharacterInLineBefore:line.length];
-            if (sentinel == line.length)
-            {
-                [processedLines addObject:line];
-                [markerRanges addObject:[NSValue valueWithRange:NSMakeRange(0, 0)]];
-                [insertedLengths addObject:@0];
-                return;
+    NSRange selection = self.selectedRange;
+    if (selection.location > content.length || selection.length > content.length-selection.location) return;
+    NSRange selectedLines = [content lineRangeForRange:selection];
+    NSMutableArray<NSMutableDictionary *> *lines = [NSMutableArray array];
+    NSUInteger offset = 0;
+    do {
+        NSUInteger end, contentsEnd;
+        [content getLineStart:NULL end:&end contentsEnd:&contentsEnd forRange:NSMakeRange(offset,0)];
+        [lines addObject:[@{@"range":[NSValue valueWithRange:NSMakeRange(offset,end-offset)],
+            @"text":[content substringWithRange:NSMakeRange(offset,contentsEnd-offset)],
+            @"ending":[content substringWithRange:NSMakeRange(contentsEnd,end-contentsEnd)],
+            @"selected":@(offset==selectedLines.location || NSIntersectionRange(NSMakeRange(offset,end-offset),selectedLines).length>0),
+            @"prefix":@0,@"suffix":@0,@"underline":@NO} mutableCopy]];
+        if (end<=offset || end>=content.length) break;
+        offset=end;
+    } while (YES);
+    if (content.length && selectedLines.location==content.length && [lines.lastObject[@"ending"] length])
+        [lines addObject:[@{@"range":[NSValue valueWithRange:NSMakeRange(content.length,0)],@"text":@"",@"ending":@"",
+            @"selected":@YES,@"prefix":@0,@"suffix":@0,@"underline":@NO} mutableCopy]];
+    NSRegularExpression *atx=[NSRegularExpression regularExpressionWithPattern:@"^ {0,3}#{1,6} *" options:0 error:NULL];
+    NSRegularExpression *setext=[NSRegularExpression regularExpressionWithPattern:@"^ {0,3}(?:=+|-+) *$" options:0 error:NULL];
+    NSRegularExpression *heading=[NSRegularExpression regularExpressionWithPattern:@"<h([1-6])\\b[^>]*>((?:(?!</h[1-6]>).)*)</h\\1>"
+        options:NSRegularExpressionDotMatchesLineSeparators error:NULL];
+    // A marker is inserted into the candidate's content, never before its
+    // container syntax. The application's real parser proves it is a heading
+    // in the complete document (fences/raw HTML/list contexts are preserved).
+    NSMutableDictionary<NSNumber *,NSString *> *markers=[NSMutableDictionary dictionary];
+    NSMutableString *probe=[content mutableCopy];
+    for (NSUInteger i=lines.count;i>0;i--) {
+        NSUInteger index=i-1; NSDictionary *line=lines[index]; NSString *text=line[@"text"];
+        BOOL selected=[line[@"selected"] boolValue];
+        BOOL nextSelected=index+1<lines.count && [lines[index+1][@"selected"] boolValue];
+        if(!selected && !nextSelected) continue;
+        NSTextCheckingResult *prefix=[atx firstMatchInString:text options:0 range:NSMakeRange(0,text.length)];
+        BOOL underline=index+1<lines.count && [setext firstMatchInString:lines[index+1][@"text"]
+            options:0 range:NSMakeRange(0,[lines[index+1][@"text"] length])]!=nil;
+        if((!prefix || !selected) && !underline) continue;
+        NSString *marker=[@"macdownHeadingProbe" stringByAppendingString:NSUUID.UUID.UUIDString];
+        markers[@(index)]=marker;
+        NSUInteger insertion=prefix ? prefix.range.length : text.length;
+        [probe insertString:marker atIndex:[line[@"range"] rangeValue].location+insertion];
+    }
+    NSString *probeHTML=markers.count ? renderMarkdown(probe) : @"";
+    if(markers.count && !probeHTML) return;
+    NSArray<NSTextCheckingResult *> *headings=[heading matchesInString:probeHTML?:@"" options:0 range:NSMakeRange(0,probeHTML.length)];
+    BOOL (^isHeading)(NSUInteger,BOOL)=^BOOL(NSUInteger index,BOOL requireFirst) {
+        NSString *marker=markers[@(index)];
+        if(!marker) return NO;
+        for (NSTextCheckingResult *match in headings) {
+            NSString *body=[probeHTML substringWithRange:[match rangeAtIndex:2]];
+            if (requireFirst ? [body hasPrefix:marker] :
+                [[body stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet] hasSuffix:marker]) return YES;
+        }
+        return NO;
+    };
+    for (NSUInteger i=0;i<lines.count;i++) {
+        NSMutableDictionary *line=lines[i]; NSString *text=line[@"text"];
+        if(!markers[@(i)]) continue;
+        NSTextCheckingResult *prefix=[atx firstMatchInString:text options:0 range:NSMakeRange(0,text.length)];
+        if (prefix && isHeading(i,YES)) {
+            line[@"heading"]=@YES;
+            line[@"prefix"]=@(prefix.range.length);
+            NSUInteger end=text.length;
+            // This is Hoedown's actual ATX closing rule: hashes at the very
+            // end, then preceding spaces. Do not erase literal hashes followed
+            // by whitespace, or any hashes from a non-heading prose line.
+            while (end>prefix.range.length && [text characterAtIndex:end-1]=='#') end--;
+            while (end>prefix.range.length && [text characterAtIndex:end-1]==' ') end--;
+            line[@"suffix"]=@(text.length-end);
+        } else if (i+1<lines.count && !prefix && text.length &&
+                   [setext firstMatchInString:lines[i+1][@"text"] options:0 range:NSMakeRange(0,[lines[i+1][@"text"] length])]) {
+            NSString *pair=[NSString stringWithFormat:@"%@%@%@",text,line[@"ending"],lines[i+1][@"text"]];
+            NSString *html=renderMarkdown(pair);
+            NSTextCheckingResult *match=[heading firstMatchInString:html?:@"" options:0 range:NSMakeRange(0,html.length)];
+            // A list/rule/HTML fragment cannot become a heading just because
+            // a regex sees an underline. Require a single real heading first.
+            if (match && ![[html stringByReplacingCharactersInRange:match.range withString:@""]
+                stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet].length && isHeading(i,NO)) {
+                NSMutableDictionary *underline=lines[i+1];
+                if ([line[@"selected"] boolValue] || [underline[@"selected"] boolValue]) {
+                    line[@"selected"]=@YES; underline[@"selected"]=@YES; underline[@"underline"]=@YES;
+                    line[@"heading"]=@YES;
+                }
             }
         }
-
-        NSString *lineContent = line;
-        NSRange headerRange = NSMakeRange(0, 0);
-        if (rangeCount > 1)
-            headerRange = [result rangeAtIndex:1];
-        if (headerRange.location != NSNotFound)
-        {
-            NSUInteger start = headerRange.location + headerRange.length;
-            lineContent = [line substringFromIndex:start];
-        }
-        [processedLines addObject:[header stringByAppendingString:lineContent]];
-
-        [markerRanges addObject:[NSValue valueWithRange:headerRange]];
-        [insertedLengths addObject:@(headerLength)];
-    }];
-    NSString *processed = [processedLines componentsJoinedByString:@"\n"];
-    [self insertText:processed replacementRange:lineRange];
-
-    NSUInteger originalStart = selectedRange.location;
-    NSUInteger originalEnd = NSMaxRange(selectedRange);
-    NSUInteger mappedStart = originalStart;
-    NSUInteger mappedEnd = originalEnd;
-    NSUInteger offset = lineRange.location;
-    for (NSUInteger i = 0; i < lines.count; i++) {
-        NSUInteger removed = markerRanges[i].rangeValue.length;
-        NSUInteger added = insertedLengths[i].unsignedIntegerValue;
-        if (originalStart >= offset)
-            mappedStart = mappedStart - MIN(removed, originalStart - offset) + added;
-        if (originalEnd >= offset)
-            mappedEnd = mappedEnd - MIN(removed, originalEnd - offset) + added;
-        offset += [lines[i] length] + 1;
     }
-    selectedRange = NSMakeRange(mappedStart, mappedEnd - mappedStart);
-    self.selectedRange = selectedRange;
+    NSString *newPrefix=level ? [[@"######" substringToIndex:level] stringByAppendingString:@" "] : @"";
+    NSUInteger first=NSNotFound,last=0;
+    for (NSUInteger i=0;i<lines.count;i++) if ([lines[i][@"selected"] boolValue]) {if(first==NSNotFound) first=i;last=i;}
+    if(first==NSNotFound) return;
+    NSUInteger replacementStart=[lines[first][@"range"] rangeValue].location;
+    NSUInteger replacementEnd=NSMaxRange([lines[last][@"range"] rangeValue]);
+    NSMutableString *replacement=[NSMutableString string];
+    NSRegularExpression *paragraph=[NSRegularExpression regularExpressionWithPattern:@"^\\s*<p>(?:(?!</p>).)*</p>\\s*$"
+        options:NSRegularExpressionDotMatchesLineSeparators error:NULL];
+    NSUInteger mappedStart=NSNotFound,mappedEnd=NSNotFound;
+    for (NSUInteger i=first;i<=last;i++) {
+        NSDictionary *line=lines[i]; NSString *text=line[@"text"],*ending=line[@"ending"];
+        NSRange range=[line[@"range"] rangeValue];
+        NSUInteger outputStart=replacement.length;
+        BOOL remove=[line[@"underline"] boolValue];
+        NSUInteger prefix=[line[@"prefix"] unsignedIntegerValue],suffix=[line[@"suffix"] unsignedIntegerValue];
+        BOOL blank=![[text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet] length];
+        NSString *added=(!blank || first==last) && !remove ? newPrefix : @"";
+        NSString *lineContent=[text substringWithRange:NSMakeRange(prefix,text.length-prefix-suffix)];
+        NSUInteger escapePosition=NSNotFound;
+        BOOL extraSeparator=NO;
+        if(!level && [line[@"heading"] boolValue] && lineContent.length) {
+            NSString *plainHTML=renderMarkdown(lineContent);
+            if(!plainHTML) return;
+            if(![paragraph firstMatchInString:plainHTML options:0 range:NSMakeRange(0,plainHTML.length)]) {
+                NSRegularExpression *literal=[NSRegularExpression regularExpressionWithPattern:@"^ {0,3}(?:[0-9]+(\\.)|([#>*+\\-`~=]))"
+                    options:0 error:NULL];
+                NSTextCheckingResult *match=[literal firstMatchInString:lineContent options:0 range:NSMakeRange(0,lineContent.length)];
+                if(!match) return; // Do not guess a conversion of an unsupported block.
+                NSRange punctuation=[match rangeAtIndex:[match rangeAtIndex:1].location!=NSNotFound ? 1 : 2];
+                escapePosition=punctuation.location;
+                lineContent=[lineContent stringByReplacingCharactersInRange:NSMakeRange(escapePosition,0) withString:@"\\"];
+                plainHTML=renderMarkdown(lineContent);
+                if(!plainHTML || ![paragraph firstMatchInString:plainHTML options:0 range:NSMakeRange(0,plainHTML.length)]) return;
+            }
+            // A neighboring rule must stay a rule after removing an ATX
+            // prefix. Without the blank separator it would become Setext.
+            extraSeparator=ending.length && i+1<lines.count && ![lines[i+1][@"underline"] boolValue] &&
+                [setext firstMatchInString:lines[i+1][@"text"] options:0 range:NSMakeRange(0,[lines[i+1][@"text"] length])]!=nil;
+        }
+        if(!remove) [replacement appendFormat:@"%@%@%@%@",added,lineContent,ending,extraSeparator?ending:@""];
+        NSUInteger boundaries[]={selection.location,NSMaxRange(selection)};
+        for(NSUInteger b=0;b<2;b++) if(boundaries[b]>=range.location && boundaries[b]<=NSMaxRange(range)) {
+            NSUInteger relative=boundaries[b]-range.location,mapped=0;
+            if(!remove) {
+                NSUInteger retainedEnd=text.length-suffix;
+                NSUInteger retained=MIN(relative,retainedEnd);
+                mapped=added.length+(retained>prefix?retained-prefix:0);
+                if(escapePosition!=NSNotFound && retained>=prefix+escapePosition) mapped++;
+                if(relative>text.length) mapped+=relative-text.length;
+            }
+            NSUInteger absolute=replacementStart+outputStart+mapped;
+            if(b==0) mappedStart=absolute;else mappedEnd=absolute;
+        }
+    }
+    NSRange replacementRange=NSMakeRange(replacementStart,replacementEnd-replacementStart);
+    if([replacement isEqualToString:[content substringWithRange:replacementRange]]) return;
+    [self insertText:replacement replacementRange:replacementRange];
+    if(mappedStart!=NSNotFound && mappedEnd!=NSNotFound && mappedEnd>=mappedStart)
+        self.selectedRange=NSMakeRange(mappedStart,mappedEnd-mappedStart);
 }
 
 @end

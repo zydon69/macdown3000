@@ -3437,43 +3437,50 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 - (IBAction)convertToH1:(id)sender
 {
     if ([self performPreviewFormattingAction:@"block" value:@"h1"]) return;
-    [self.editor makeHeaderForSelectedLinesWithLevel:1];
+    [self.editor makeHeaderForSelectedLinesWithLevel:1
+        renderMarkdown:^NSString *(NSString *source) { return [self.renderer HTMLForMarkdownSnapshot:source]; }];
 }
 
 - (IBAction)convertToH2:(id)sender
 {
     if ([self performPreviewFormattingAction:@"block" value:@"h2"]) return;
-    [self.editor makeHeaderForSelectedLinesWithLevel:2];
+    [self.editor makeHeaderForSelectedLinesWithLevel:2
+        renderMarkdown:^NSString *(NSString *source) { return [self.renderer HTMLForMarkdownSnapshot:source]; }];
 }
 
 - (IBAction)convertToH3:(id)sender
 {
     if ([self performPreviewFormattingAction:@"block" value:@"h3"]) return;
-    [self.editor makeHeaderForSelectedLinesWithLevel:3];
+    [self.editor makeHeaderForSelectedLinesWithLevel:3
+        renderMarkdown:^NSString *(NSString *source) { return [self.renderer HTMLForMarkdownSnapshot:source]; }];
 }
 
 - (IBAction)convertToH4:(id)sender
 {
     if ([self performPreviewFormattingAction:@"block" value:@"h4"]) return;
-    [self.editor makeHeaderForSelectedLinesWithLevel:4];
+    [self.editor makeHeaderForSelectedLinesWithLevel:4
+        renderMarkdown:^NSString *(NSString *source) { return [self.renderer HTMLForMarkdownSnapshot:source]; }];
 }
 
 - (IBAction)convertToH5:(id)sender
 {
     if ([self performPreviewFormattingAction:@"block" value:@"h5"]) return;
-    [self.editor makeHeaderForSelectedLinesWithLevel:5];
+    [self.editor makeHeaderForSelectedLinesWithLevel:5
+        renderMarkdown:^NSString *(NSString *source) { return [self.renderer HTMLForMarkdownSnapshot:source]; }];
 }
 
 - (IBAction)convertToH6:(id)sender
 {
     if ([self performPreviewFormattingAction:@"block" value:@"h6"]) return;
-    [self.editor makeHeaderForSelectedLinesWithLevel:6];
+    [self.editor makeHeaderForSelectedLinesWithLevel:6
+        renderMarkdown:^NSString *(NSString *source) { return [self.renderer HTMLForMarkdownSnapshot:source]; }];
 }
 
 - (IBAction)convertToParagraph:(id)sender
 {
     if ([self performPreviewFormattingAction:@"block" value:@"paragraph"]) return;
-    [self.editor makeHeaderForSelectedLinesWithLevel:0];
+    [self.editor makeHeaderForSelectedLinesWithLevel:0
+        renderMarkdown:^NSString *(NSString *source) { return [self.renderer HTMLForMarkdownSnapshot:source]; }];
 }
 
 - (IBAction)toggleStrong:(id)sender

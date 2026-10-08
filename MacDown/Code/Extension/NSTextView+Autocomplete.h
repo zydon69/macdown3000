@@ -34,6 +34,7 @@
 - (BOOL)completeNextListItem:(BOOL)autoIncrement;
 - (BOOL)completeNextBlockquoteLine;
 - (BOOL)completeNextIndentedLine;
-- (void)makeHeaderForSelectedLinesWithLevel:(NSUInteger)level;
+- (void)makeHeaderForSelectedLinesWithLevel:(NSUInteger)level
+                            renderMarkdown:(NSString *(^)(NSString *markdown))renderMarkdown;
 
 @end

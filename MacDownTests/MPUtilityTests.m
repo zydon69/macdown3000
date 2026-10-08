@@ -16,6 +16,8 @@
 #import "FileURLInlining.h"
 #import "NSString+Lookup.h"
 #import "NSPasteboard+Types.h"
+#import "MPRendererTestHelpers.h"
+#import <hoedown/document.h>
 
 @interface MPAuditOutputStream : NSOutputStream
 @property (strong) NSOutputStream *backingStream;
@@ -778,7 +780,8 @@
     NSTextView *view = [[NSTextView alloc] initWithFrame:NSZeroRect];
     view.string = @"### heading";
     view.selectedRange = NSMakeRange(0, 0);
-    [view makeHeaderForSelectedLinesWithLevel:0];
+    MPRenderer *renderer=[[MPRenderer alloc] init];
+    [view makeHeaderForSelectedLinesWithLevel:0 renderMarkdown:^NSString *(NSString *markdown){return [renderer HTMLForMarkdownSnapshot:markdown];}];
     XCTAssertEqualObjects(view.string, @"heading");
     XCTAssertTrue(NSEqualRanges(view.selectedRange, NSMakeRange(0, 0)));
 }
@@ -798,7 +801,8 @@
         view.selectedRange = NSMakeRange(cursor, 3);
         [view.undoManager removeAllActions];
         [view.undoManager beginUndoGrouping];
-        [view makeHeaderForSelectedLinesWithLevel:0];
+        MPRenderer *renderer=[[MPRenderer alloc] init];
+        [view makeHeaderForSelectedLinesWithLevel:0 renderMarkdown:^NSString *(NSString *markdown){return [renderer HTMLForMarkdownSnapshot:markdown];}];
         [view.undoManager endUndoGrouping];
         XCTAssertEqualObjects(view.string, expected);
         XCTAssertTrue(NSEqualRanges(view.selectedRange, NSMakeRange(cursor-prefix.length, 3)));
@@ -808,6 +812,140 @@
         [view.undoManager redo];
         XCTAssertEqualObjects(view.string, expected);
     }
+}
+
+- (void)testNormalTextConsumesActualHeadingDelimitersAndPreservesNeighborsAndUndo {
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0,0,500,300)
+        styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
+    NSTextView *view = [[NSTextView alloc] initWithFrame:window.contentView.bounds];
+    [window.contentView addSubview:view];
+    view.allowsUndo = YES;
+    window.releasedWhenClosed=NO;
+    MPRenderer *renderer = [[MPRenderer alloc] init];
+    MPMockRendererDelegate *delegate = [[MPMockRendererDelegate alloc] init];
+    renderer.delegate = delegate;
+    NSArray *cases = @[
+        @[@"# Before\n\nTitle\n====\n\n---\n\n# After\n", @"# Before\n\nTitle\n\n---\n\n# After\n", @"Title", @0],
+        @[@"# Before\r\n\r\nTitle\r\n----\r\n\r\n---\r\n\r\n# After\r\n", @"# Before\r\n\r\nTitle\r\n\r\n---\r\n\r\n# After\r\n", @"Title", @0],
+        @[@"# Before\n\n# Title ###\n\n# After\n", @"# Before\n\nTitle\n\n# After\n", @"Title", @0],
+        @[@"# Before\r\n\r\n### Title ###\r\n\r\n# After\r\n", @"# Before\r\n\r\nTitle\r\n\r\n# After\r\n", @"Title", @0],
+        @[@"Title\n====\n\n# After\n", @"## Title\n\n# After\n", @"Title", @2],
+        @[@"# Before\n\nTitle\n====\n\n# After\n", @"# Before\n\nTitle\n\n# After\n", @"====", @0]
+    ];
+    @try {
+    for (NSArray *item in cases) {
+        NSString *source=item[0], *expected=item[1], *selected=item[2];
+        view.string=source;
+        view.selectedRange=[source rangeOfString:selected];
+        [view.undoManager removeAllActions];
+        [view.undoManager beginUndoGrouping];
+        [view makeHeaderForSelectedLinesWithLevel:[item[3] unsignedIntegerValue]
+            renderMarkdown:^NSString *(NSString *markdown){return [renderer HTMLForMarkdownSnapshot:markdown];}];
+        [view.undoManager endUndoGrouping];
+        XCTAssertEqualObjects(view.string,expected,@"%@",source);
+        NSString *html=[renderer HTMLForMarkdownSnapshot:view.string];
+        XCTAssertTrue([html containsString:[item[3] unsignedIntegerValue] ? @">Title</h2>" : @"<p>Title</p>"],@"%@",html);
+        XCTAssertTrue([html containsString:@">After</h1>"],@"%@",html);
+        if (![selected isEqualToString:@"===="])
+            XCTAssertEqualObjects([view.string substringWithRange:view.selectedRange],@"Title");
+        else XCTAssertLessThanOrEqual(NSMaxRange(view.selectedRange),view.string.length);
+        XCTAssertTrue(view.undoManager.canUndo);
+        [view.undoManager undo];
+        XCTAssertEqualObjects(view.string,source);
+        [view.undoManager redo];
+        XCTAssertEqualObjects(view.string,expected);
+    }
+    } @finally { [window close]; }
+}
+
+- (void)testNormalTextKeepsLiteralHeadingSyntaxInCodeHTMLAndNonHeadings {
+    MPRenderer *renderer=[[MPRenderer alloc] init];
+    MPMockRendererDelegate *delegate=[[MPMockRendererDelegate alloc] init];
+    delegate.extensions=HOEDOWN_EXT_FENCED_CODE|HOEDOWN_EXT_SPACE_HEADERS;
+    renderer.delegate=delegate;
+    for(NSString *source in @[@"```markdown\n# Title ###\n```\n",@"<div>\n# Title ###\n</div>\n",
+        @"Title ###\n",@"#Title ###\n",@"Title\n\n---\n",@"Title\n= =\n",
+        @"<h1>\nTitle\n====\n</h1>\n",@"#######Title\n",@"#\tTitle\n"]) {
+        NSTextView *view=[[NSTextView alloc] initWithFrame:NSZeroRect];
+        view.string=source; view.selectedRange=[source rangeOfString:@"Title"];
+        NSString *before=[renderer HTMLForMarkdownSnapshot:source];
+        [view makeHeaderForSelectedLinesWithLevel:0 renderMarkdown:^NSString *(NSString *markdown){return [renderer HTMLForMarkdownSnapshot:markdown];}];
+        XCTAssertEqualObjects(view.string,source);
+        XCTAssertEqualObjects([renderer HTMLForMarkdownSnapshot:view.string],before);
+        XCTAssertEqualObjects([view.string substringWithRange:view.selectedRange],@"Title");
+    }
+    NSTextView *view=[[NSTextView alloc] initWithFrame:NSZeroRect];
+    view.string=@"### Title ###  \n";
+    view.selectedRange=[view.string rangeOfString:@"Title"];
+    XCTAssertTrue([[renderer HTMLForMarkdownSnapshot:view.string] containsString:@">Title ###</h3>"]);
+    [view makeHeaderForSelectedLinesWithLevel:0 renderMarkdown:^NSString *(NSString *markdown){return [renderer HTMLForMarkdownSnapshot:markdown];}];
+    XCTAssertEqualObjects(view.string,@"Title ###\n");
+    XCTAssertTrue([[renderer HTMLForMarkdownSnapshot:view.string] containsString:@"<p>Title ###</p>"]);
+    XCTAssertEqualObjects([view.string substringWithRange:view.selectedRange],@"Title");
+}
+
+- (void)testNormalTextKeepsHeadingBodyLiteralAndDoesNotCreateAnotherBlock {
+    MPRenderer *renderer=[[MPRenderer alloc] init];
+    MPMockRendererDelegate *delegate=[[MPMockRendererDelegate alloc] init];
+    renderer.delegate=delegate;
+    NSArray *cases=@[
+        @[@"# - Title\n",@"\\- Title\n",@"<p>- Title</p>"],
+        @[@"# # Title\n",@"\\# Title\n",@"<p># Title</p>"],
+        @[@"# 1. Title\n",@"1\\. Title\n",@"<p>1. Title</p>"],
+        @[@"# Title\n---\n",@"Title\n\n---\n",@"<p>Title</p>"],
+        @[@"# Title\r\n---\r\n",@"Title\r\n\r\n---\r\n",@"<p>Title</p>"]
+    ];
+    NSWindow *window=[[NSWindow alloc] initWithContentRect:NSMakeRect(0,0,500,300)
+        styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
+    window.releasedWhenClosed=NO;
+    NSTextView *view=[[NSTextView alloc] initWithFrame:window.contentView.bounds];
+    [window.contentView addSubview:view]; view.allowsUndo=YES;
+    @try {
+    for(NSArray *item in cases) {
+        view.string=item[0]; view.selectedRange=[view.string rangeOfString:@"Title"];
+        [view.undoManager removeAllActions];
+        [view.undoManager beginUndoGrouping];
+        [view makeHeaderForSelectedLinesWithLevel:0 renderMarkdown:^NSString *(NSString *markdown){return [renderer HTMLForMarkdownSnapshot:markdown];}];
+        [view.undoManager endUndoGrouping];
+        XCTAssertEqualObjects(view.string,item[1]);
+        NSString *html=[renderer HTMLForMarkdownSnapshot:view.string];
+        XCTAssertTrue([html containsString:item[2]],@"%@",html);
+        if([item[0] containsString:@"---"]) XCTAssertTrue([html containsString:@"<hr>"]);
+        XCTAssertEqualObjects([view.string substringWithRange:view.selectedRange],@"Title");
+        XCTAssertTrue(view.undoManager.canUndo);
+        [view.undoManager undo]; XCTAssertEqualObjects(view.string,item[0]);
+        [view.undoManager redo]; XCTAssertEqualObjects(view.string,item[1]);
+    }
+    } @finally { [window close]; }
+}
+
+- (void)testNormalTextLargeHeadingSelectionUsesActualParserAndKeepsContents {
+    NSMutableString *source=[NSMutableString string],*expected=[NSMutableString string];
+    for(NSUInteger i=0;i<1000;i++) {
+        [source appendFormat:@"## Heading %lu é 😀\n",(unsigned long)i];
+        [expected appendFormat:@"Heading %lu é 😀\n",(unsigned long)i];
+    }
+    NSTextView *view=[[NSTextView alloc] initWithFrame:NSZeroRect];
+    view.string=source; view.selectedRange=NSMakeRange(0,source.length);
+    MPRenderer *renderer=[[MPRenderer alloc] init];
+    MPMockRendererDelegate *delegate=[[MPMockRendererDelegate alloc] init];
+    renderer.delegate=delegate;
+    __block NSUInteger fullDocumentParses=0,totalParses=0;
+    NSDate *started=NSDate.date;
+    [view makeHeaderForSelectedLinesWithLevel:0 renderMarkdown:^NSString *(NSString *markdown){
+        totalParses++;
+        if(markdown.length>=source.length) fullDocumentParses++;
+        return [renderer HTMLForMarkdownSnapshot:markdown];
+    }];
+    NSLog(@"Source heading conversion: 1000 lines, %lu UTF16 units, %.6f seconds, %lu full document parses / %lu total parses",
+        (unsigned long)source.length,-started.timeIntervalSinceNow,(unsigned long)fullDocumentParses,(unsigned long)totalParses);
+    XCTAssertEqualObjects(view.string,expected);
+    XCTAssertLessThanOrEqual(NSMaxRange(view.selectedRange),view.string.length);
+    XCTAssertEqualObjects([view.string substringWithRange:view.selectedRange],expected);
+    NSString *html=[renderer HTMLForMarkdownSnapshot:view.string];
+    XCTAssertFalse([html containsString:@"<h2"]);
+    XCTAssertTrue([html containsString:@"Heading 0 é 😀"]);
+    XCTAssertTrue([html containsString:@"Heading 999 é 😀"]);
 }
 
 - (void)testOrderedBlockToggleRemovesEntireMarkerAndPreservesSelectedText {
