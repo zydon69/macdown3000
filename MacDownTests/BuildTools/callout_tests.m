@@ -19,6 +19,13 @@ int main(void) { @autoreleasepool {
         { NSString *html = [renderer renderMarkdown:literal];
         check(![html containsString:@"class=\"mp-callout"], @"Literal or unsupported syntax was changed");
         check(![html containsString:@"macdowncallout"], @"Literal marker leaked"); }
+    // Inline spans are collected before indented ranges. Literal protection
+    // must remain correct when those groups overlap or are out of source order.
+    NSString *mixed = [renderer renderMarkdown:@"    ::: {.callout-note}\n    Indented `code`\n    :::\n\n`\n::: {.callout-tip}\nInline\n:::\n`\n\n::: {.callout-warning}\nVisible\n:::"];
+    check([mixed containsString:@"class=\"mp-callout mp-callout-warning\""] &&
+          ![mixed containsString:@"class=\"mp-callout mp-callout-note\""] &&
+          ![mixed containsString:@"class=\"mp-callout mp-callout-tip\""],
+          @"Mixed literal ranges must protect code without suppressing real callouts");
     NSDictionary *prepared = MPPreprocessMarkdown(@"::: {.callout-note}\n\n- [ ] task\n:::\n",YES,10);
     NSString *marked = prepared[@"text"];
     NSString *offset = [prepared[@"taskPrefix"] stringByAppendingString:@"34Z"];

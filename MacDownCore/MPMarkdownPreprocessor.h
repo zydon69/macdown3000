@@ -121,8 +121,14 @@ NS_INLINE NSDictionary *MPPrepareCallouts(NSString *text)
     NSRegularExpression *code = [NSRegularExpression regularExpressionWithPattern:
         @"^[ \\t]*(?:>[ \\t]*)*(?:(?:[-*+]|\\d+[.)])[ \\t]+)?(`{3,}|~{3,})(.*)$" options:0 error:NULL];
     NSString *fence = nil;
-    NSArray<NSValue *> *literals = MPMarkdownLiteralRanges(text);
-    NSUInteger offset = 0;
+    // Literal spans and indented-code ranges can overlap and arrive in two
+    // separate groups. Order them once and advance monotonically with lines.
+    NSArray<NSValue *> *literals = [MPMarkdownLiteralRanges(text)
+        sortedArrayUsingComparator:^NSComparisonResult(NSValue *a, NSValue *b) {
+            NSUInteger left = a.rangeValue.location, right = b.rangeValue.location;
+            return left < right ? NSOrderedAscending : left > right ? NSOrderedDescending : NSOrderedSame;
+        }];
+    NSUInteger offset = 0, literalIndex = 0;
     for (NSUInteger i = 0; i < lines.count; i++) {
         NSString *line = lines[i];
         NSTextCheckingResult *cm = [code firstMatchInString:line options:0 range:NSMakeRange(0,line.length)];
@@ -133,8 +139,10 @@ NS_INLINE NSDictionary *MPPrepareCallouts(NSString *text)
             offset += line.length + 1; continue;
         }
         if (run) { fence = run; offset += line.length + 1; continue; }
-        BOOL literal = NO;
-        for (NSValue *value in literals) if (NSIntersectionRange(NSMakeRange(offset,line.length),value.rangeValue).length) { literal = YES; break; }
+        while (literalIndex < literals.count &&
+               NSMaxRange(literals[literalIndex].rangeValue) <= offset) literalIndex++;
+        BOOL literal = literalIndex < literals.count &&
+            NSIntersectionRange(NSMakeRange(offset,line.length), literals[literalIndex].rangeValue).length > 0;
         offset += line.length + 1;
         if (literal) continue;
         NSTextCheckingResult *match = [opening firstMatchInString:line options:0 range:NSMakeRange(0,line.length)];
