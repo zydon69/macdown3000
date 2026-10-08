@@ -150,6 +150,7 @@ NS_INLINE NSString *MPHTMLFromMarkdown(
         hoedown_document_free(document);
         hoedown_buffer_free(ob);
     }
+    result = MPFinishCallouts(result, preprocessed[@"callouts"]);
     if (frontMatter)
         result = [NSString stringWithFormat:@"%@\n%@", frontMatter, result];
     

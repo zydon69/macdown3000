@@ -217,6 +217,7 @@ NS_INLINE NSString *MPQuickLookContentSecurityPolicy(void)
     // Parse markdown to HTML body
     NSString *body = [self parseMarkdownToHTML:preprocessed[@"text"] codeEscapeToken:preprocessed[@"codeEscapeToken"] taskPrefix:preprocessed[@"taskPrefix"]];
 
+    body = MPFinishCallouts(body, preprocessed[@"callouts"]);
     // Wrap in complete HTML document
     return [self wrapBodyInHTML:body];
 }

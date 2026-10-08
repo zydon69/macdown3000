@@ -102,6 +102,100 @@ NS_INLINE NSUInteger MPMarkdownQuoteDepth(NSString *line, NSUInteger *contentSta
     return depth;
 }
 
+// A deliberately small Quarto subset. Unknown attributes and incomplete divs
+// remain source text. Opaque markers let the existing Markdown renderer parse
+// callout contents, rather than introducing another Markdown implementation.
+NS_INLINE NSDictionary *MPPrepareCallouts(NSString *text)
+{
+    if (![text containsString:@":::"]) return @{@"text":text, @"callouts":@[]};
+    NSString *prefix;
+    do { prefix = [@"macdowncallout" stringByAppendingString:NSUUID.UUID.UUIDString]; }
+    while ([text containsString:prefix]);
+    NSArray *lines = [text componentsSeparatedByString:@"\n"];
+    NSMutableArray *output = [lines mutableCopy], *stack = [NSMutableArray array], *pairs = [NSMutableArray array];
+    NSRegularExpression *opening = [NSRegularExpression regularExpressionWithPattern:
+        @"^ {0,3}(:{3,})[ \\t]*\\{(.*)\\}[ \\t]*$" options:0 error:NULL];
+    NSRegularExpression *supported = [NSRegularExpression regularExpressionWithPattern:
+        @"^\\.callout-(note|tip|warning|important|caution)(?:[ \\t]+collapse=(?:\\\"(true|false)\\\"|'(true|false)'|(true|false)))?[ \\t]*$" options:0 error:NULL];
+    NSRegularExpression *closing = [NSRegularExpression regularExpressionWithPattern:@"^ {0,3}:{3,}[ \\t]*$" options:0 error:NULL];
+    NSRegularExpression *code = [NSRegularExpression regularExpressionWithPattern:
+        @"^[ \\t]*(?:>[ \\t]*)*(?:(?:[-*+]|\\d+[.)])[ \\t]+)?(`{3,}|~{3,})(.*)$" options:0 error:NULL];
+    NSString *fence = nil;
+    NSArray<NSValue *> *literals = MPMarkdownLiteralRanges(text);
+    NSUInteger offset = 0;
+    for (NSUInteger i = 0; i < lines.count; i++) {
+        NSString *line = lines[i];
+        NSTextCheckingResult *cm = [code firstMatchInString:line options:0 range:NSMakeRange(0,line.length)];
+        NSString *run = cm ? [line substringWithRange:[cm rangeAtIndex:1]] : nil;
+        if (fence) {
+            if (run && [run characterAtIndex:0] == [fence characterAtIndex:0] && run.length >= fence.length &&
+                ![[line substringWithRange:[cm rangeAtIndex:2]] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet].length) fence = nil;
+            offset += line.length + 1; continue;
+        }
+        if (run) { fence = run; offset += line.length + 1; continue; }
+        BOOL literal = NO;
+        for (NSValue *value in literals) if (NSIntersectionRange(NSMakeRange(offset,line.length),value.rangeValue).length) { literal = YES; break; }
+        offset += line.length + 1;
+        if (literal) continue;
+        NSTextCheckingResult *match = [opening firstMatchInString:line options:0 range:NSMakeRange(0,line.length)];
+        if (match) {
+            NSString *attributes = [line substringWithRange:[match rangeAtIndex:2]];
+            NSTextCheckingResult *valid = [supported firstMatchInString:attributes options:0 range:NSMakeRange(0,attributes.length)];
+            NSMutableDictionary *entry = [@{@"start":@(i)} mutableCopy];
+            if (valid) {
+                entry[@"type"] = [attributes substringWithRange:[valid rangeAtIndex:1]];
+                for (NSUInteger n = 2; n <= 4; n++) if ([valid rangeAtIndex:n].location != NSNotFound)
+                    entry[@"collapse"] = [attributes substringWithRange:[valid rangeAtIndex:n]];
+            }
+            [stack addObject:entry];
+        } else if (stack.count && [closing firstMatchInString:line options:0 range:NSMakeRange(0,line.length)]) {
+            NSMutableDictionary *entry = stack.lastObject; [stack removeLastObject];
+            if (!entry[@"type"]) continue;
+            NSString *token = [prefix stringByAppendingFormat:@"%lu",(unsigned long)pairs.count];
+            entry[@"token"] = token;
+            entry[@"sourceOpen"] = lines[[entry[@"start"] unsignedIntegerValue]];
+            output[[entry[@"start"] unsignedIntegerValue]] = [NSString stringWithFormat:@"\n%@OPEN\n",token];
+            output[i] = [NSString stringWithFormat:@"\n%@CLOSE\n",token];
+            [pairs addObject:entry];
+        }
+    }
+    return @{@"text":[output componentsJoinedByString:@"\n"], @"callouts":pairs};
+}
+
+NS_INLINE NSString *MPFinishCallouts(NSString *html, NSArray<NSDictionary *> *callouts)
+{
+    BOOL rendered = NO;
+    for (NSDictionary *entry in callouts) {
+        NSString *open = [NSString stringWithFormat:@"<p>%@OPEN</p>",entry[@"token"]];
+        NSString *close = [NSString stringWithFormat:@"<p>%@CLOSE</p>",entry[@"token"]];
+        NSRange start = [html rangeOfString:open];
+        if (start.location == NSNotFound) continue;
+        NSRange end = [html rangeOfString:close options:0 range:NSMakeRange(NSMaxRange(start),html.length-NSMaxRange(start))];
+        if (end.location == NSNotFound) continue;
+        NSString *body = [html substringWithRange:NSMakeRange(NSMaxRange(start),end.location-NSMaxRange(start))];
+        NSString *title = [entry[@"type"] capitalizedString];
+        NSRegularExpression *heading = [NSRegularExpression regularExpressionWithPattern:@"^\\s*<h([1-6])(?:\\s[^>]*)?>(.*?)</h\\1>" options:NSRegularExpressionDotMatchesLineSeparators error:NULL];
+        NSTextCheckingResult *match = [heading firstMatchInString:body options:0 range:NSMakeRange(0,body.length)];
+        if (match) { title = [[body substringWithRange:match.range] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet]; body = [body substringFromIndex:NSMaxRange(match.range)]; }
+        NSString *replacement;
+        if (entry[@"collapse"]) replacement = [NSString stringWithFormat:@"<details class=\"mp-callout mp-callout-%@\"%@><summary>%@</summary><div class=\"mp-callout-body\">%@</div></details>",entry[@"type"],[entry[@"collapse"] isEqual:@"false"] ? @" open" : @"",title,body];
+        else replacement = [NSString stringWithFormat:@"<aside class=\"mp-callout mp-callout-%@\"><div class=\"mp-callout-title\">%@</div><div class=\"mp-callout-body\">%@</div></aside>",entry[@"type"],title,body];
+        html = [html stringByReplacingCharactersInRange:NSMakeRange(start.location,NSMaxRange(end)-start.location) withString:replacement];
+        rendered = YES;
+    }
+    // Hoedown may keep a marker inside a raw HTML block instead of making a
+    // paragraph. Restore the original delimiters there; never leak opaque ids.
+    for (NSDictionary *entry in callouts) {
+        NSString *source = entry[@"sourceOpen"];
+        source = [[source stringByReplacingOccurrencesOfString:@"&" withString:@"&amp;"] stringByReplacingOccurrencesOfString:@"<" withString:@"&lt;"];
+        source = [source stringByReplacingOccurrencesOfString:@">" withString:@"&gt;"];
+        html = [html stringByReplacingOccurrencesOfString:[entry[@"token"] stringByAppendingString:@"OPEN"] withString:source];
+        html = [html stringByReplacingOccurrencesOfString:[entry[@"token"] stringByAppendingString:@"CLOSE"] withString:@":::"];
+    }
+    if (!rendered) return html;
+    return [@"<style>.mp-callout{border:1px solid #8886;border-left:4px solid #4385be;border-radius:4px;margin:1em 0}.mp-callout-tip{border-left-color:#23865a}.mp-callout-warning,.mp-callout-caution{border-left-color:#ba7818}.mp-callout-important{border-left-color:#bc3945}.mp-callout-title,.mp-callout>summary{font-weight:bold;padding:.5em .8em}.mp-callout>summary{cursor:pointer}.mp-callout-title>h1,.mp-callout-title>h2,.mp-callout-title>h3,.mp-callout-title>h4,.mp-callout-title>h5,.mp-callout-title>h6,.mp-callout>summary>h1,.mp-callout>summary>h2,.mp-callout>summary>h3,.mp-callout>summary>h4,.mp-callout>summary>h5,.mp-callout>summary>h6{display:inline;font-size:inherit;line-height:inherit;margin:0;border:0}.mp-callout-body{padding:0 .8em .5em}.mp-callout-body>:last-child{margin-bottom:0}@media print{details.mp-callout:not([open])>.mp-callout-body{display:block!important}}</style>\n" stringByAppendingString:html];
+}
+
 // Hoedown extracts reference definitions before parsing fenced code. Protect
 // only those definitions with a per-parse marker, removed by the blockcode
 // callback before escaping. Unlike a zero-width character, this cannot alter
@@ -123,7 +217,11 @@ NS_INLINE NSDictionary<NSString *, NSString *> *MPPreprocessMarkdown(NSString *t
                      atIndex:NSMaxRange(match.range)];
     }
     text = [marked stringByReplacingOccurrencesOfString:@"\r\n" withString:@"\n"];
-    if (!fencedCodeEnabled) return @{@"text": MPPreprocessProse(text), @"codeEscapeToken": @"", @"taskPrefix": taskPrefix};
+    if (!fencedCodeEnabled) {
+        NSMutableDictionary *prepared = [MPPrepareCallouts(MPPreprocessProse(text)) mutableCopy];
+        prepared[@"codeEscapeToken"] = @""; prepared[@"taskPrefix"] = taskPrefix;
+        return prepared;
+    }
     NSString *marker;
     do { marker = [NSString stringWithFormat:@"macdown-code-%@", NSUUID.UUID.UUIDString]; }
     while ([text containsString:marker]);
@@ -207,7 +305,9 @@ NS_INLINE NSDictionary<NSString *, NSString *> *MPPreprocessMarkdown(NSString *t
         if (newline) [result appendString:@"\n"];
     }
     [result appendString:MPPreprocessProse(prose)];
-    return @{@"text": result, @"codeEscapeToken": marker, @"taskPrefix": taskPrefix};
+    NSMutableDictionary *prepared = [MPPrepareCallouts(result) mutableCopy];
+    prepared[@"codeEscapeToken"] = marker; prepared[@"taskPrefix"] = taskPrefix;
+    return prepared;
 }
 
 NS_INLINE NSString *MPRemoveTaskMarkers(NSString *html, NSString *taskPrefix)

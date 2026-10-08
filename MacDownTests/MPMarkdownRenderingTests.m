@@ -1227,4 +1227,26 @@
                   @"Empty heading with TOC enabled must render without crashing.");
 }
 
+- (void)testQuartoCalloutsUseApplicationMarkdownRendererAndKeepTitleAnchors
+{
+    self.delegate.renderTOC = YES;
+    NSString *html = [self renderMarkdown:@"[TOC]\n\n::: {.callout-warning collapse=\"true\"}\n## Keep **this title**\n\nA *body*.\n:::\n"
+                              withExtensions:HOEDOWN_EXT_FENCED_CODE rendererFlags:0];
+    XCTAssertTrue([html containsString:@"<details class=\"mp-callout mp-callout-warning\">"]);
+    XCTAssertTrue([html containsString:@"<strong>this title</strong>"]);
+    XCTAssertTrue([html containsString:@"<em>body</em>"]);
+    XCTAssertFalse([html containsString:@"macdowncallout"]);
+    XCTAssertTrue([html containsString:@"@media print"]);
+    XCTAssertTrue([html containsString:@"id=\"keep-this-title\""]);
+    XCTAssertTrue([html containsString:@"href=\"#keep-this-title\""]);
+}
+
+- (void)testQuartoCalloutSyntaxInsideCodeIsLiteral
+{
+    NSString *html = [self renderMarkdown:@"```markdown\n::: {.callout-note}\nKeep literal\n:::\n```\n"
+                              withExtensions:HOEDOWN_EXT_FENCED_CODE rendererFlags:0];
+    XCTAssertFalse([html containsString:@"class=\"mp-callout"]);
+    XCTAssertTrue([html containsString:@".callout-note"]);
+}
+
 @end
