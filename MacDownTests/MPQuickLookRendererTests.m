@@ -107,6 +107,28 @@
 }
 
 
+- (void)testCodeWrappingPreferenceIsConsumedWithoutChangingLiteralCode
+{
+    CFStringRef domain = CFSTR("app.macdown.macdown3000");
+    CFStringRef key = CFSTR("htmlWrapCodeBlocks");
+    id original = CFBridgingRelease(CFPreferencesCopyValue(key, domain,
+        kCFPreferencesCurrentUser, kCFPreferencesAnyHost));
+    @try {
+        for (NSNumber *enabled in @[@NO, @YES, @NO]) {
+            CFPreferencesSetValue(key, (__bridge CFPropertyListRef)enabled, domain,
+                kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+            XCTAssertTrue(CFPreferencesSynchronize(domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost));
+            NSString *html = [self.renderer renderMarkdown:@"```bash\necho abcdefghijklmnopqrstuvwxyz\n```"];
+            XCTAssertEqual([html containsString:@"id=\"macdown-code-wrapping\""], enabled.boolValue);
+            XCTAssertTrue([html containsString:@"echo abcdefghijklmnopqrstuvwxyz"]);
+        }
+    } @finally {
+        CFPreferencesSetValue(key, (__bridge CFPropertyListRef)original, domain,
+            kCFPreferencesCurrentUser, kCFPreferencesAnyHost);
+        XCTAssertTrue(CFPreferencesSynchronize(domain, kCFPreferencesCurrentUser, kCFPreferencesAnyHost));
+    }
+}
+
 #pragma mark - Initialization Tests
 
 - (void)testInitializerCreatesValidInstance

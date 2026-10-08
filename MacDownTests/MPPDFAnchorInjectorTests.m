@@ -179,6 +179,10 @@
     WebView *web = [document valueForKey:@"preview"];
     XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:
         @"String(document.querySelector('details').open)"], @"false");
+    [web stringByEvaluatingJavaScriptFromString:@"document.querySelector('summary').click()"];
+    XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:
+        @"String(document.querySelector('details').open)"], @"true");
+    [web stringByEvaluatingJavaScriptFromString:@"document.querySelector('summary').click()"];
     PDFDocument *pdf = [self printTemporaryPDF:document];
     XCTAssertTrue([pdf.string containsString:@"Hidden callout content 8675309"]);
     XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:

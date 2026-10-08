@@ -44,6 +44,8 @@ jobs:
         python3 MacDownTests/BuildTools/toc_hierarchy_tests.py
         python3 MacDownTests/BuildTools/quicklook_theme_tests.py
         python3 MacDownTests/BuildTools/quicklook_code_theme_tests.py
+        python3 MacDownTests/BuildTools/community_theme_tests.py
+        python3 MacDownTests/BuildTools/callout_tests.py
         python3 MacDownTests/BuildTools/heading_spacing_tests.py
         python3 MacDownTests/BuildTools/indent_selection_tests.py
         bash MacDownTests/UI/test_editor_geometry.sh

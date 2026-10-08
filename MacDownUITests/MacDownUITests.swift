@@ -18,7 +18,8 @@ final class MacDownUITests: XCTestCase {
         }
         // Disable state restoration to get consistent initial state
         app.launchArguments = ["-ApplePersistenceIgnoreState", "YES",
-                               "-MPDisableUpdater", "YES"]
+                               "-MPDisableUpdater", "YES",
+                               "-AppleLanguages", "(en)"]
         app.launch()
     }
 
@@ -146,6 +147,100 @@ final class MacDownUITests: XCTestCase {
         app.typeKey("f", modifierFlags: .command)
         XCTAssertFalse(app.searchFields["preview-find-field"].isHittable,
                        "Source Find must retain its native editor interface")
+    }
+
+    func testReaderModeAppliesToEveryNewWindowAndKeepsProgressVisible() throws {
+        app.terminate()
+        app.launchArguments = ["-ApplePersistenceIgnoreState", "YES",
+                               "-MPDisableUpdater", "YES",
+                               "-editorStartInPreviewMode", "YES",
+                               "-editorShowReadingProgress", "YES"]
+        app.launch()
+        for _ in 0..<3 {
+            app.typeKey("n", modifierFlags: .command)
+            let window = app.windows.firstMatch
+            XCTAssertTrue(window.webViews.firstMatch.waitForExistence(timeout: 10))
+            XCTAssertFalse(window.textViews.matching(identifier: "editor-text-view").firstMatch.isHittable)
+            let progress = window.staticTexts["reading-progress"]
+            XCTAssertTrue(progress.waitForExistence(timeout: 5))
+            XCTAssertEqual(progress.value as? String, "100%")
+        }
+    }
+
+    func testReadingPositionUpdatesDuringEditorAndPreviewWheelScrolling() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("ReadingProgress.md")
+        try String(repeating: "Reading progress paragraph.\n\n", count: 300)
+            .write(to: file, atomically: true, encoding: .utf8)
+        app.terminate()
+        app.launchArguments = ["-ApplePersistenceIgnoreState", "YES",
+                               "-MPDisableUpdater", "YES",
+                               "-editorShowReadingProgress", "YES",
+                               "-editorSyncScrolling", "NO",
+                               "-editorStartInPreviewMode", "NO",
+                               "-AppleLanguages", "(en)"]
+        app.launch()
+        app.typeKey("o", modifierFlags: .command)
+        app.typeKey("g", modifierFlags: [.command, .shift])
+        app.typeText(file.path)
+        app.typeKey(XCUIKeyboardKey.return.rawValue, modifierFlags: [])
+        app.typeKey(XCUIKeyboardKey.return.rawValue, modifierFlags: [])
+        let window = app.windows["ReadingProgress.md"]
+        let editor = window.textViews.matching(identifier: "editor-text-view").firstMatch
+        XCTAssertTrue(editor.waitForExistence(timeout: 10))
+        let progress = window.staticTexts["reading-progress"]
+        XCTAssertTrue(progress.waitForExistence(timeout: 5))
+        editor.scroll(byDeltaX: 0, deltaY: -100000)
+        wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "100%"), object: progress)], timeout: 5)
+        // With sync disabled the preview is still at its top. Its wheel event
+        // must take ownership of the indicator without requiring a click.
+        let preview = window.webViews.firstMatch
+        preview.scroll(byDeltaX: 0, deltaY: 1000)
+        wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "0%"), object: progress)], timeout: 5)
+        preview.scroll(byDeltaX: 0, deltaY: -100000)
+        wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "100%"), object: progress)], timeout: 5)
+    }
+
+    func testReaderSettingsCanBeSelectedThroughPreferences() throws {
+        app.typeKey(",", modifierFlags: .command)
+        let general = app.toolbars.buttons["General"]
+        if general.waitForExistence(timeout: 5) { general.click() }
+        let appearance = app.popUpButtons["application-appearance"]
+        XCTAssertTrue(appearance.waitForExistence(timeout: 5))
+        appearance.click()
+        app.menuItems["Appearance: Dark"].click()
+        XCTAssertEqual(appearance.value as? String, "Appearance: Dark")
+        let screenshot = XCTAttachment(screenshot: app.windows.containing(.popUpButton,
+            identifier: "application-appearance").firstMatch.screenshot())
+        screenshot.name = "Reader settings with forced dark appearance"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        let position = app.checkBoxes["reading-progress-setting"]
+        XCTAssertTrue(position.exists)
+        if (position.value as? NSNumber)?.intValue != 1 { position.click() }
+        XCTAssertEqual((position.value as? NSNumber)?.intValue, 1)
+        XCTAssertTrue(app.staticTexts.matching(identifier: "reading-progress").firstMatch.waitForExistence(timeout: 5))
+        let rendering = app.toolbars.buttons["Rendering"]
+        XCTAssertTrue(rendering.exists)
+        rendering.click()
+        let wrapping = app.checkBoxes["code-wrap-setting"]
+        XCTAssertTrue(wrapping.waitForExistence(timeout: 5))
+        let initialWrapping = try XCTUnwrap(wrapping.value as? NSNumber).intValue
+        let wrapIndicator = wrapping.coordinate(withNormalizedOffset: CGVector(dx: 0.02, dy: 0.5))
+        wrapIndicator.click()
+        XCTAssertEqual((wrapping.value as? NSNumber)?.intValue, 1 - initialWrapping)
+        if initialWrapping == 1 { wrapIndicator.click() }
+        XCTAssertEqual((wrapping.value as? NSNumber)?.intValue, 1)
+        app.terminate()
+        app.launch()
+        app.typeKey(",", modifierFlags: .command)
+        app.toolbars.buttons["General"].click()
+        XCTAssertEqual(app.popUpButtons["application-appearance"].value as? String, "Appearance: Dark")
+        XCTAssertEqual((app.checkBoxes["reading-progress-setting"].value as? NSNumber)?.intValue, 1)
+        app.toolbars.buttons["Rendering"].click()
+        XCTAssertEqual((app.checkBoxes["code-wrap-setting"].value as? NSNumber)?.intValue, 1)
     }
 
     /// Smoke test: App launches and shows at least one window.
