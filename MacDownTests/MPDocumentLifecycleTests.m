@@ -29,6 +29,7 @@
 
 @interface MPPreferences (PreviewEditingTests)
 - (int)rendererFlags;
+
 @end
 
 // A real loopback HTTP response exercises WebKit navigation and its delegates.
@@ -2340,6 +2341,13 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
         preferences.htmlMermaid = mermaid;
         preferences.htmlGraphviz = graphviz;
     }
+}
+
+
+- (void)testPreviewSetextProofDoesNotConsumeUnderlineAfterATX
+{
+    [self assertPreviewBlockSource:@"# Title\n===\n\nNeighbor.\n" texts:@[@"Title"] value:@"h3"
+        expected:@"### Title\n===\n\nNeighbor.\n" HTML:@">Title</h3>"];
 }
 
 @end

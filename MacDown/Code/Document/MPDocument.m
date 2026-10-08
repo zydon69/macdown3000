@@ -5781,6 +5781,7 @@ to link outside that scope.", \
         NSRange lineRange = [source lineRangeForRange:range];
         NSMutableArray<NSMutableDictionary *> *sourceLines = [NSMutableArray array];
         NSRegularExpression *setext = [NSRegularExpression regularExpressionWithPattern:@"^(?:=+|-+)[ ]*$" options:0 error:NULL];
+        NSRegularExpression *singleParagraph = [NSRegularExpression regularExpressionWithPattern:@"^\\s*<p>.*?</p>\\s*$" options:NSRegularExpressionDotMatchesLineSeparators error:NULL];
         NSRegularExpression *singleHeading = [NSRegularExpression regularExpressionWithPattern:@"^\\s*<h[12]\\b[^>]*>.*?</h[12]>\\s*$" options:NSRegularExpressionDotMatchesLineSeparators error:NULL];
         NSUInteger offset = lineRange.location;
         while (offset < NSMaxRange(lineRange)) {
@@ -5807,7 +5808,9 @@ to link outside that scope.", \
             if ([setext firstMatchInString:text options:0 range:NSMakeRange(0,text.length)]) {
                 NSRange pair = NSMakeRange([previous[@"range"] rangeValue].location,end-[previous[@"range"] rangeValue].location);
                 NSString *HTML = [self.renderer HTMLForMarkdownSnapshot:[source substringWithRange:pair]];
-                if ([singleHeading firstMatchInString:HTML options:0 range:NSMakeRange(0,HTML.length)]) {
+                NSString *beforeHTML=[self.renderer HTMLForMarkdownSnapshot:previous[@"text"]];
+                if ([singleParagraph firstMatchInString:beforeHTML options:0 range:NSMakeRange(0,beforeHTML.length)] &&
+                    [singleHeading firstMatchInString:HTML options:0 range:NSMakeRange(0,HTML.length)]) {
                     [sourceLines addObject:[@{@"range":[NSValue valueWithRange:NSMakeRange(start,end-start)],
                         @"contents":[NSValue valueWithRange:NSMakeRange(start,contentsEnd-start)],@"text":text,
                         @"ending":[source substringWithRange:NSMakeRange(contentsEnd,end-contentsEnd)],
@@ -5823,7 +5826,9 @@ to link outside that scope.", \
                 [setext firstMatchInString:line[@"text"] options:0 range:NSMakeRange(0,[line[@"text"] length])]) {
                 NSRange before = [sourceLines[i-1][@"range"] rangeValue], current = [line[@"range"] rangeValue];
                 NSString *HTML = [self.renderer HTMLForMarkdownSnapshot:[source substringWithRange:NSMakeRange(before.location,NSMaxRange(current)-before.location)]];
-                if ([singleHeading firstMatchInString:HTML options:0 range:NSMakeRange(0,HTML.length)]) line[@"setext"] = @YES;
+                NSString *beforeHTML=[self.renderer HTMLForMarkdownSnapshot:sourceLines[i-1][@"text"]];
+                if ([singleParagraph firstMatchInString:beforeHTML options:0 range:NSMakeRange(0,beforeHTML.length)] &&
+                    [singleHeading firstMatchInString:HTML options:0 range:NSMakeRange(0,HTML.length)]) line[@"setext"] = @YES;
             }
             if (![line[@"setext"] boolValue]) { [blockBody appendString:line[@"text"]]; [blockBody appendString:line[@"ending"]]; }
         }
