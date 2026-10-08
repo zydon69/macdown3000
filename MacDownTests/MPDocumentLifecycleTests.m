@@ -1390,6 +1390,47 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
     }
 }
 
+- (void)testPreviewFormattingErrorBelongsToSelectionAndDeselectHidesPanel
+{
+    MPDocument *document = [MPDocument new];
+    document.fileURL = self.testFileURL;
+    MPEditorView *editor = [[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+    WebView *web = [[WebView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+    MPRenderer *renderer = [MPRenderer new];
+    document.editor = editor; document.preview = web; document.renderer = renderer;
+    renderer.delegate = (id<MPRendererDelegate>)document;
+    renderer.dataSource = (id<MPRendererDataSource>)document;
+    web.frameLoadDelegate = (id<WebFrameLoadDelegate>)document;
+    BOOL oldMath = document.preferences.htmlMathJax;
+    BOOL oldSmart = document.preferences.extensionSmartyPants;
+    @try {
+        document.preferences.htmlMathJax = NO;
+        document.preferences.extensionSmartyPants = NO;
+        editor.string = @"Alpha passage\n\nBeta passage\n";
+        [renderer parseMarkdown:editor.string]; [renderer render];
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:
+            [NSPredicate predicateWithBlock:^BOOL(id object,NSDictionary *bindings) {
+                return !web.isLoading && document.previewEditRanges.count==2;
+            }] object:web]] timeout:10];
+        NSString *(^select)(NSString *) = ^NSString *(NSString *text) {
+            return [NSString stringWithFormat:@"(function(){var e=Array.from(document.querySelectorAll('[data-mp-edit-id]')).find(function(n){return n.textContent==='%@';}),r=document.createRange();r.selectNodeContents(e);getSelection().removeAllRanges();getSelection().addRange(r);window.dispatchEvent(new Event('scroll'));})()",text];
+        };
+        [web stringByEvaluatingJavaScriptFromString:select(@"Alpha passage")];
+        [web stringByEvaluatingJavaScriptFromString:@"window.macdownPreviewEditor.showFormattingError();window.dispatchEvent(new Event('scroll'));"];
+        XCTAssertTrue([[web stringByEvaluatingJavaScriptFromString:@"!!document.getElementById('macdown-preview-edit-error')"] boolValue],@"The refusal remains visible for the same selection after scrolling");
+        [web stringByEvaluatingJavaScriptFromString:select(@"Beta passage")];
+        XCTAssertFalse([[web stringByEvaluatingJavaScriptFromString:@"!!document.getElementById('macdown-preview-edit-error')"] boolValue],@"A new admissible selection must not inherit the previous error");
+        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"getComputedStyle(document.getElementById('macdown-preview-format')).display"],@"block");
+        [web stringByEvaluatingJavaScriptFromString:@"document.body.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,button:0}));getSelection().removeAllRanges();window.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,button:0}));"];
+        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"getComputedStyle(document.getElementById('macdown-preview-format')).display"],@"none");
+        XCTAssertEqualObjects(editor.string,@"Alpha passage\n\nBeta passage\n");
+    } @finally {
+        web.frameLoadDelegate = nil; [document close];
+        document.preferences.htmlMathJax = oldMath;
+        document.preferences.extensionSmartyPants = oldSmart;
+    }
+}
+
 - (void)testPreviewFormattingInsideWordsUsesMarkdownAndRendersStyles
 {
     MPDocument *document = [MPDocument new];

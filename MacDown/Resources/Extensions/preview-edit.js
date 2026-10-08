@@ -6,7 +6,7 @@
   if (window.macdownPreviewEditor) window.macdownPreviewEditor.destroy(!!retainedPanel);
   delete window.__macdownPreviewEditConfig;
   if (!config || !config.nodes) return;
-  var panel = null, active = null, saved = null, timer = null;
+  var panel = null, active = null, saved = null, timer = null, errorSelection = null;
   var handlers = [], rendering = false, selectingWithMouse = false;
   function listen(target, name, fn) {
     target.addEventListener(name, fn, false);
@@ -210,6 +210,10 @@
   function updatePanel() {
     if(active || rendering || selectingWithMouse) return;
     var selected=currentSelection();
+    var message=document.getElementById('macdown-preview-edit-error');
+    if(message && JSON.stringify(selected)!==errorSelection) {
+      message.remove(); errorSelection=null;
+    }
     if(!selected){if(!panel.contains(document.activeElement)){saved=null;hide();}return;}
     saved=selected; updateStyles(selected);
     var rect=window.getSelection().getRangeAt(0).getBoundingClientRect();
@@ -236,6 +240,7 @@
   listen(window,'scroll',function(){if(!rendering) updatePanel();});
   listen(window,'resize',updatePanel);
   function showEditError(text) {
+    errorSelection=JSON.stringify(currentSelection() || saved);
     panel.style.display='block'; panel.style.left='12px'; panel.style.top='12px';
     var message=document.getElementById('macdown-preview-edit-error');
     if(!message){message=document.createElement('div');message.id='macdown-preview-edit-error';panel.insertBefore(message,panel.firstChild);}
