@@ -1303,6 +1303,64 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
     }
 }
 
+- (void)testFirstRealCodeRenderAfterEmptyPreviewLoadsPrismGrammarAndTokens
+{
+    MPPreferences *preferences = self.document.preferences;
+    BOOL syntax = preferences.htmlSyntaxHighlighting;
+    BOOL fences = preferences.extensionFencedCode;
+    BOOL math = preferences.htmlMathJax;
+    BOOL mermaid = preferences.htmlMermaid, graphviz = preferences.htmlGraphviz;
+    NSString *theme = [preferences.htmlHighlightingThemeName copy];
+    MPDocument *document = [MPDocument new];
+    WebView *web = [[WebView alloc] initWithFrame:NSMakeRect(0,0,400,300)];
+    MPEditorView *editor = [[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,400,300)];
+    MPRenderer *renderer = [MPRenderer new];
+    document.editor = editor;
+    document.preview = web;
+    document.renderer = renderer;
+    renderer.dataSource = (id<MPRendererDataSource>)document;
+    renderer.delegate = (id<MPRendererDelegate>)document;
+    web.frameLoadDelegate = (id<WebFrameLoadDelegate>)document;
+    @try {
+        preferences.htmlSyntaxHighlighting = YES;
+        preferences.extensionFencedCode = YES;
+        preferences.htmlMathJax = NO;
+        preferences.htmlMermaid = NO;
+        preferences.htmlGraphviz = NO;
+        preferences.htmlHighlightingThemeName = nil;
+        [renderer parseMarkdown:@""];
+        [renderer render];
+        XCTNSPredicateExpectation *empty = [[XCTNSPredicateExpectation alloc]
+            initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id object,
+                                                                   NSDictionary *bindings) {
+                return document.isPreviewReady && !document.alreadyRenderingInWeb &&
+                    [[web.mainFrame.javaScriptContext evaluateScript:@"!!window.Prism"] toBool];
+            }] object:web];
+        [self waitForExpectations:@[empty] timeout:10];
+        editor.string = @"```javascript\nconst answer = 42;\n```\n";
+        [renderer parseMarkdown:editor.string];
+        [renderer render];
+        XCTNSPredicateExpectation *highlighted = [[XCTNSPredicateExpectation alloc]
+            initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id object,
+                                                                   NSDictionary *bindings) {
+                return !document.alreadyRenderingInWeb &&
+                    [[web.mainFrame.javaScriptContext evaluateScript:
+                        @"!!(window.Prism && Prism.languages.javascript) && "
+                         "document.querySelectorAll('code.language-javascript span.token').length > 0"] toBool];
+            }] object:web];
+        [self waitForExpectations:@[highlighted] timeout:10];
+    } @finally {
+        web.frameLoadDelegate = nil;
+        [document close];
+        preferences.htmlSyntaxHighlighting = syntax;
+        preferences.extensionFencedCode = fences;
+        preferences.htmlMathJax = math;
+        preferences.htmlMermaid = mermaid;
+        preferences.htmlGraphviz = graphviz;
+        preferences.htmlHighlightingThemeName = theme;
+    }
+}
+
 - (void)testResourceWatcherBurstPublishesOnceAndAnOldWatcherSetCannotPublish
 {
     MPDocumentExportAuditProbe *document = [MPDocumentExportAuditProbe new];

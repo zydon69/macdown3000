@@ -358,6 +358,29 @@ NS_INLINE NSColor *MPGetWebViewBackgroundColor(WebView *webview)
 @end
 
 
+// The template emits Prism language components at the end of the body.
+// Comparing only the head can retain a page that has no required grammar.
+static NSString *MPPreviewResourceHTML(NSString *html)
+{
+    if (!html.length) return nil;
+    NSRange end = [html rangeOfString:@"</head>"];
+    if (end.location == NSNotFound) return nil;
+    NSMutableString *resources = [[html substringToIndex:NSMaxRange(end)]
+                                 mutableCopy];
+    static NSRegularExpression *scripts;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        scripts = [NSRegularExpression regularExpressionWithPattern:
+            @"<script\\b[^>]*>.*?</script>"
+            options:NSRegularExpressionCaseInsensitive |
+                    NSRegularExpressionDotMatchesLineSeparators error:NULL];
+    });
+    for (NSTextCheckingResult *match in [scripts matchesInString:html
+             options:0 range:NSMakeRange(0, html.length)])
+        [resources appendString:[html substringWithRange:match.range]];
+    return resources;
+}
+
 @interface MPDocument ()
     <NSSplitViewDelegate, NSTextViewDelegate,
 #if __MAC_OS_X_VERSION_MAX_ALLOWED >= 101100
@@ -452,7 +475,7 @@ typedef NS_ENUM(NSInteger, MPReferenceKind) {
 @property NSUInteger saveGeneration;
 @property NSUInteger previewRenderGeneration;
 @property BOOL awaitingRequestedRender;
-@property (copy) NSString *currentHeadContent;
+@property (copy) NSString *currentPreviewResourceHTML;
 @property (strong) NSURL *currentBaseUrl;
 @property (copy) NSString *currentStyleName;
 @property (copy) NSString *currentHighlightingThemeName;
@@ -2305,13 +2328,11 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     // If either changed, we must do a full reload to update <head> with new CSS links.
     NSString *newStyleName = self.preferences.htmlStyleName;
     NSString *newHighlightingTheme = self.preferences.htmlHighlightingThemeName;
-    NSRange headEnd = [html rangeOfString:@"</head>"];
-    NSString *newHead = headEnd.location == NSNotFound ? nil :
-        [html substringToIndex:NSMaxRange(headEnd)];
-    NSString *headForComparison = [newHead stringByReplacingOccurrencesOfString:
+    NSString *resources = MPPreviewResourceHTML(html);
+    NSString *resourcesForComparison = [resources stringByReplacingOccurrencesOfString:
         [NSString stringWithFormat:@"<meta name=\"macdown-checkbox-token\" content=\"%@\">", renderer.checkboxBridgeToken]
         withString:@"<meta name=\"macdown-checkbox-token\" content=\"\">"];
-    BOOL scriptsChanged = !MPAreNilableStringsEqual(self.currentHeadContent, headForComparison);
+    BOOL scriptsChanged = !MPAreNilableStringsEqual(self.currentPreviewResourceHTML, resourcesForComparison);
     BOOL stylesChanged = !MPAreNilableStringsEqual(self.currentStyleName, newStyleName) ||
                          !MPAreNilableStringsEqual(self.currentHighlightingThemeName, newHighlightingTheme);
 
@@ -2324,7 +2345,8 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     // still describes our last Markdown preview. Never reuse that foreign head.
     NSURL *loadedURL = self.preview.mainFrame.dataSource.request.URL;
     if (self.isPreviewReady && [self.currentBaseUrl isEqualTo:baseUrl]
-        && [loadedURL isEqual:baseUrl] && !stylesChanged && !scriptsChanged
+        && [loadedURL isEqual:baseUrl] && resourcesForComparison
+        && !stylesChanged && !scriptsChanged
         && !self.preferences.htmlMermaid && !self.preferences.htmlGraphviz)
     {
         DOMDocument *doc = self.preview.mainFrame.DOMDocument;
@@ -2455,7 +2477,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     // the preview could briefly render at 100% before our preference
     // takes effect.
     [self applyPreviewZoom];
-    self.currentHeadContent = headForComparison;
+    self.currentPreviewResourceHTML = resourcesForComparison;
     self.currentBaseUrl = baseUrl;
     self.currentStyleName = newStyleName;
     self.currentHighlightingThemeName = newHighlightingTheme;
@@ -3417,7 +3439,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     // path instead of body-only DOM replacement.
     self.currentStyleName = nil;
     self.currentHighlightingThemeName = nil;
-    self.currentHeadContent = nil;
+    self.currentPreviewResourceHTML = nil;
 }
 
 /**
