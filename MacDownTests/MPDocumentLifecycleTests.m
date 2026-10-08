@@ -107,6 +107,7 @@
 @property (nonatomic) BOOL renderToWebPending;
 @property (weak) WebView *preview;
 @property (strong) MPResourceWatcherSet *resourceWatcherSet;
+@property (strong) NSSearchField *previewFindField;
 - (void)processExternalFileChange;
 - (void)performAfterRender:(void (^)(void))handler;
 - (void)renderer:(MPRenderer *)renderer didProduceHTMLOutput:(NSString *)html;
@@ -1300,6 +1301,72 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
         preview.frameLoadDelegate = nil;
         [document close];
         preferences.htmlMathJax = math; preferences.htmlMermaid = mermaid; preferences.htmlGraphviz = graphviz;
+    }
+}
+
+- (void)testPreviewFindActionsSearchRenderedTextWithoutChangingMarkdown
+{
+    MPDocument *document = [MPDocument new];
+    NSWindow *window = [[NSWindow alloc] initWithContentRect:NSMakeRect(0,0,400,300)
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+    window.releasedWhenClosed = NO;
+    [document addWindowController:[[NSWindowController alloc] initWithWindow:window]];
+    WebView *web = [[WebView alloc] initWithFrame:window.contentView.bounds];
+    [window.contentView addSubview:web];
+    MPEditorView *editor = [[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,400,300)];
+    document.editor = editor;
+    document.preview = web;
+    [document showWindows];
+    NSString *source = @"# source remains **unchanged**\n";
+    document.editor.string = source;
+    NSPasteboard *pasteboard = [NSPasteboard pasteboardWithName:NSPasteboardNameFind];
+    NSMutableArray *originalItems = [NSMutableArray array];
+    for (NSPasteboardItem *item in pasteboard.pasteboardItems) {
+        NSPasteboardItem *copy = [NSPasteboardItem new];
+        for (NSString *type in item.types)
+            [copy setData:[item dataForType:type] forType:type];
+        [originalItems addObject:copy];
+    }
+    @try {
+        [web.mainFrame loadHTMLString:@"<html><body>"
+            "<p id='first'>target <strong>é</strong></p>"
+            "<p id='second'>target é</p></body></html>" baseURL:nil];
+        XCTNSPredicateExpectation *ready = [[XCTNSPredicateExpectation alloc]
+            initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id object,
+                                                                   NSDictionary *bindings) {
+                return !web.isLoading && web.mainFrame.DOMDocument.body != nil;
+            }] object:web];
+        [self waitForExpectations:@[ready] timeout:10];
+        NSMenuItem *find = [[NSMenuItem alloc] initWithTitle:@"Find"
+            action:@selector(performDocumentFindAction:) keyEquivalent:@"f"];
+        find.tag = NSTextFinderActionShowFindInterface;
+        [web.window makeFirstResponder:web.mainFrame.frameView.documentView];
+        XCTAssertTrue([NSApp sendAction:find.action to:document from:find]);
+        XCTAssertTrue([document respondsToSelector:@selector(previewFindField)]);
+        if (![document respondsToSelector:@selector(previewFindField)]) return;
+        NSSearchField *field = document.previewFindField;
+        XCTAssertTrue(field.window.isVisible);
+        field.stringValue = @"target é";
+        XCTAssertTrue([NSApp sendAction:field.action to:field.target from:field]);
+        XCTAssertEqualObjects(web.selectedDOMRange.toString, @"target é");
+        DOMNode *first = web.selectedDOMRange.startContainer;
+        find.tag = NSTextFinderActionNextMatch;
+        [NSApp sendAction:find.action to:document from:find];
+        XCTAssertEqualObjects(web.selectedDOMRange.toString, @"target é");
+        XCTAssertNotEqual(web.selectedDOMRange.startContainer, first);
+        find.tag = NSTextFinderActionPreviousMatch;
+        [NSApp sendAction:find.action to:document from:find];
+        XCTAssertEqual(web.selectedDOMRange.startContainer, first);
+        find.tag = NSTextFinderActionShowReplaceInterface;
+        XCTAssertFalse([document validateDocumentFindAction:find]);
+        XCTAssertEqualObjects(document.editor.string, source);
+        [(NSResponder *)field.window cancelOperation:nil];
+        XCTAssertFalse(field.window.isVisible);
+    } @finally {
+        [pasteboard clearContents];
+        if (originalItems.count) [pasteboard writeObjects:originalItems];
+        [document updateChangeCount:NSChangeCleared];
+        [document close];
     }
 }
 

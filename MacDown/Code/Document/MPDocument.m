@@ -381,6 +381,46 @@ static NSString *MPPreviewResourceHTML(NSString *html)
     return resources;
 }
 
+// The search field's field editor would otherwise consume Cmd-G/Cmd-F itself.
+@interface MPPreviewFindPanel : NSPanel
+@property (copy) void (^findActionHandler)(NSTextFinderAction);
+@end
+
+@implementation MPPreviewFindPanel
+- (void)sendEvent:(NSEvent *)event
+{
+    // NSSearchField's field editor consumes Escape before the responder chain.
+    if (event.type == NSEventTypeKeyDown && event.keyCode == 53)
+        [self cancelOperation:nil];
+    else
+        [super sendEvent:event];
+}
+- (BOOL)performKeyEquivalent:(NSEvent *)event
+{
+    NSEventModifierFlags flags = event.modifierFlags &
+        NSEventModifierFlagDeviceIndependentFlagsMask;
+    if ((flags & NSEventModifierFlagCommand) &&
+        !(flags & (NSEventModifierFlagOption | NSEventModifierFlagControl)))
+    {
+        NSString *key = event.charactersIgnoringModifiers.lowercaseString;
+        NSTextFinderAction action;
+        if ([key isEqualToString:@"g"])
+            action = flags & NSEventModifierFlagShift ?
+                NSTextFinderActionPreviousMatch : NSTextFinderActionNextMatch;
+        else if ([key isEqualToString:@"f"])
+            action = NSTextFinderActionShowFindInterface;
+        else if ([key isEqualToString:@"e"])
+            action = NSTextFinderActionSetSearchString;
+        else
+            return [super performKeyEquivalent:event];
+        if (self.findActionHandler) self.findActionHandler(action);
+        return YES;
+    }
+    return [super performKeyEquivalent:event];
+}
+- (void)cancelOperation:(id)sender { [self orderOut:sender]; }
+@end
+
 @interface MPDocument ()
     <NSSplitViewDelegate, NSTextViewDelegate,
 #if __MAC_OS_X_VERSION_MAX_ALLOWED >= 101100
@@ -440,6 +480,8 @@ typedef NS_ENUM(NSInteger, MPReferenceKind) {
 @property (weak) IBOutlet MPEditorView *editor;
 @property (weak) IBOutlet NSLayoutConstraint *editorPaddingBottom;
 @property (weak) IBOutlet WebView *preview;
+@property (strong) MPPreviewFindPanel *previewFindPanel;
+@property (strong) NSSearchField *previewFindField;
 @property (weak) IBOutlet NSPopUpButton *wordCountWidget;
 @property (strong) IBOutlet MPToolbarController *toolbarController;
 @property (copy, nonatomic) NSString *autosaveName;
@@ -1415,6 +1457,11 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 
 - (void)close
 {
+    self.previewFindPanel.findActionHandler = nil;
+    [self.previewFindPanel.parentWindow removeChildWindow:self.previewFindPanel];
+    [self.previewFindPanel close];
+    self.previewFindField = nil;
+    self.previewFindPanel = nil;
     self.documentClosed = YES;
     [self stopFileWatching];
     [self.renderCompletionHandlers removeAllObjects];
@@ -2172,6 +2219,131 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 }
 
 #pragma mark - WebUIDelegate
+
+- (BOOL)previewHasFindFocus
+{
+    if (NSApp.keyWindow == self.previewFindPanel && self.previewFindPanel)
+        return YES;
+    NSResponder *responder = self.preview.window.firstResponder;
+    return [responder isKindOfClass:NSView.class] &&
+        [(NSView *)responder isDescendantOf:self.preview];
+}
+
+- (BOOL)validateDocumentFindAction:(NSMenuItem *)item
+{
+    if (![self previewHasFindFocus])
+    {
+        NSMenuItem *native = [item copy];
+        native.action = @selector(performFindPanelAction:);
+        id target = [NSApp targetForAction:native.action to:nil from:native];
+        if ([target respondsToSelector:@selector(validateUserInterfaceItem:)])
+            return [target validateUserInterfaceItem:native];
+        return target != nil;
+    }
+    if (item.tag == NSTextFinderActionShowFindInterface) return YES;
+    if (item.tag == NSTextFinderActionSetSearchString)
+        return self.preview.selectedDOMRange.toString.length > 0;
+    if (item.tag == NSTextFinderActionNextMatch ||
+        item.tag == NSTextFinderActionPreviousMatch)
+        return [[NSPasteboard pasteboardWithName:NSPasteboardNameFind]
+                stringForType:NSPasteboardTypeString].length > 0;
+    return NO;
+}
+
+- (IBAction)performDocumentFindAction:(id)sender
+{
+    if ([self previewHasFindFocus])
+        [self performPreviewFindAction:[sender tag]];
+    else
+        [NSApp sendAction:@selector(performFindPanelAction:) to:nil from:sender];
+}
+
+- (void)performPreviewFindAction:(NSTextFinderAction)action
+{
+    NSPasteboard *pasteboard = [NSPasteboard pasteboardWithName:NSPasteboardNameFind];
+    if (action == NSTextFinderActionSetSearchString)
+    {
+        NSString *selection = self.preview.selectedDOMRange.toString;
+        if (selection.length)
+        {
+            [pasteboard clearContents];
+            [pasteboard setString:selection forType:NSPasteboardTypeString];
+            self.previewFindField.stringValue = selection;
+        }
+        return;
+    }
+    if (action == NSTextFinderActionNextMatch ||
+        action == NSTextFinderActionPreviousMatch)
+    {
+        NSString *query = [pasteboard stringForType:NSPasteboardTypeString];
+        if (query.length && ![self.preview searchFor:query
+            direction:action == NSTextFinderActionNextMatch
+            caseSensitive:NO wrap:YES]) NSBeep();
+        return;
+    }
+    if (action != NSTextFinderActionShowFindInterface) return;
+    if (!self.previewFindPanel)
+    {
+        MPPreviewFindPanel *panel = [[MPPreviewFindPanel alloc]
+            initWithContentRect:NSMakeRect(0,0,380,76)
+            styleMask:NSWindowStyleMaskTitled | NSWindowStyleMaskClosable |
+                      NSWindowStyleMaskUtilityWindow
+            backing:NSBackingStoreBuffered defer:NO];
+        panel.releasedWhenClosed = NO;
+        panel.title = NSLocalizedString(@"Find in Preview", @"Preview search panel title");
+        panel.hidesOnDeactivate = YES;
+        NSSearchField *field = [[NSSearchField alloc] initWithFrame:NSZeroRect];
+        field.translatesAutoresizingMaskIntoConstraints = NO;
+        field.accessibilityIdentifier = @"preview-find-field";
+        field.target = self;
+        field.action = @selector(findPreviewText:);
+        field.sendsWholeSearchString = YES;
+        NSSegmentedControl *buttons = [NSSegmentedControl
+            segmentedControlWithLabels:@[@"‹", @"›"]
+            trackingMode:NSSegmentSwitchTrackingMomentary target:self
+            action:@selector(findPreviewAdjacent:)];
+        buttons.translatesAutoresizingMaskIntoConstraints = NO;
+        [buttons setToolTip:NSLocalizedString(@"Find Previous", @"Search backwards")
+                 forSegment:0];
+        [buttons setToolTip:NSLocalizedString(@"Find Next", @"Search forwards")
+                 forSegment:1];
+        [panel.contentView addSubview:field];
+        [panel.contentView addSubview:buttons];
+        [NSLayoutConstraint activateConstraints:@[
+            [field.leadingAnchor constraintEqualToAnchor:panel.contentView.leadingAnchor constant:12],
+            [field.trailingAnchor constraintEqualToAnchor:panel.contentView.trailingAnchor constant:-12],
+            [field.topAnchor constraintEqualToAnchor:panel.contentView.topAnchor constant:12],
+            [buttons.trailingAnchor constraintEqualToAnchor:field.trailingAnchor],
+            [buttons.topAnchor constraintEqualToAnchor:field.bottomAnchor constant:6],
+        ]];
+        __weak MPDocument *weakSelf = self;
+        panel.findActionHandler = ^(NSTextFinderAction requested) {
+            [weakSelf performPreviewFindAction:requested];
+        };
+        [self.windowForSheet addChildWindow:panel ordered:NSWindowAbove];
+        self.previewFindPanel = panel;
+        self.previewFindField = field;
+        [panel center];
+    }
+    self.previewFindField.stringValue =
+        [pasteboard stringForType:NSPasteboardTypeString] ?: @"";
+    [self.previewFindPanel makeKeyAndOrderFront:nil];
+    [self.previewFindPanel makeFirstResponder:self.previewFindField];
+}
+
+- (void)findPreviewText:(NSSearchField *)field
+{
+    NSPasteboard *pasteboard = [NSPasteboard pasteboardWithName:NSPasteboardNameFind];
+    [pasteboard clearContents];
+    [pasteboard setString:field.stringValue forType:NSPasteboardTypeString];
+    [self performPreviewFindAction:NSTextFinderActionNextMatch];
+}
+
+- (void)findPreviewAdjacent:(NSSegmentedControl *)sender
+{
+    [self performPreviewFindAction:sender.selectedSegment == 0 ?
+        NSTextFinderActionPreviousMatch : NSTextFinderActionNextMatch];
+}
 
 - (NSUInteger)webView:(WebView *)webView
         dragDestinationActionMaskForDraggingInfo:(id<NSDraggingInfo>)info

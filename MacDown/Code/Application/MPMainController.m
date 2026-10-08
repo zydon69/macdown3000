@@ -267,11 +267,26 @@ NS_INLINE void treat()
 
 - (BOOL)validateMenuItem:(NSMenuItem *)menuItem
 {
+    if (menuItem.action == @selector(performDocumentFindAction:))
+        return [[self documentForFindAction] validateDocumentFindAction:menuItem];
     if (menuItem.action == @selector(checkForUpdates:))
         return self.updaterController.updater.canCheckForUpdates;
     // Intentional blanket YES: preserves the always-enabled behavior of this
     // delegate's other menu actions (and of any added in the future).
     return YES;
+}
+
+- (MPDocument *)documentForFindAction
+{
+    NSWindow *window = NSApp.keyWindow;
+    NSDocument *document = [[NSDocumentController sharedDocumentController]
+        documentForWindow:window.parentWindow ?: window];
+    return [document isKindOfClass:MPDocument.class] ? (MPDocument *)document : nil;
+}
+
+- (IBAction)performDocumentFindAction:(id)sender
+{
+    [[self documentForFindAction] performDocumentFindAction:sender];
 }
 
 
