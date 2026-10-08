@@ -141,7 +141,6 @@
       hide(); if(span) begin(span);
     });
     editButton.setAttribute('data-mp-edit-text','');
-    button('Fermer',hide);
     var style = document.getElementById('macdown-preview-edit-style') || document.createElement('style'); style.id='macdown-preview-edit-style';
     style.textContent='#macdown-preview-format button,#macdown-preview-format select{font:inherit;color:#fff;background:#3c3c3c;border:1px solid #666;border-radius:4px;margin:2px;padding:5px;cursor:pointer} #macdown-preview-format button:disabled{opacity:.5;cursor:default} #macdown-preview-format [aria-pressed="true"],#macdown-preview-format select[data-mp-active],#macdown-preview-format option[data-mp-active]{color:#2784DE} [data-mp-edit-id][contenteditable]{outline:2px solid #4385be;outline-offset:3px} @media print{#macdown-preview-format{display:none!important}}';
     document.body.appendChild(style); document.body.appendChild(panel);
