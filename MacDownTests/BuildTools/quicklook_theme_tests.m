@@ -3,6 +3,7 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "../../MacDownCore/MPQuickLookRenderer.h"
+#import "../../MacDownCore/MPQuickLookPreferences.h"
 #import <hoedown/document.h>
 @interface FixtureRenderer : MPQuickLookRenderer
 @property(copy) NSString *fixtureCSS;
@@ -10,9 +11,11 @@
 @implementation FixtureRenderer
 - (NSString *)embeddedStyles { return [NSString stringWithFormat:@"<style>%@</style>",self.fixtureCSS]; }
 @end
-@interface FixturePreferences : NSObject
+@interface FixturePreferences : MPQuickLookPreferences
 @end
 @implementation FixturePreferences
+// These contracts exercise the original unwrapped theme geometry.
+- (BOOL)wrapCodeBlocks { return NO; }
 - (int)extensionFlags { return HOEDOWN_EXT_TABLES | HOEDOWN_EXT_FENCED_CODE; }
 - (int)rendererFlags { return 0; }
 @end

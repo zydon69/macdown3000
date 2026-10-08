@@ -2,6 +2,7 @@
 #import <Cocoa/Cocoa.h>
 #import <WebKit/WebKit.h>
 #import "../../MacDownCore/MPQuickLookRenderer.h"
+#import "../../MacDownCore/MPQuickLookPreferences.h"
 #import <hoedown/document.h>
 #import "../../MacDown/Code/Extension/hoedown_html_patch.h"
 @interface CodeThemeRenderer : MPQuickLookRenderer
@@ -10,10 +11,12 @@
 @implementation CodeThemeRenderer
 - (NSString *)embeddedStyles { return [NSString stringWithFormat:@"<style>%@</style>",self.fixtureCSS]; }
 @end
-@interface CodeThemePreferences : NSObject
+@interface CodeThemePreferences : MPQuickLookPreferences
 @property int flags;
 @end
 @implementation CodeThemePreferences
+// These contracts exercise the original unwrapped theme geometry.
+- (BOOL)wrapCodeBlocks { return NO; }
 - (int)extensionFlags { return HOEDOWN_EXT_FENCED_CODE; }
 - (int)rendererFlags { return self.flags; }
 @end
