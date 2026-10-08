@@ -489,6 +489,7 @@ typedef NS_ENUM(NSInteger, MPReferenceKind) {
 @property (weak) NSView *readingProgressDocumentView;
 @property BOOL readingProgressFromPreview;
 @property BOOL readingProgressUpdatePending;
+@property (strong) id readingProgressScrollMonitor;
 @property (strong) IBOutlet MPToolbarController *toolbarController;
 @property (copy, nonatomic) NSString *autosaveName;
 @property (strong) HGMarkdownHighlighter *highlighter;
@@ -1469,6 +1470,10 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     self.previewFindField = nil;
     self.previewFindPanel = nil;
     self.documentClosed = YES;
+    if (self.readingProgressScrollMonitor) {
+        [NSEvent removeMonitor:self.readingProgressScrollMonitor];
+        self.readingProgressScrollMonitor = nil;
+    }
     [NSObject cancelPreviousPerformRequestsWithTarget:self
         selector:@selector(updateReadingProgress) object:nil];
     [NSNotificationCenter.defaultCenter removeObserver:self
@@ -3067,6 +3072,27 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 {
     NSView *container = self.windowForSheet.contentView;
     if (!container || self.documentClosed) return;
+    if (!self.preferences.editorShowReadingProgress && self.readingProgressScrollMonitor) {
+        [NSEvent removeMonitor:self.readingProgressScrollMonitor];
+        self.readingProgressScrollMonitor = nil;
+    } else if (self.preferences.editorShowReadingProgress && !self.readingProgressScrollMonitor) {
+        // Mouse wheels can have no gesture phase and produce no live-scroll
+        // notification, especially when the pane is already at an edge.
+        __weak MPDocument *weakSelf = self;
+        self.readingProgressScrollMonitor = [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskScrollWheel
+            handler:^NSEvent *(NSEvent *event) {
+                MPDocument *document = weakSelf;
+                NSView *content = document.windowForSheet.contentView;
+                if (!document || document.documentClosed || event.window != document.windowForSheet || !content)
+                    return event;
+                NSView *hit = [content hitTest:[content convertPoint:event.locationInWindow fromView:nil]];
+                if ([hit isDescendantOf:document.preview]) document.readingProgressFromPreview = YES;
+                else if ([hit isDescendantOf:document.editor.enclosingScrollView]) document.readingProgressFromPreview = NO;
+                else return event;
+                [document scheduleReadingProgressUpdate];
+                return event;
+            }];
+    }
     if (!self.readingProgressLabel) {
         NSTextField *label = [NSTextField labelWithString:@"100%"];
         label.translatesAutoresizingMaskIntoConstraints = NO;

@@ -1397,6 +1397,7 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
         [document.editor.layoutManager ensureLayoutForTextContainer:document.editor.textContainer];
         [document.editor sizeToFit];
         [document setupReadingProgress];
+        XCTAssertNotNil([document valueForKey:@"readingProgressScrollMonitor"]);
         NSScrollView *scroll = document.editor.enclosingScrollView;
         [document willStartLiveScroll:nil];
         [scroll.documentView scrollPoint:NSMakePoint(0,0)];
@@ -1443,6 +1444,7 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
         preferences.editorShowReadingProgress = NO;
         [document setupReadingProgress];
         XCTAssertTrue(document.readingProgressLabel.hidden);
+        XCTAssertNil([document valueForKey:@"readingProgressScrollMonitor"]);
     } @finally {
         [document updateChangeCount:NSChangeCleared]; [document close];
         preferences.editorShowReadingProgress = oldProgress;
