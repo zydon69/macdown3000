@@ -239,12 +239,23 @@ static NSArray *MPPIFingerprint(NSString *html)
     NSMutableArray *tokens=[NSMutableArray array]; MPPIFingerprintNode(body,0,tokens); return tokens;
 }
 
+static NSArray<NSString *> *MPPILegacyColorOpenings(void)
+{
+    static NSArray *tags;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        tags=@[
+        @"<span style=\"color:#b42318\">",@"<span style=\"color:#b54708\">",@"<span style=\"color:#067647\">",@"<span style=\"color:#175cd3\">",@"<span style=\"color:#6938ef\">",
+        @"<span style=\"background-color:#fef08a;color:#111\">",@"<span style=\"background-color:#bbf7d0;color:#111\">",@"<span style=\"background-color:#bfdbfe;color:#111\">",@"<span style=\"background-color:#fbcfe8;color:#111\">"];
+    });
+    return tags;
+}
+
 static NSString *MPPIWithoutLegacyTags(NSString *body, NSMutableArray *positions)
 {
     NSMutableString *result=[NSMutableString string];
-    NSArray *tags=@[@"<u>",@"</u>",@"</span>",
-        @"<span style=\"color:#b42318\">",@"<span style=\"color:#b54708\">",@"<span style=\"color:#067647\">",@"<span style=\"color:#175cd3\">",@"<span style=\"color:#6938ef\">",
-        @"<span style=\"background-color:#fef08a;color:#111\">",@"<span style=\"background-color:#bbf7d0;color:#111\">",@"<span style=\"background-color:#bfdbfe;color:#111\">",@"<span style=\"background-color:#fbcfe8;color:#111\">"];
+    NSMutableArray *tags=[@[@"<u>",@"</u>",@"</span>"] mutableCopy];
+    [tags addObjectsFromArray:MPPILegacyColorOpenings()];
     for(NSUInteger i=0;i<body.length;) {
         NSUInteger skip=0;
         for(NSString *tag in tags) if(i+tag.length<=body.length && [[body substringWithRange:NSMakeRange(i,tag.length)] isEqualToString:tag]) {skip=tag.length;break;}
@@ -255,21 +266,35 @@ static NSString *MPPIWithoutLegacyTags(NSString *body, NSMutableArray *positions
 }
 
 
-// Preserve recognizable source-backed links and code as opaque atoms when
+// Preserve source-backed links, code and legacy colors as opaque atoms when
 // they lie outside the selection. They are put back byte-for-byte, and the
 // final full-document parser check verifies their structure and attributes.
-static NSString *MPPIMaskOpaque(NSString *body, NSRange selection, NSUInteger base,
+static NSString *MPPIMaskOpaque(NSString *body, NSRange selection, NSUInteger base, NSString *action,
                                 NSMutableArray *positions, NSMutableDictionary *opaque, NSMutableArray *links)
 {
-    NSRegularExpression *expression=[NSRegularExpression regularExpressionWithPattern:
-        @"(`+)([^`\\n]*?)\\1|!?\\[(?:\\\\.|[^\\]\\n])*\\]\\((?:\\\\.|[^)\\n])*\\)"
-        options:0 error:NULL];
+    NSMutableArray *colorOpenings=[NSMutableArray array];
+    for(NSString *opening in MPPILegacyColorOpenings())
+        [colorOpenings addObject:[NSRegularExpression escapedPatternForString:opening]];
+    NSString *pattern=[NSString stringWithFormat:
+        @"(`+)([^`\\n]*?)\\1|(?:%@)(?:(?!<span\\b|</span>)[\\s\\S])*</span>|!?\\[(?:\\\\.|[^\\]\\n])*\\]\\((?:\\\\.|[^)\\n])*\\)",
+        [colorOpenings componentsJoinedByString:@"|"]];
+    NSRegularExpression *expression=[NSRegularExpression regularExpressionWithPattern:pattern options:0 error:NULL];
     NSArray *matches=[expression matchesInString:body options:0 range:NSMakeRange(0,body.length)];
     NSMutableString *result=[NSMutableString string]; NSUInteger cursor=0;
     for(NSTextCheckingResult *match in matches) {
         NSRange range=match.range;
         if(NSIntersectionRange(NSMakeRange(base+range.location,range.length),selection).length) {
             if([body characterAtIndex:range.location]=='`') continue;
+            if([body characterAtIndex:range.location]=='<') {
+                NSString *raw=[body substringWithRange:range];
+                NSUInteger contentStart=base+range.location+NSMaxRange([raw rangeOfString:@">"]);
+                NSUInteger contentEnd=base+NSMaxRange(range)-@"</span>".length;
+                // Color has no Markdown-only representation. Do not silently
+                // remove it from unselected characters or while adding a style.
+                // Explicit clear can remove a complete legacy colored passage.
+                if(![action isEqualToString:@"clear"] || selection.location>contentStart || NSMaxRange(selection)<contentEnd) return nil;
+                continue;
+            }
             if([body characterAtIndex:range.location]!='[') return nil;
             NSString *raw=[body substringWithRange:range]; NSRange divider=[raw rangeOfString:@"](" options:NSBackwardsSearch];
             if(divider.location==NSNotFound || divider.location<1) return nil;
@@ -315,7 +340,7 @@ static NSDictionary *MPPreviewInlineSingleChange(NSString *source, NSRange selec
     // Refuse before rendering or allocating a style entry per character.
     if(body.length>20000) return nil;
     NSMutableArray *opaquePositions=[NSMutableArray array]; NSMutableDictionary *opaque=[NSMutableDictionary dictionary]; NSMutableArray *links=[NSMutableArray array];
-    NSString *proxy=MPPIMaskOpaque(body,selection,line.location+prefixLength,opaquePositions,opaque,links);
+    NSString *proxy=MPPIMaskOpaque(body,selection,line.location+prefixLength,action,opaquePositions,opaque,links);
     if(!proxy) return nil;
     NSDictionary *oracle=MPPIInlineOracle(render(proxy));
     NSString *text=oracle[@"text"]; NSArray *original=oracle[@"styles"];

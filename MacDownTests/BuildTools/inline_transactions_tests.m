@@ -39,6 +39,23 @@ int main(void)
         BOOL bounded=!oversizedChange && oversizedRenderCalls==0;
         fprintf(bounded?stdout:stderr,"%s oversized paragraph refused before rendering\n",bounded?"PASS":"FAIL");
         if(!bounded) failures++;
+        NSString *legacyNeighbor=@"<span style=\"color:#175cd3\">outside</span> selected";
+        NSDictionary *legacyNeighborChange=MPPreviewInlineChange(legacyNeighbor,[legacyNeighbor rangeOfString:@"selected"],@"bold",nil,^NSString *(NSString *s){return Render(s);},^NSString *(NSString *s){return Escape(s);});
+        BOOL preserved=[legacyNeighborChange[@"replacement"] isEqualToString:@"<span style=\"color:#175cd3\">outside</span> **selected**"];
+        fprintf(preserved?stdout:stderr,"%s neighboring legacy color remains unchanged\n",preserved?"PASS":"FAIL");
+        if(!preserved) failures++;
+        Check(@"<span style=\"color:#175cd3\">outside selected</span>",@"selected",@"clear",nil,NO);
+        Check(@"<span style=\"color:#175cd3\">selected</span> outside",@"selected",@"clear",@"selected",YES);
+        for(NSString *opening in MPPILegacyColorOpenings()) {
+            NSString *source=[NSString stringWithFormat:@"%@neighbor</span> selected",opening];
+            NSDictionary *change=MPPreviewInlineChange(source,[source rangeOfString:@"selected"],@"underline",nil,^NSString *(NSString *s){return Render(s);},^NSString *(NSString *s){return Escape(s);});
+            NSString *expected=[NSString stringWithFormat:@"%@neighbor</span> _selected_",opening];
+            BOOL intact=[change[@"replacement"] isEqualToString:expected];
+            fprintf(intact?stdout:stderr,"%s legacy palette neighbor %s\n",intact?"PASS":"FAIL",opening.UTF8String);
+            if(!intact) failures++;
+        }
+        Check(@"<span style=\"color:#175cd3\">selected</span> outside",@"selected",@"bold",nil,NO);
+        Check(@"<span style=\"color:#175cd3\">selected</span> <span style=\"color:#067647\">neighbor</span>",@"selected",@"clear",@"selected",YES);
         Check(@"test **mot** selection",@"test **mot",@"bold",@"test mot",YES);
         Check(@"test **mot** selection",@"st **mo",@"bold",@"st mo",YES);
         Check(@"test **mot** selection",@"ot** selection",@"bold",@"ot selection",YES);
