@@ -9,6 +9,7 @@
 
 @interface MPMainController (CommandTesting)
 - (void)openPendingCommandRequests;
+- (void)applyApplicationAppearance;
 - (BOOL)migrateLegacyCommandRequests:(NSError **)error;
 - (NSURL *)commandQueueDirectory;
 - (NSString *)commandPreferencesSuiteName;
@@ -19,9 +20,11 @@
 // which would run migrations and initialize PAPreferences' shared metadata.
 @interface MPCommandTestPreferences : MPPreferences
 @property BOOL suppressUntitled;
+@property NSInteger testAppearance;
 @end
 @implementation MPCommandTestPreferences
 - (BOOL)supressesUntitledDocumentOnLaunch { return self.suppressUntitled; }
+- (NSInteger)applicationAppearance { return self.testAppearance; }
 @end
 
 @interface MPCommandTestController : MPMainController
@@ -59,6 +62,25 @@
     self.controller = [[MPCommandTestController alloc] init];
     self.controller.testQueueDirectory = [self.temporaryDirectory URLByAppendingPathComponent:@"queue"];
     self.controller.testSuiteName = [@"audit.commands." stringByAppendingString:NSUUID.UUID.UUIDString];
+}
+
+- (void)testAppearanceCanBeForcedAndReturnToSystem
+{
+    NSAppearance *original = NSApp.appearance;
+    @try {
+        self.controller.testPreferences.testAppearance = 2;
+        [self.controller applyApplicationAppearance];
+        XCTAssertEqualObjects(NSApp.appearance.name, NSAppearanceNameDarkAqua);
+        self.controller.testPreferences.testAppearance = 1;
+        [self.controller applyApplicationAppearance];
+        XCTAssertEqualObjects(NSApp.appearance.name, NSAppearanceNameAqua);
+        self.controller.testPreferences.testAppearance = 0;
+        [self.controller applyApplicationAppearance];
+        XCTAssertNil(NSApp.appearance);
+        self.controller.testPreferences.testAppearance = 999;
+        [self.controller applyApplicationAppearance];
+        XCTAssertNil(NSApp.appearance);
+    } @finally { NSApp.appearance = original; }
 }
 
 - (void)tearDown

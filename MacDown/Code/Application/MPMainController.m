@@ -130,6 +130,7 @@ NS_INLINE void treat()
 @property (readonly) NSURL *commandQueueDirectory;
 @property (readonly) NSString *commandPreferencesSuiteName;
 @property BOOL didMigrateLegacyCommands;
+@property (strong) id appearanceObserver;
 @property (nonatomic, strong, readwrite) SPUStandardUpdaterController *updaterController;
 @end
 
@@ -146,6 +147,7 @@ NS_INLINE void treat()
 
 - (void)applicationDidFinishLaunching:(NSNotification *)notification
 {
+    [self applyApplicationAppearance];
     [[NSAppleEventManager sharedAppleEventManager]
         setEventHandler:self
             andSelector:@selector(openUrlSchemeAppleEvent:withReplyEvent:)
@@ -305,9 +307,34 @@ NS_INLINE void treat()
     _updaterController = [[SPUStandardUpdaterController alloc]
         initWithStartingUpdater:NO updaterDelegate:self userDriverDelegate:nil];
     [self copyFiles];
+    __weak MPMainController *weakSelf = self;
+    self.appearanceObserver = [center addObserverForName:NSUserDefaultsDidChangeNotification
+        object:NSUserDefaults.standardUserDefaults queue:NSOperationQueue.mainQueue
+        usingBlock:^(NSNotification *notification) {
+            [weakSelf applyApplicationAppearance];
+        }];
     return self;
 }
 
+
+- (void)dealloc
+{
+    if (self.appearanceObserver)
+        [NSNotificationCenter.defaultCenter removeObserver:self.appearanceObserver];
+    [NSNotificationCenter.defaultCenter removeObserver:self];
+}
+
+- (void)applyApplicationAppearance
+{
+    NSInteger mode = self.preferences.applicationAppearance;
+    NSString *name = mode == 1 ? NSAppearanceNameAqua :
+        mode == 2 ? NSAppearanceNameDarkAqua : nil;
+    if (name == nil) {
+        if (NSApp.appearance) NSApp.appearance = nil;
+    } else if (![NSApp.appearance.name isEqualToString:name]) {
+        NSApp.appearance = [NSAppearance appearanceNamed:name];
+    }
+}
 
 #pragma mark - NSApplicationDelegate
 

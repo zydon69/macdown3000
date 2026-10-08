@@ -132,6 +132,7 @@ static NSString * const kMPDefaultHtmlStyleName = @"GitHub2";
 @dynamic updateIncludesPreReleases;
 @dynamic supressesUntitledDocumentOnLaunch;
 @dynamic createFileForLinkTarget;
+@dynamic applicationAppearance;
 
 @dynamic extensionIntraEmphasis;
 @dynamic extensionTables;

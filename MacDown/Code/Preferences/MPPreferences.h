@@ -19,6 +19,8 @@ extern NSString * const MPDidDetectFreshInstallationNotification;
 @property (assign) BOOL updateIncludesPreReleases;
 @property (assign) BOOL supressesUntitledDocumentOnLaunch;
 @property (assign) BOOL createFileForLinkTarget;
+// 0: system, 1: light, 2: dark.
+@property (assign) NSInteger applicationAppearance;
 
 // Extension flags.
 @property (assign) BOOL extensionIntraEmphasis;
