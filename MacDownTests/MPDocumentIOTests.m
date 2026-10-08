@@ -87,6 +87,54 @@
 
 #pragma mark - API & Data Tests
 
+- (void)testNativeUntitledAutosavePreservesContentAndHasRecoveryLocation
+{
+    MPPreferences *preferences = [MPPreferences sharedInstance];
+    BOOL original = preferences.editorAutoSave;
+    preferences.editorAutoSave = YES;
+    [self addTeardownBlock:^{ preferences.editorAutoSave = original; }];
+    NSDocumentController *controller = NSDocumentController.sharedDocumentController;
+    NSError *error = nil;
+    MPDocument *document = (MPDocument *)[controller
+        openUntitledDocumentAndDisplay:YES error:&error];
+    XCTAssertNotNil(document, @"%@", error);
+    if (!document) return;
+    [self addTeardownBlock:^{
+        NSURL *draft = document.isDraft ? document.fileURL : nil;
+        NSURL *recovery = document.autosavedContentsFileURL;
+        [document updateChangeCount:NSChangeCleared];
+        [document close];
+        if (draft) [[NSFileManager defaultManager] removeItemAtURL:draft error:NULL];
+        if (recovery) [[NSFileManager defaultManager] removeItemAtURL:recovery error:NULL];
+    }];
+    NSUndoManager *undo = document.undoManager;
+    BOOL groups = undo.groupsByEvent;
+    undo.groupsByEvent = NO;
+    [self addTeardownBlock:^{ undo.groupsByEvent = groups; }];
+    [document.undoManager beginUndoGrouping];
+    [document.editor insertText:@"Draft recovery é 日本語\n"
+              replacementRange:NSMakeRange(0, 0)];
+    [document.editor breakUndoCoalescing];
+    [document.undoManager endUndoGrouping];
+    XCTAssertEqualObjects(document.markdown, @"Draft recovery é 日本語\n");
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:2];
+    while (!document.isDocumentEdited && deadline.timeIntervalSinceNow > 0)
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode
+            beforeDate:[NSDate dateWithTimeIntervalSinceNow:.01]];
+    XCTAssertTrue(document.isDocumentEdited);
+    XCTestExpectation *saved = [self expectationWithDescription:@"Native draft autosave"];
+    [document autosaveWithImplicitCancellability:NO completionHandler:^(NSError *saveError) {
+        XCTAssertNil(saveError);
+        NSURL *location = document.fileURL ?: document.autosavedContentsFileURL;
+        XCTAssertNotNil(location);
+        NSString *bytes = [NSString stringWithContentsOfURL:location
+                          encoding:NSUTF8StringEncoding error:NULL];
+        XCTAssertEqualObjects(bytes, @"Draft recovery é 日本語\n");
+        [saved fulfill];
+    }];
+    [self waitForExpectations:@[saved] timeout:10];
+}
+
 - (void)testReadFromDataValidUTF8
 {
     // Create valid UTF-8 markdown data
