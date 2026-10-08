@@ -599,3 +599,27 @@ L'ancienne fixture checkbox sans rendererFlags était incorrecte : elle n'est pa
 Extension justifiée : le bouton natif du code fusionné délègue à NSTextView+Autocomplete. Toutes les lignes de cette catégorie h/m sont relues ; les sept consommateurs utilisent désormais les options réelles du renderer du document. L'ancienne API interne a été supprimée après migration et recherche des usages statiques, dynamiques et nib/resources.
 
 [Clôture et résultats](preuves/squashed-cloture.md), [commandes, résultats et empreintes](preuves/squashed-verification.json). Validation locale sur macOS26.6.2/arm64 ; les limites Intel, matrice macOS et distribution sont explicites dans la clôture. Aucun déploiement ni push prévu.
+
+
+## Nouvelle lecture indépendante — passe 3 du 9 octobre 2026
+
+Statut : **terminé dans le périmètre vérifié**, baseline `17dbbb9ba39746b4c216278b764b2d95fe1ce801`, arbre initial propre. Nouvelle demande après clôture précédente : aucune case Lu/Analysé/Validé héritée. Même périmètre : cinq sources du squash dbc6b23 et trois dépendances directes nécessaires, huit sources actives. Tests/documents hors compteur. Anciennes lectures conservées comme historiques. Aucune installation ni publication.
+
+| Chemin | SHA-256 final relu | Lu | Analysé | Validé | Preuve |
+| --- | --- | --- | --- | --- | --- |
+| `MacDown/Code/Document/MPDocument.m` | `9c8d4034063cce472c12ba667a81bdcf8c81d013a08dfea61f34763d556cc481` | ☑ | ☑ | ☑ | [Lecture, analyse et seconde passe](preuves/squashed-pass3-document.md) |
+| `MacDown/Code/Document/MPPreviewInlineTransaction.h` | `618db0c670ad51b85755258eb1cc27dfdc49f8facd64f060be05cca31434c039` | ☑ | ☑ | ☑ | [Lecture, analyse et seconde passe](preuves/squashed-pass3-inline.md) |
+| `MacDown/Code/Document/MPRenderer.h` | `897256ea8bb4616dec80592c49c7e02c82bc1ad42f3a43f7c34cc23f213cba6d` | ☑ | ☑ | ☑ | [Lecture, analyse et seconde passe](preuves/squashed-pass3-renderer.md) |
+| `MacDown/Code/Document/MPRenderer.m` | `cd6b9a332b52f2a160d9c530d59c1fae3246642fa01679953d8c827cafb418e2` | ☑ | ☑ | ☑ | [Lecture, analyse et seconde passe](preuves/squashed-pass3-renderer.md) |
+| `MacDown/Resources/Extensions/preview-edit.js` | `72bb762a66c365f6ea8895882fea2f560a731aa7a8eddb6308a202605bcf7cf0` | ☑ | ☑ | ☑ | [Lecture, analyse et seconde passe](preuves/squashed-pass3-js.md) |
+| `MacDown/Code/Extension/DOMNode+Text.m` | `012b469069e5ba220c530ae1de0df9811585ceca7628330da984723139b56b8d` | ☑ | ☑ | ☑ | [Lecture, analyse et seconde passe](preuves/squashed-pass3-js.md) |
+| `MacDown/Code/Extension/NSTextView+Autocomplete.h` | `9412de885b8ff167500177ee83787e485eed5cd4d1ea2de781f4ea3d15ef40e2` | ☑ | ☑ | ☑ | [Lecture, analyse et seconde passe](preuves/squashed-pass3-renderer.md) |
+| `MacDown/Code/Extension/NSTextView+Autocomplete.m` | `d836b8efb5885b462a142166998b8541e1db51bc22f5eb75796e5817a81c5d6b` | ☑ | ☑ | ☑ | [Lecture, analyse et seconde passe](preuves/squashed-pass3-renderer.md) |
+
+Lecture complète finale : **8/8 lus, 8/8 analysés, 8/8 validés — 9 501 lignes**. Quatre défauts confirmés et corrigés dans quatre commits séparés : `4929c78` (Setext et voisins), `55629e7` (compteur et styles inline), `cc358cb` (refus impression/PDF), `8c694d7` (CSS export Intel). Les fichiers modifiés sont intégralement relus après leur dernier changement et leurs consommateurs réexaminés. Aucun défaut confirmé non corrigé ni hypothèse déterminante ouverte dans les parcours étudiés.
+
+Contrôles finaux : **1 476 XCTest complets en Intel/Rosetta, 13 XCUITest en ARM et 65 contrats CLI, zéro échec** ; zéro test ignoré dans les suites complètes. Test HTML final ciblé Intel puis ARM réussi après ajout d’une assertion de completion, sans changement applicatif (versions de test explicites). Syntaxe JS correcte. Release universel arm64/x86_64 compilé, signature locale valide et script embarqué identique. Préférences restaurées et vérifiées à chaque session.
+
+Rapprochement complet : cinq sources du squash et trois dépendances directes, aucun fichier actif oublié ; 12 auxiliaires hors compteur. Les SHA relus/testés/commités concordent. Les preuves antérieures restent historiques, aucune validation héritée. Seconde passe terminée ; limites Rosetta/macOS/distribution et confiance envers scripts locaux explicites. Aucune installation ni publication.
+
+[Clôture de cette passe](preuves/squashed-pass3-cloture.md), [commandes, résultats et empreintes](preuves/squashed-pass3-verification.json).
