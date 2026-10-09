@@ -130,7 +130,14 @@ final class MacDownUITests: XCTestCase {
         editor.typeText("# Preview target\n\nSearch **rendered text** here.")
         let preview = window.webViews.firstMatch
         XCTAssertTrue(preview.waitForExistence(timeout: 10))
-        preview.click()
+        // The WebView exists before its asynchronous Markdown render finishes.
+        // Focus the rendered fixture rather than an arbitrary point in a view
+        // whose content can still be replaced while the click is delivered.
+        let target = preview.staticTexts.matching(NSPredicate(
+            format: "label == %@ OR value == %@", "Preview target", "Preview target"
+        )).firstMatch
+        XCTAssertTrue(target.waitForExistence(timeout: 10), window.debugDescription)
+        target.click()
         app.typeKey("f", modifierFlags: .command)
         let field = app.searchFields["preview-find-field"]
         XCTAssertTrue(field.waitForExistence(timeout: 5))
