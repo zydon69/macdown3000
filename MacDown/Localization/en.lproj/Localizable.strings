@@ -12,6 +12,9 @@
 "Task List" = "Task List";
 "Code" = "Code";
 "Code Block" = "Code Block";
+"Link address (https://…)" = "Link address (https://…)";
+"Apply" = "Apply";
+"Cancel" = "Cancel";
 
 "WORDS_PLURAL_STRING" = "%@ word;%@ words";
 

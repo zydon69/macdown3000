@@ -66,6 +66,9 @@
 "Inline Code" = "Code en ligne";
 "Code" = "Code";
 "Code Block" = "Bloc de code";
+"Link address (https://…)" = "Adresse du lien (https://…)";
+"Apply" = "Appliquer";
+"Cancel" = "Annuler";
 
 /* Install shell utility button */
 "Install" = "Installer";

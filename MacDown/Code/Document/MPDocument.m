@@ -3706,22 +3706,36 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 
 - (IBAction)toggleLink:(id)sender
 {
-    BOOL inserted = [self.editor toggleForMarkupPrefix:@"[" suffix:@"]()"];
-    if (!inserted)
-        return;
-
-    NSRange selectedRange = self.editor.selectedRange;
-    NSUInteger location = selectedRange.location + selectedRange.length + 2;
-    selectedRange = NSMakeRange(location, 0);
-
-    NSPasteboard *pb = [NSPasteboard generalPasteboard];
-    NSString *url = [pb URLForType:NSPasteboardTypeString].absoluteString;
-    if (url)
-    {
-        [self.editor insertText:url replacementRange:selectedRange];
-        selectedRange.length = url.length;
+    if (self.documentClosed || self.printing) return;
+    BOOL previewFocused=[self previewHasFindFocus];
+    NSString *source=self.editor.string.copy;
+    NSRange selection=self.editor.selectedRange;
+    if (previewFocused) {
+        JSValue *function=self.preview.mainFrame.javaScriptContext[@"window"][@"macdownPreviewEditor"][@"selectionPayload"];
+        NSDictionary *payload=[[function callWithArguments:@[@"link",NSNull.null]] toDictionary];
+        NSDictionary *verified=[self verifiedPreviewSelection:payload];
+        if (!verified || verified[@"codeBlockRange"]) {NSBeep();return;}
     }
-    self.editor.selectedRange = selectedRange;
+    NSAlert *alert=[NSAlert new];
+    alert.messageText=NSLocalizedString(@"Link",@"");
+    alert.informativeText=NSLocalizedString(@"Link address (https://…)",@"");
+    [alert addButtonWithTitle:NSLocalizedString(@"Apply",@"")];
+    [alert addButtonWithTitle:NSLocalizedString(@"Cancel",@"")];
+    NSTextField *field=[[NSTextField alloc] initWithFrame:NSMakeRect(0,0,360,24)];
+    field.stringValue=@"https://"; alert.accessoryView=field;
+    alert.window.initialFirstResponder=field;
+    if ([alert runModal]!=NSAlertFirstButtonReturn || ![source isEqualToString:self.editor.string]) return;
+    NSString *value=field.stringValue;
+    if (previewFocused) {
+        if ([self previewHasFindFocus]) [self performPreviewFormattingAction:@"link" value:value];
+        return;
+    }
+    if (!NSEqualRanges(selection,self.editor.selectedRange)) return;
+    if (!selection.length) {
+        NSURL *url=MPPIValidatedLinkURL(value);
+        if (!url) {NSBeep();return;}
+        [self.editor toggleForMarkupPrefix:@"[" suffix:[NSString stringWithFormat:@"](<%@>)",url.absoluteString]];
+    } else if (![self formatSourceInlineAction:@"link" value:value]) NSBeep();
 }
 
 - (IBAction)toggleImage:(id)sender

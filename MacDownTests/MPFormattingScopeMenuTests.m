@@ -20,6 +20,8 @@
 @property (copy) NSArray<NSDictionary *> *previewEditRanges;
 - (IBAction)convertToH1:(id)sender;
 - (IBAction)toggleStrong:(id)sender;
+- (IBAction)toggleLink:(id)sender;
+- (BOOL)previewHasFindFocus;
 @end
 
 // Exercise rendered selections, the JavaScript controls and native formatting
@@ -154,6 +156,91 @@
 - (void)chooseContainer:(NSString *)value
 {
     [self JS:[NSString stringWithFormat:@"(function(){var s=document.querySelector('#macdown-preview-format select[data-mp-scope=container]');s.value='%@';s.dispatchEvent(new Event('change',{bubbles:true}));})()",value]];
+}
+
+- (NSArray<NSView *> *)allSubviewsOf:(NSView *)view
+{
+    NSMutableArray *views=[NSMutableArray array];
+    for (NSView *child in view.subviews) {
+        [views addObject:child];
+        [views addObjectsFromArray:[self allSubviewsOf:child]];
+    }
+    return views;
+}
+
+// Drive NSAlert's native controls inside its modal run loop. A bounded callback
+// aborts only this test's modal session if the expected controls never appear;
+// no Accessibility or UI-automation permission is required.
+- (void)invokeLinkWithAddress:(NSString *)address apply:(BOOL)apply
+{
+    XCTAssertTrue([self.document previewHasFindFocus]);
+    XCTAssertTrue([[self JS:@"Boolean(macdownPreviewEditor.selectionPayload('link'))"] boolValue]);
+    __block BOOL answered=NO,finished=NO;
+    __block NSString *modalDescription=@"No modal observed";
+    __block NSUInteger attempts=0;
+    __block void (^respond)(void);
+    respond=^{
+        if (finished) {respond=nil;return;}
+        NSWindow *modal=NSApp.modalWindow;
+        NSTextField *field=nil;
+        NSButton *button=nil;
+        NSMutableArray *controls=[NSMutableArray array];
+        for (NSView *view in [self allSubviewsOf:modal.contentView]) {
+            if ([view isKindOfClass:NSButton.class]) [controls addObject:[NSString stringWithFormat:@"button %@ tag %ld",[(NSButton *)view title],(long)view.tag]];
+            if ([view isKindOfClass:NSTextField.class] && [(NSTextField *)view isEditable]) [controls addObject:[NSString stringWithFormat:@"editable field %@",[(NSTextField *)view stringValue]]];
+            if ([view isKindOfClass:NSTextField.class] && [(NSTextField *)view isEditable] &&
+                [[(NSTextField *)view stringValue] isEqualToString:@"https://"]) field=(NSTextField *)view;
+            if ([view isKindOfClass:NSButton.class] && view.tag==(apply ? NSAlertFirstButtonReturn : NSAlertSecondButtonReturn)) button=(NSButton *)view;
+        }
+        if (modal) modalDescription=[controls componentsJoinedByString:@"; "];
+        if (field && button) {
+            field.stringValue=address;
+            answered=YES; finished=YES;
+            [button performClick:nil];
+            respond=nil;
+        } else if (++attempts>=40) {
+            finished=YES;
+            if (NSApp.modalWindow) [NSApp abortModal];
+            respond=nil;
+        } else {
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(0.05*NSEC_PER_SEC)),dispatch_get_main_queue(),respond);
+        }
+    };
+    dispatch_async(dispatch_get_main_queue(),respond);
+    XCTAssertTrue([NSApp sendAction:@selector(toggleLink:) to:self.document from:nil]);
+    finished=YES; respond=nil;
+    XCTAssertTrue(answered,@"Expected link address field and %@ button must be available; %@",apply ? @"Apply" : @"Cancel",modalDescription);
+}
+
+- (void)testNativeLinkActionPreservesHeadingContainerSelectionAndRejectsCancelOrUnsafeURLAtomically
+{
+    NSString *source=@"::: {.callout-note}\n## Title\n# **Heading**\n\nBody\n:::\n\nNeighbor.\n";
+    [self loadSource:source];
+    [self selectFromText:@"Heading" throughText:@"Heading"];
+    [self invokeLinkWithAddress:@"https://example.com/scopes" apply:NO];
+    XCTAssertEqualObjects(self.editor.string,source,@"Cancel must not create a Markdown link");
+    XCTAssertEqualObjects([self JS:@"getSelection().toString()"],@"Heading");
+    [self invokeLinkWithAddress:@"javascript:alert(1)" apply:YES];
+    XCTAssertEqualObjects(self.editor.string,source,@"An unsafe URL must leave every scope unchanged");
+    XCTAssertFalse([[self JS:@"!!document.querySelector('h1 a')"] boolValue]);
+    XCTAssertEqualObjects([self JS:@"getSelection().toString()"],@"Heading");
+    [self invokeLinkWithAddress:@"https://example.com/scopes" apply:YES];
+    [self waitUntil:^BOOL{return [self.editor.string containsString:@"https://example.com/scopes"];} description:@"Native link action creates source Markdown"];
+    [self waitForFormatting];
+    XCTAssertFalse([self.editor.string containsString:@"<a"]);
+    XCTAssertTrue([self.editor.string containsString:@"](https://example.com/scopes)"] ||
+        [self.editor.string containsString:@"](<https://example.com/scopes>)"]);
+    XCTAssertTrue([self.editor.string containsString:@"::: {.callout-note}"]);
+    XCTAssertTrue([self.editor.string containsString:@"## Title"]);
+    XCTAssertTrue([self.editor.string containsString:@"Body"]);
+    XCTAssertTrue([self.editor.string hasSuffix:@"\nNeighbor.\n"]);
+    XCTAssertEqualObjects([self JS:@"document.querySelector('h1 a').getAttribute('href')"],@"https://example.com/scopes");
+    XCTAssertEqualObjects([self JS:@"document.querySelector('h1 a').textContent"],@"Heading");
+    XCTAssertTrue([[self JS:@"!!document.querySelector('h1 strong')"] boolValue]);
+    XCTAssertEqualObjects([self JS:@"getSelection().toString()"],@"Heading");
+    [self assertMenuScope:@"block" value:@"h1" active:YES];
+    [self assertMenuScope:@"container" value:@"callout-note" active:YES];
+    XCTAssertEqualObjects([self JS:@"document.querySelector('[data-mp-style=link]').getAttribute('aria-pressed')"],@"true");
 }
 
 - (void)testHeadingAndContainerAreIndependentAndMixedBlocksKeepOnlyTheirCommonContainer
