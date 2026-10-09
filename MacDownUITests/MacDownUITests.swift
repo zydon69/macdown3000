@@ -300,13 +300,19 @@ final class MacDownUITests: XCTestCase {
     }
 
     private func choosePreviewBlock(_ label: String, window: XCUIElement) {
-        let menu = window.webViews.popUpButtons["Texte normal / Bloc"]
+        let menu = window.webViews.popUpButtons["Type de ligne et encadré"]
         XCTAssertTrue(menu.waitForExistence(timeout: 5), window.debugDescription)
         XCTAssertTrue(menu.isEnabled)
         menu.click()
-        let option = app.menuItems[label].firstMatch
+        // These are HTML menuitemradio controls, not AppKit menu items.
+        let option = window.webViews.descendants(matching: .any).matching(
+            NSPredicate(format: "label == %@", label)).firstMatch
         XCTAssertTrue(option.waitForExistence(timeout: 5), app.debugDescription)
-        option.click()
+        XCTAssertTrue(option.isEnabled)
+        XCTAssertTrue(option.isHittable)
+        // WebKit exposes menuitemradio as MenuItem, but it has no native
+        // NSMenu to traverse. Click its visible position as the user does.
+        option.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
     }
 
     func testPreviewCodeSelectionDisablesInlineStylesAndConvertsBackToText() throws {
