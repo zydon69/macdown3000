@@ -8,6 +8,7 @@
 
 #import "MPDocument.h"
 #import <WebKit/WebKit.h>
+#import <CommonCrypto/CommonDigest.h>
 #import <JJPluralForm/JJPluralForm.h>
 #import <hoedown/html.h>
 #import "hoedown_html_patch.h"
@@ -43,6 +44,24 @@
 // Issue #504: PDF export post-processing (clickable internal anchor links).
 #import <PDFKit/PDFKit.h>
 #import "MPPDFAnchorInjector.h"
+
+// Compare original bytes, before CRLF normalization, without retaining a second
+// copy of the document. Chunking avoids truncating NSData.length to CC_LONG.
+static NSData *MPDocumentContentFingerprint(NSData *data)
+{
+    CC_SHA256_CTX context;
+    CC_SHA256_Init(&context);
+    const unsigned char *bytes = data.bytes;
+    NSUInteger offset = 0;
+    while (offset < data.length) {
+        CC_LONG count = (CC_LONG)MIN(data.length - offset, (NSUInteger)(1024 * 1024));
+        CC_SHA256_Update(&context, bytes + offset, count);
+        offset += count;
+    }
+    unsigned char digest[CC_SHA256_DIGEST_LENGTH];
+    CC_SHA256_Final(digest, &context);
+    return [NSData dataWithBytes:digest length:sizeof(digest)];
+}
 
 static NSString *MPNormalizePreviewSelectionText(NSString *text)
 {
@@ -621,6 +640,9 @@ typedef NS_ENUM(NSInteger, MPReferenceKind) {
 // Issue #290: File watching for auto-reload
 @property (strong) MPFileWatcher *fileWatcher;
 @property (nonatomic) BOOL isSelfSaving;
+@property (copy) NSData *diskContentFingerprint;
+@property (copy) NSData *pendingDiskFingerprint;
+@property BOOL collectingDiskFingerprint;
 
 // Issue #543: State for collapsing bursts of external-change notifications.
 // externalChangeCoalescePending is set while a debounced decision is in flight;
@@ -1662,7 +1684,16 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
         }
     }
 
-    BOOL result = [super writeToURL:url ofType:typeName error:outError];
+    self.pendingDiskFingerprint = nil;
+    self.collectingDiskFingerprint = YES;
+    BOOL result;
+    @try {
+        result = [super writeToURL:url ofType:typeName error:outError];
+    } @finally {
+        self.collectingDiskFingerprint = NO;
+    }
+    if (result && [url isEqual:self.fileURL])
+        self.diskContentFingerprint = self.pendingDiskFingerprint;
 
     // Issue #290: Clear save flag after a short delay to ensure
     // the file watcher doesn't trigger (events may be coalesced)
@@ -1728,14 +1759,22 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     // Checked against `url` (the destination), not self.fileURL, so a Save As
     // across volumes is classified by where the file is going, not where it
     // came from.
+    NSData *previousFingerprint = self.diskContentFingerprint;
+    BOOL result;
     if ([self shouldBypassSafeSaveForURL:url])
     {
-        return [self writeToURL:url ofType:typeName
+        result = [self writeToURL:url ofType:typeName
                 forSaveOperation:saveOperation
              originalContentsURL:self.fileURL error:outError];
     }
-    return [super writeSafelyToURL:url ofType:typeName
-                   forSaveOperation:saveOperation error:outError];
+    else
+        result = [super writeSafelyToURL:url ofType:typeName
+                       forSaveOperation:saveOperation error:outError];
+    // A recovery autosave is not a write to the original file. Publish the
+    // exact serialized snapshot only after the complete safe save succeeds.
+    self.diskContentFingerprint = result && saveOperation != NSAutosaveElsewhereOperation
+        ? self.pendingDiskFingerprint : previousFingerprint;
+    return result;
 }
 
 // Issue #371: Split out for test exposure. Checks `url` (the save
@@ -1765,7 +1804,10 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 {
     if (![self flushPreviewEditorForSaveWithError:outError]) return nil;
     NSString *content = self.editor ? self.editor.string : (self.loadedString ?: @"");
-    return [content dataUsingEncoding:NSUTF8StringEncoding];
+    NSData *data = [content dataUsingEncoding:NSUTF8StringEncoding];
+    if (data && self.collectingDiskFingerprint)
+        self.pendingDiskFingerprint = MPDocumentContentFingerprint(data);
+    return data;
 }
 
 - (BOOL)readFromData:(NSData *)data ofType:(NSString *)typeName
@@ -1779,6 +1821,8 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
             userInfo:@{NSLocalizedDescriptionKey: NSLocalizedString(@"The document is not valid UTF-8 text.", @"Invalid Markdown encoding")}];
         return NO;
     }
+
+    self.diskContentFingerprint = MPDocumentContentFingerprint(data);
 
     // Normalize Windows CRLF to LF (Issue #382)
     content = [content stringByReplacingOccurrencesOfString:@"\r\n" withString:@"\n"];
@@ -7139,11 +7183,16 @@ to link outside that scope.", \
 
     NSDate *diskModDate = attrs[NSFileModificationDate];
 
-    // If dates match (or disk is older), no real change
+    // Backup restores can preserve or decrease the timestamp. With the same
+    // date, compare against the bytes actually read/saved, not the dirty editor.
     if (currentModDate && diskModDate &&
-        [diskModDate compare:currentModDate] != NSOrderedDescending)
+        [diskModDate compare:currentModDate] == NSOrderedSame)
     {
-        return;
+        if (!self.diskContentFingerprint) return;
+        NSData *diskData = [NSData dataWithContentsOfURL:self.fileURL
+                                              options:0 error:&error];
+        if (!diskData || [MPDocumentContentFingerprint(diskData)
+                         isEqual:self.diskContentFingerprint]) return;
     }
 
     // File has been modified externally.
