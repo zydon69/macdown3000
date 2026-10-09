@@ -5872,7 +5872,7 @@ to link outside that scope.", \
         }
         NSDictionary *prefixes = @{@"paragraph":@"", @"h1":@"# ", @"h2":@"## ", @"h3":@"### ", @"h4":@"#### ", @"h5":@"##### ", @"h6":@"###### ",
             @"unordered":@"- ", @"ordered":@"1. ", @"tasks":@"- [ ] ", @"quote":@"> "};
-        NSString *prefix = prefixes[value];
+        NSString *prefix = [value isEqualToString:@"code-block"] ? @"" : prefixes[value];
         NSRange restoredSelection = blockStart!=NSNotFound && blockEnd!=NSNotFound && blockEnd>=blockStart
             ? NSMakeRange(blockStart,blockEnd-blockStart) : NSMakeRange(NSNotFound,0);
         if (prefix != nil) {
@@ -5894,11 +5894,13 @@ to link outside that scope.", \
             };
             NSMutableString *processed = [NSMutableString string];
             NSUInteger restoredStart = NSNotFound, restoredEnd = NSNotFound;
+            BOOL codeSelectionProven=YES;
             for (NSDictionary *line in sourceLines) {
                 if ([line[@"setext"] boolValue]) continue;
                 NSString *text = line[@"text"];
                 NSUInteger outputStart = processed.length, removedPrefix = 0, addedPrefix = 0, literalEscape = NSNotFound;
                 NSString *outputText = text;
+                NSArray<NSNumber *> *codePositions=nil;
                 // A contiguous visual selection can cross blank separators,
                 // comments and images that have no selected text. Convert only
                 // source lines touched by an independently proven text run.
@@ -5948,9 +5950,18 @@ to link outside that scope.", \
                         if (probe && [[HTML substringWithRange:[probe rangeAtIndex:1]] isEqualToString:[originalHTML substringWithRange:[heading rangeAtIndex:1]]]) plain=candidate;
                     }
                     NSString *expectedText=[content.stringValue stringByTrimmingCharactersInSet:NSCharacterSet.newlineCharacterSet];
-                    NSString *expectedTag=[value hasPrefix:@"h"] ? value : [value isEqualToString:@"paragraph"] ? @"p" : [value isEqualToString:@"quote"] ? @"blockquote" : [value isEqualToString:@"ordered"] ? @"ol" : @"ul";
-                    BOOL proved=NO;
-                    for (NSUInteger attempt=0;attempt<2;attempt++) {
+                    NSString *expectedTag=[value hasPrefix:@"h"] ? value : ([value isEqualToString:@"paragraph"] || [value isEqualToString:@"code-block"]) ? @"p" : [value isEqualToString:@"quote"] ? @"blockquote" : [value isEqualToString:@"ordered"] ? @"ol" : @"ul";
+                    // A code block displays literal rendered content. Do not
+                    // carry inline Markdown or prose-only protective escapes
+                    // into the new fenced body.
+                    BOOL codeTarget=[value isEqualToString:@"code-block"];
+                    if (codeTarget) {
+                        codePositions=MPPIProvenance(plain,expectedText);
+                        if (!codePositions) codeSelectionProven=NO;
+                        plain=expectedText;
+                    }
+                    BOOL proved=codeTarget;
+                    for (NSUInteger attempt=0;!proved && attempt<2;attempt++) {
                         NSString *candidate=[prefix stringByAppendingString:plain];
                         NSXMLDocument *DOM=MPPIParseHTML([self.renderer HTMLForMarkdownSnapshot:candidate]);
                         normalizeTaskSpacing(DOM);
@@ -5999,6 +6010,14 @@ to link outside that scope.", \
                     if (relative>text.length) mapped = outputText.length+relative-text.length;
                     else {
                         NSUInteger plainPosition=MIN(relative>removedPrefix ? relative-removedPrefix : 0,outputText.length-addedPrefix-(literalEscape!=NSNotFound ? 1 : 0));
+                        if (codePositions) {
+                            NSUInteger raw=relative>removedPrefix ? relative-removedPrefix : 0;
+                            plainPosition=0;
+                            for (NSNumber *position in codePositions) {
+                                if (position.unsignedIntegerValue>=raw) break;
+                                plainPosition++;
+                            }
+                        }
                         mapped=addedPrefix+plainPosition+(literalEscape!=NSNotFound && plainPosition>=literalEscape ? 1 : 0);
                     }
                     if (boundary==0) restoredStart=outputStart+mapped; else restoredEnd=outputStart+mapped;
@@ -6008,7 +6027,15 @@ to link outside that scope.", \
             if (restoredStart!=NSNotFound && restoredEnd!=NSNotFound && restoredEnd>=restoredStart)
                 restoredSelection=NSMakeRange(restoredStart,restoredEnd-restoredStart);
             body = newline.length && [processed hasSuffix:newline] ? [processed substringToIndex:processed.length-newline.length] : processed;
-        } else if ([value isEqualToString:@"code-block"]) {
+            if ([value isEqualToString:@"code-block"] && !codeSelectionProven) {
+                NSString *visible=verified[@"text"];
+                NSRange occurrence=[body rangeOfString:visible options:NSLiteralSearch];
+                BOOL unique=occurrence.location!=NSNotFound &&
+                    [body rangeOfString:visible options:NSLiteralSearch range:NSMakeRange(occurrence.location+1,body.length-occurrence.location-1)].location==NSNotFound;
+                restoredSelection=unique ? occurrence : NSMakeRange(NSNotFound,0);
+            }
+        }
+        if ([value isEqualToString:@"code-block"]) {
             restoredSelection=NSMakeRange(NSNotFound,0); // Code blocks leave the editable text domain.
             NSUInteger longest = 0, run = 0;
             for (NSUInteger i=0;i<body.length;i++) { run=[body characterAtIndex:i]=='`'?run+1:0;longest=MAX(longest,run); }
@@ -6039,7 +6066,7 @@ to link outside that scope.", \
             restoredSelection=NSMakeRange(NSNotFound,0); // Generated math is not mapped for editing.
             if (!self.preferences.htmlMathJax || [body containsString:@"$$"]) return NO;
             body = [NSString stringWithFormat:@"\n$$\n%@\n$$\n",body];
-        } else return NO;
+        } else if (prefix == nil) return NO;
         if (newline.length) body = [body stringByAppendingString:newline];
         return [self replacePreviewRange:lineRange withString:body preservingSelection:selectedRange restoringRange:restoredSelection];
     }

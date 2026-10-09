@@ -1549,12 +1549,34 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
         payload[@"token"] = document.previewEditToken; payload[@"action"] = @"block"; payload[@"value"] = value;
         XCTAssertTrue([document applyPreviewEditPayload:payload], @"%@ -> %@",source,value);
         XCTAssertEqualObjects(editor.string, expected);
-        XCTAssertTrue([[renderer HTMLForMarkdownSnapshot:editor.string] containsString:expectedHTML]);
+        NSString *HTML=[renderer HTMLForMarkdownSnapshot:editor.string];
+        if ([value isEqualToString:@"code-block"]) {
+            NSXMLDocument *DOM=[[NSXMLDocument alloc] initWithXMLString:HTML options:NSXMLDocumentTidyHTML error:NULL];
+            NSArray *codes=[DOM nodesForXPath:@"//pre/code" error:NULL];
+            XCTAssertEqual(codes.count,1u);
+            XCTAssertEqualObjects([codes.firstObject stringValue],expectedHTML);
+        } else XCTAssertTrue([HTML containsString:expectedHTML]);
     } @finally {
         [document close];
         document.preferences.extensionSmartyPants = oldSmarty;
         document.preferences.htmlTaskList = oldTasks;
     }
+}
+
+- (void)testPreviewQuoteToCodeRemovesOnlyStructuralPrefix
+{
+    [self assertPreviewBlockSource:@"> Quotedword\n\nNeighbor.\n" texts:@[@"Quotedword"] value:@"code-block"
+        expected:@"\n```\nQuotedword\n```\n\n\nNeighbor.\n" HTML:@"Quotedword"];
+    [self assertPreviewBlockSource:@"> # Headingword\n\nNeighbor.\n" texts:@[@"Headingword"] value:@"code-block"
+        expected:@"\n```\nHeadingword\n```\n\n\nNeighbor.\n" HTML:@"Headingword"];
+}
+
+- (void)testPreviewCodeConversionPreservesRenderedLiteralMarkers
+{
+    [self assertPreviewBlockSource:@"> # > literal\n" texts:@[@"literal"] value:@"code-block"
+        expected:@"\n```\n> literal\n```\n\n" HTML:@"> literal"];
+    [self assertPreviewBlockSource:@"# - **item**\n" texts:@[@"item"] value:@"code-block"
+        expected:@"\n```\n- item\n```\n\n" HTML:@"- item"];
 }
 
 - (void)testPreviewBlockConversionPreservesBlankSeparators

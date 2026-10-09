@@ -284,6 +284,55 @@ final class MacDownUITests: XCTestCase {
         XCTAssertEqual(editor.value as? String, source)
     }
 
+    private func openPreviewBlockFixture(_ file: URL) -> XCUIElement {
+        app.terminate()
+        app.launchArguments = ["-ApplePersistenceIgnoreState", "YES", "-MPDisableUpdater", "YES",
+                               "-editorStartInPreviewMode", "NO", "-htmlMathJax", "NO",
+                               "-extensionFencedCode", "YES", "-extensionStrikethough", "YES",
+                               "-htmlSyntaxHighlighting", "NO", "-AppleLanguages", "(fr)"]
+        app.launch()
+        app.typeKey("o", modifierFlags: .command)
+        app.typeKey("g", modifierFlags: [.command, .shift])
+        app.typeText(file.path)
+        app.typeKey(XCUIKeyboardKey.return.rawValue, modifierFlags: [])
+        app.typeKey(XCUIKeyboardKey.return.rawValue, modifierFlags: [])
+        return app.windows[file.lastPathComponent]
+    }
+
+    private func choosePreviewBlock(_ label: String, window: XCUIElement) {
+        let menu = window.webViews.popUpButtons["Texte normal / Bloc"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 5), window.debugDescription)
+        XCTAssertTrue(menu.isEnabled)
+        menu.click()
+        let option = app.menuItems[label].firstMatch
+        XCTAssertTrue(option.waitForExistence(timeout: 5), app.debugDescription)
+        option.click()
+    }
+
+    func testPreviewQuoteToCodeRemovesQuotePrefixAndKeepsNeighbor() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("QuoteToCode.md")
+        let source = "> Quotedword\n\nNeighbor\n"
+        try source.write(to: file, atomically: true, encoding: .utf8)
+        let window = openPreviewBlockFixture(file)
+        let editor = window.textViews.matching(identifier: "editor-text-view").firstMatch
+        XCTAssertTrue(editor.waitForExistence(timeout: 10))
+        let text = window.webViews.staticTexts.matching(
+            NSPredicate(format: "label == %@ OR value == %@", "Quotedword", "Quotedword")).firstMatch
+        XCTAssertTrue(text.waitForExistence(timeout: 10), window.debugDescription)
+        text.doubleClick()
+        choosePreviewBlock("Code — bloc", window: window)
+        wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value CONTAINS %@", "```"), object: editor)], timeout: 10)
+        let converted = try XCTUnwrap(editor.value as? String)
+        XCTAssertFalse(converted.contains(">"), "A converted quote marker must not become code content")
+        XCTAssertTrue(converted.contains("Quotedword"))
+        XCTAssertTrue(converted.contains("Neighbor"))
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertEqual(editor.value as? String, source)
+    }
+
     func testNormalTextToolbarRemovesCurrentHeadingAndSupportsUndo() throws {
         app.terminate()
         app.launchArguments = ["-ApplePersistenceIgnoreState", "YES",
