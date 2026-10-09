@@ -2329,6 +2329,16 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 
 #pragma mark - WebEditingDelegate
 
+- (void)webViewDidChangeSelection:(NSNotification *)notification
+{
+    if (self.documentClosed || notification.object != self.preview ||
+        ![self previewHasFindFocus] || !self.preview.selectedDOMRange.toString.length)
+        return;
+    NSRange selection = self.editor.selectedRange;
+    if (selection.length)
+        self.editor.selectedRange = NSMakeRange(selection.location, 0);
+}
+
 - (BOOL)webView:(WebView *)webView doCommandBySelector:(SEL)selector
 {
     if (selector == @selector(copy:))
@@ -2962,13 +2972,32 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 // revert to the document-wide totals.
 - (void)editorSelectionDidChange:(NSNotification *)notification
 {
-    self.readingProgressFromPreview = NO;
+    BOOL previewFocused = [self previewHasFindFocus];
+    if (!self.documentClosed && notification.object == self.editor) {
+        if (previewFocused && self.editor.selectedRange.length) {
+            // Source replacements also change NSTextView's selection. While
+            // the preview owns focus, keep its selection and only a source caret.
+            self.editor.selectedRange = NSMakeRange(self.editor.selectedRange.location, 0);
+            return;
+        }
+        NSResponder *responder = self.editor.window.firstResponder;
+        if ([responder isKindOfClass:NSView.class] &&
+            [(NSView *)responder isDescendantOf:self.editor]) {
+            // Switching to the source cancels both the visible DOM selection
+            // and any pending restoration/formatting for the previous passage.
+            self.previewSelectionToRestore = nil;
+            self.previewQueuedFormatting = nil;
+            [self.preview.mainFrame.javaScriptContext evaluateScript:
+                @"window.macdownPreviewEditor && window.macdownPreviewEditor.clearSelection()"];
+        }
+    }
+    if (!previewFocused) self.readingProgressFromPreview = NO;
     [self scheduleReadingProgressUpdate];
     // When Sync Panes is on, moving the cursor (click or arrow keys) refines the
     // preview's scroll position to follow it, on top of the usual viewport-based
     // sync. Runs independently of the word-count display preference below, since
     // it is unrelated to that gate.
-    if (self.preferences.editorSyncScrolling && _scrollOwner == MPScrollOwnerNeither)
+    if (!previewFocused && self.preferences.editorSyncScrolling && _scrollOwner == MPScrollOwnerNeither)
     {
         [self syncScrollersToCursor];
     }

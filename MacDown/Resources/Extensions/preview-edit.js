@@ -21,6 +21,12 @@
     window.location.href = 'x-macdown-preview://edit/?payload=' + encodeURIComponent(JSON.stringify(payload));
   }
   function hide() { if (panel) panel.style.display = 'none'; }
+  function clearSelection() {
+    clearTimeout(timer); saved=null; selectingWithMouse=false;
+    window.getSelection().removeAllRanges();
+    if(errorMessage){errorMessage.remove();errorMessage=null;}
+    errorSelection=null; hide();
+  }
   function draft() {
     if (!active || active.textContent === active._mpOriginal) return null;
     return {action:'replace', id:active._mpID, text:active.textContent, token:config.token};
@@ -294,7 +300,7 @@
   function normalizedSelectionText(text) {
     return text.replace(/\r\n?/g,'\n').replace(/\n+/g,'\n');
   }
-  window.macdownPreviewEditor={elements:function(){return {panel:panel,style:panelStyle,spans:mappedSpans.slice()};},prepareForRender:function(){saved=currentSelection() || saved;rendering=true;clearTimeout(timer);},draft:draft,finish:finish,selectionPayload:selectionPayload,showError:function(){
+  window.macdownPreviewEditor={elements:function(){return {panel:panel,style:panelStyle,spans:mappedSpans.slice()};},clearSelection:clearSelection,prepareForRender:function(){saved=currentSelection() || saved;rendering=true;clearTimeout(timer);},draft:draft,finish:finish,selectionPayload:selectionPayload,showError:function(){
     showEditError('Modification refusée : la source a changé. Copiez votre texte, puis appuyez sur Échap pour annuler.');
   },showFormattingError:function(){
     showEditError('Mise en forme refusée : cette sélection ne peut pas être représentée correctement en Markdown. Sélectionnez un passage plus court.');

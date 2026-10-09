@@ -1742,6 +1742,76 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
     }
 }
 
+- (void)testEditorAndPreviewSelectionsAreExclusiveAndToolbarFollowsFocus
+{
+    MPDocument *document=[MPDocument new]; document.fileURL=self.testFileURL;
+    MPEditorView *editor=[[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,600,400)];
+    WebView *web=[[WebView alloc] initWithFrame:NSMakeRect(600,0,600,400)];
+    NSWindow *window=[[NSWindow alloc] initWithContentRect:NSMakeRect(0,0,1200,400) styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+    window.releasedWhenClosed=NO; [window.contentView addSubview:editor]; [window.contentView addSubview:web];
+    MPRenderer *renderer=[MPRenderer new];
+    document.editor=editor; document.preview=web; document.renderer=renderer;
+    renderer.delegate=(id<MPRendererDelegate>)document; renderer.dataSource=(id<MPRendererDataSource>)document;
+    web.frameLoadDelegate=(id<WebFrameLoadDelegate>)document; web.policyDelegate=(id<WebPolicyDelegate>)document; web.editingDelegate=(id<WebEditingDelegate>)document;
+    [NSNotificationCenter.defaultCenter addObserver:document selector:NSSelectorFromString(@"editorSelectionDidChange:") name:NSTextViewDidChangeSelectionNotification object:editor];
+    BOOL math=document.preferences.htmlMathJax,smart=document.preferences.extensionSmartyPants;
+    @try {
+        document.preferences.htmlMathJax=NO; document.preferences.extensionSmartyPants=NO; renderer.rendererFlags=document.preferences.rendererFlags;
+        editor.string=@"Sourceword.\n\nPreviewword.\n"; [renderer parseMarkdown:editor.string]; [renderer render];
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return !web.isLoading && !document.alreadyRenderingInWeb && document.previewEditRanges.count>0;}] object:web]] timeout:10];
+        XCTAssertTrue([window makeFirstResponder:editor]);
+        NSRange original=[editor.string rangeOfString:@"Sourceword"];
+        editor.selectedRange=original;
+        XCTAssertTrue([window makeFirstResponder:web]);
+        XCTAssertTrue([[web stringByEvaluatingJavaScriptFromString:@"(function(){var e=macdownPreviewEditor.elements().spans.find(function(n){return n.textContent==='Previewword.';}),r=document.createRange();r.setStart(e.firstChild,0);r.setEnd(e.firstChild,11);getSelection().removeAllRanges();getSelection().addRange(r);return true;})()"] boolValue]);
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return editor.selectedRange.length==0;}] object:editor]] timeout:3];
+        XCTAssertEqual(editor.selectedRange.location,original.location,@"Deselection preserves the source caret");
+        XCTAssertTrue([NSApp sendAction:@selector(toggleStrong:) to:document from:nil]);
+        XCTAssertEqualObjects(editor.string,@"Sourceword.\n\n**Previewword**.\n");
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return !web.isLoading && !document.alreadyRenderingInWeb && [document.previewEditSource isEqualToString:editor.string];}] object:web]] timeout:10];
+        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"getSelection().toString()"],@"Previewword");
+        XCTAssertEqual(editor.selectedRange.length,0u,@"Preview formatting must not select the corresponding source replacement");
+        // Programmatic source range changes while the preview owns focus must
+        // not invalidate its live selection or formatting continuation.
+        editor.selectedRange=[editor.string rangeOfString:@"Sourceword"];
+        XCTAssertEqual(editor.selectedRange.length,0u);
+        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"getSelection().toString()"],@"Previewword");
+        XCTAssertTrue([window makeFirstResponder:editor]);
+        editor.selectedRange=[editor.string rangeOfString:@"Sourceword"];
+        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"getSelection().toString()"],@"");
+        XCTAssertTrue([[web stringByEvaluatingJavaScriptFromString:@"macdownPreviewEditor.selectionPayload('bold')===null"] boolValue],@"The cached preview selection must also be forgotten");
+        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"getComputedStyle(document.getElementById('macdown-preview-format')).display"],@"none");
+        XCTAssertNil([document valueForKey:@"previewSelectionToRestore"]);
+        XCTAssertTrue([NSApp sendAction:@selector(toggleStrong:) to:document from:nil]);
+        XCTAssertEqualObjects(editor.string,@"**Sourceword**.\n\n**Previewword**.\n");
+        // This isolated fixture has no document split-view controller driving
+        // source render scheduling; refresh the real renderer explicitly.
+        [renderer parseMarkdown:editor.string]; [renderer render];
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return !web.isLoading && !document.alreadyRenderingInWeb && [document.previewEditSource isEqualToString:editor.string];}] object:web]] timeout:10];
+        XCTAssertTrue([window makeFirstResponder:web]);
+        [web stringByEvaluatingJavaScriptFromString:@"(function(){var e=macdownPreviewEditor.elements().spans.find(function(n){return n.textContent==='Previewword';}),r=document.createRange();r.selectNodeContents(e);getSelection().removeAllRanges();getSelection().addRange(r);})()"];
+        [document setValue:@YES forKey:@"readingProgressFromPreview"];
+        editor.selectedRange=[editor.string rangeOfString:@"Sourceword"];
+        XCTAssertTrue([[document valueForKey:@"readingProgressFromPreview"] boolValue],@"Collapsing a source range must not transfer scroll ownership");
+        [document toggleEmphasis:nil];
+        XCTAssertNotNil([document valueForKey:@"previewSelectionToRestore"]);
+        [document toggleUnderline:nil];
+        XCTAssertEqual([[document valueForKey:@"previewQueuedFormatting"] count],1u);
+        XCTAssertTrue([window makeFirstResponder:editor]);
+        editor.selectedRange=[editor.string rangeOfString:@"Sourceword"];
+        XCTAssertNil([document valueForKey:@"previewSelectionToRestore"]);
+        XCTAssertNil([document valueForKey:@"previewQueuedFormatting"]);
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return !web.isLoading && !document.alreadyRenderingInWeb && [document.previewEditSource isEqualToString:editor.string];}] object:web]] timeout:10];
+        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"getSelection().toString()"],@"");
+        XCTAssertFalse([[renderer HTMLForMarkdownSnapshot:editor.string] containsString:@"<u>"],@"A cancelled preview command must not replay after switching panes");
+    } @finally {
+        document.preferences.htmlMathJax=math; document.preferences.extensionSmartyPants=smart;
+        [NSNotificationCenter.defaultCenter removeObserver:document name:NSTextViewDidChangeSelectionNotification object:editor];
+        web.frameLoadDelegate=nil; web.policyDelegate=nil; web.editingDelegate=nil;
+        window.contentView=nil; [window close]; [document close];
+    }
+}
+
 - (void)testPreviewListToolbarUsesTheSameConversionAsBlockMenu
 {
     MPDocument *document=[MPDocument new];

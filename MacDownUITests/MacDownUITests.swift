@@ -368,6 +368,39 @@ final class MacDownUITests: XCTestCase {
         XCTAssertEqual(editor.value as? String, source)
     }
 
+    func testQuickFormattingFollowsExclusiveSelectionAcrossPanes() throws {
+        app.terminate()
+        app.launchArguments = ["-ApplePersistenceIgnoreState", "YES", "-MPDisableUpdater", "YES",
+                               "-editorStartInPreviewMode", "NO", "-htmlMathJax", "NO",
+                               "-AppleLanguages", "(en)"]
+        app.launch()
+        let editor = try XCTUnwrap(waitForEditor(timeout: 10))
+        editor.click()
+        editor.typeText("Sourceword.\n\nPreviewword.\n")
+        editor.typeKey(XCUIKeyboardKey.upArrow.rawValue, modifierFlags: .command)
+        editor.typeKey(XCUIKeyboardKey.rightArrow.rawValue, modifierFlags: [.option, .shift])
+        let window = app.windows.containing(.textView, identifier: "editor-text-view").firstMatch
+        let previewWord = window.webViews.staticTexts.matching(NSPredicate(format: "label == %@ OR value == %@", "Previewword.", "Previewword.")).firstMatch
+        XCTAssertTrue(previewWord.waitForExistence(timeout: 10))
+        previewWord.doubleClick()
+        let group = window.toolbars.groups["text-formatting-group"]
+        XCTAssertTrue(group.waitForExistence(timeout: 5))
+        let bold = group.buttons.element(boundBy: 0)
+        bold.click()
+        let previewBold = "Sourceword.\n\n**Previewword**.\n"
+        wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", previewBold), object: editor)], timeout: 10)
+        editor.click()
+        editor.typeKey(XCUIKeyboardKey.upArrow.rawValue, modifierFlags: .command)
+        editor.typeKey(XCUIKeyboardKey.rightArrow.rawValue, modifierFlags: [.option, .shift])
+        let previewPanelBold = window.webViews.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Gras")).firstMatch
+        XCTAssertFalse(previewPanelBold.isHittable, "Source selection must hide the old preview toolbar")
+        bold.click()
+        let bothBold = "**Sourceword**.\n\n**Previewword**.\n"
+        wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", bothBold), object: editor)], timeout: 10)
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertEqual(editor.value as? String, previewBold)
+    }
+
     func testListToolbarConvertsExistingBlockAndSupportsUndo() throws {
         app.terminate()
         app.launchArguments = ["-ApplePersistenceIgnoreState", "YES",
