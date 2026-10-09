@@ -1580,6 +1580,39 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
         expected:@"\n```\n- item\n```\n\n" HTML:@"- item"];
 }
 
+- (void)testPreviewCodeConversionRefusesNonTextContentWithoutLosingSource
+{
+    for (NSString *source in @[@"> first ![image](photo.png)\n", @"> first\n> ![image](photo.png)\n> second\n"]) {
+        MPDocument *document=[MPDocument new];
+        MPEditorView *editor=[[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+        MPRenderer *renderer=[MPRenderer new];
+        document.editor=editor; document.renderer=renderer;
+        renderer.delegate=(id<MPRendererDelegate>)document;
+        renderer.dataSource=(id<MPRendererDataSource>)document;
+        @try {
+            editor.string=source;
+            [renderer parseMarkdown:source];
+            NSMutableArray *mapping=[NSMutableArray array], *runs=[NSMutableArray array];
+            NSArray *texts=[source containsString:@"second"] ? @[@"first",@"second"] : @[@"first"];
+            for (NSString *text in texts) {
+                NSRange range=[source rangeOfString:text];
+                [runs addObject:@{@"id":@(mapping.count),@"start":@0,@"end":@(text.length)}];
+                [mapping addObject:@{@"location":@(range.location),@"length":@(range.length),@"text":text}];
+            }
+            document.previewEditRanges=mapping;
+            document.previewEditSource=source;
+            document.previewEditToken=renderer.checkboxBridgeToken;
+            NSMutableDictionary *payload=[runs.firstObject mutableCopy];
+            payload[@"runs"]=runs;
+            payload[@"text"]=[texts componentsJoinedByString:@"\n\n"];
+            payload[@"token"]=document.previewEditToken;
+            payload[@"action"]=@"block"; payload[@"value"]=@"code-block";
+            XCTAssertFalse([document applyPreviewEditPayload:payload]);
+            XCTAssertEqualObjects(editor.string,source);
+        } @finally { [document close]; }
+    }
+}
+
 - (void)testPreviewMultilineQuoteToCodeRemovesEmptyStructuralLines
 {
     [self assertPreviewBlockSource:@"> first\n>\n> second\n\nNeighbor.\n" texts:@[@"first",@"second"] value:@"code-block"

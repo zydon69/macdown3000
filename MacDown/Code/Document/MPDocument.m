@@ -6282,6 +6282,12 @@ to link outside that scope.", \
                     // into the new fenced body.
                     BOOL codeTarget=[value isEqualToString:@"code-block"];
                     if (codeTarget) {
+                        // Text extraction cannot preserve images or embedded
+                        // controls. Reject the whole transaction before losing
+                        // any non-text content; generated task checkboxes are
+                        // the only controls removed with their list syntax.
+                        NSArray *nonText=[content nodesForXPath:@".//img|.//svg|.//math|.//iframe|.//object|.//video|.//audio|.//canvas|.//script|.//style|.//textarea|.//select|.//input[not(@type='checkbox' and parent::li[@class='task-list-item'])]" error:NULL];
+                        if (nonText.count) return NO;
                         codePositions=MPPIProvenance(plain,expectedText);
                         if (!codePositions) codeSelectionProven=NO;
                         plain=expectedText;
@@ -6331,7 +6337,7 @@ to link outside that scope.", \
                             BOOL empty=body && ![body.stringValue stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet].length;
                             if (!empty || (roots.count && (roots.count!=1 || ![roots.firstObject.name.lowercaseString isEqualToString:@"blockquote"]))) return NO;
                             outputText=@"";
-                        }
+                        } else return NO; // No selected rendered text proves this source line.
                     }
                     [processed appendString:outputText];
                 }
