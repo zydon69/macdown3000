@@ -907,7 +907,7 @@ NS_INLINE NSString *MPPreviewHeadTags(NSString *checkboxBridgeToken)
     NSString *title = [self.dataSource rendererHTMLTitle:self];
     if (!self.checkboxBridgeToken.length)
         self.checkboxBridgeToken = NSUUID.UUID.UUIDString;
-    NSString *headTags = MPPreviewHeadTags(self.checkboxBridgeToken);
+    NSString *headTags = [MPPreviewHeadTags(self.checkboxBridgeToken) stringByAppendingString:MPTaskListStyleTag()];
     if ([self delegateWrapsCodeBlocks])
         headTags = [headTags stringByAppendingString:MPCodeWrappingStyleTag()];
     NSString *html = MPGetHTML(
@@ -1007,7 +1007,8 @@ NS_INLINE NSString *MPPreviewHeadTags(NSString *checkboxBridgeToken)
     if (!title)
         title = @"";
     NSString *html = MPGetHTML(
-        title, withStyles && [self delegateWrapsCodeBlocks] ? MPCodeWrappingStyleTag() : nil,
+        title, [MPTaskListStyleTag() stringByAppendingString:
+            withStyles && [self delegateWrapsCodeBlocks] ? MPCodeWrappingStyleTag() : @""],
         self.currentHtml, styles, stylesOption, scripts,
         scriptsOption);
     return html;

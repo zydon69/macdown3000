@@ -330,6 +330,7 @@ NS_INLINE NSString *MPQuickLookContentSecurityPolicy(void)
 
     // Embed CSS styles
     [html appendString:[self embeddedStyles]];
+    [html appendString:MPTaskListStyleTag()];
     if (self.preferences.wrapCodeBlocks)
         [html appendString:MPCodeWrappingStyleTag()];
 

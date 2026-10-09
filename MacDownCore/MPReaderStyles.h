@@ -8,3 +8,12 @@ NS_INLINE NSString *MPCodeWrappingStyleTag(void)
         "pre {max-width:100%;box-sizing:border-box;}"
         "}</style>";
 }
+
+// A task's checkbox replaces its list marker; ordinary nested lists retain
+// their own markers. Keep this structural rule shared by preview and exports.
+NS_INLINE NSString *MPTaskListStyleTag(void)
+{
+    return @"<style id=\"macdown-task-list-markers\">"
+        "li.task-list-item{list-style-type:none!important;}"
+        "</style>";
+}

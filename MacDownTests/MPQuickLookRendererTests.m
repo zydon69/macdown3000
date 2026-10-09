@@ -107,6 +107,14 @@
 }
 
 
+- (void)testQuickLookIncludesSharedTaskListMarkerStyle
+{
+    NSString *HTML=[self.renderer renderMarkdown:@"- [ ] Task\n- Ordinary\n"];
+    XCTAssertTrue([HTML containsString:@"id=\"macdown-task-list-markers\""]);
+    XCTAssertTrue([HTML containsString:@"li.task-list-item{list-style-type:none!important;}"]);
+    XCTAssertTrue([HTML containsString:@"Ordinary"]);
+}
+
 - (void)testCodeWrappingPreferenceIsConsumedWithoutChangingLiteralCode
 {
     CFStringRef domain = CFSTR("app.macdown.macdown3000");

@@ -381,6 +381,53 @@
              rendererFlags:rendFlags];
 }
 
+- (void)testHTMLExportRetainsTaskMarkerSuppressionWithOrWithoutTheme
+{
+    [self renderMarkdown:@"- [ ] Task\n- Ordinary\n" withExtensions:0 rendererFlags:HOEDOWN_HTML_USE_TASK_LIST];
+    for (NSNumber *styles in @[@NO,@YES]) {
+        NSString *HTML=[self.renderer HTMLForExportWithStyles:styles.boolValue highlighting:NO];
+        XCTAssertTrue([HTML containsString:@"id=\"macdown-task-list-markers\""]);
+        XCTAssertTrue([HTML containsString:@"li.task-list-item{list-style-type:none!important;}"]);
+        XCTAssertTrue([HTML containsString:@"<li>Ordinary</li>"]);
+        XCTAssertTrue([HTML containsString:@"type=\"checkbox\""]);
+    }
+}
+
+- (void)testTaskListCheckboxesReplaceBulletsWithoutChangingOrdinaryLists
+{
+    MPDocument *document=[MPDocument new];
+    WebView *web=[[WebView alloc] initWithFrame:NSMakeRect(0,0,640,480)];
+    MPEditorView *editor=[[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,640,480)];
+    document.editor=editor; document.preview=web; document.renderer=[MPRenderer new];
+    document.renderer.dataSource=(id<MPRendererDataSource>)document;
+    document.renderer.delegate=(id<MPRendererDelegate>)document;
+    web.frameLoadDelegate=(id<WebFrameLoadDelegate>)document;
+    MPPreferences *preferences=document.preferences;
+    BOOL tasks=preferences.htmlTaskList,math=preferences.htmlMathJax;
+    BOOL mermaid=preferences.htmlMermaid,graphviz=preferences.htmlGraphviz;
+    NSString *style=preferences.htmlStyleName;
+    NSString *source=@"- [ ] erftgesqzsq\n- [ ] v\n- [ ] er\n- [x] checked\n    - Ordinary nested bullet\n\n1. Ordinary number\n2. [ ] Ordered task\n";
+    @try {
+        preferences.htmlTaskList=YES; preferences.htmlMathJax=NO;
+        preferences.htmlMermaid=NO; preferences.htmlGraphviz=NO;
+        for (NSString *theme in @[@"GitHub2",@"GitHub Tomorrow"]) {
+            preferences.htmlStyleName=theme;
+            document.renderer.rendererFlags=HOEDOWN_HTML_USE_TASK_LIST;
+            [self renderCalloutDocument:document source:source];
+            XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"JSON.stringify(Array.prototype.map.call(document.querySelectorAll('li.task-list-item'),function(e){return getComputedStyle(e).listStyleType;}))"],@"[\"none\",\"none\",\"none\",\"none\",\"none\"]",@"%@",theme);
+            XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"JSON.stringify(Array.prototype.map.call(document.querySelectorAll('li:not(.task-list-item)'),function(e){return getComputedStyle(e).listStyleType==='none';}))"],@"[false,false]",@"Ordinary nested bullets and numbering stay visible: %@",theme);
+            XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"String(document.querySelectorAll('input[type=checkbox]').length)"],@"5");
+            XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"String(document.querySelectorAll('input[checked]').length)"],@"1");
+            XCTAssertEqualObjects(editor.string,source);
+        }
+    } @finally {
+        web.frameLoadDelegate=nil; [document close];
+        preferences.htmlTaskList=tasks; preferences.htmlMathJax=math;
+        preferences.htmlMermaid=mermaid; preferences.htmlGraphviz=graphviz;
+        preferences.htmlStyleName=style;
+    }
+}
+
 - (void)testTaskLists
 {
     // Task lists are MacDown's custom rendering feature
