@@ -5,6 +5,10 @@
 static void check(BOOL condition, NSString *message) { if (!condition) { fprintf(stderr,"%s\n",message.UTF8String); exit(1); } }
 int main(void) { @autoreleasepool {
     MPQuickLookRenderer *renderer = [[MPQuickLookRenderer alloc] init];
+    NSString *stableSource = @"::: {.callout-note}\n## Title\nBody\n:::\n\n<span data-macdown-callout-token=\"authored\">Literal</span>";
+    NSString *stableHTML = [renderer renderMarkdown:stableSource];
+    check([stableHTML isEqual:[renderer renderMarkdown:stableSource]], @"Quick Look must not publish random preview bridge identities");
+    check([stableHTML containsString:@"data-macdown-callout-token=\"authored\""], @"Authored attributes must remain intact");
     for (NSString *type in @[@"note",@"tip",@"warning",@"important",@"caution"]) {
         NSString *html = [renderer renderMarkdown:[NSString stringWithFormat:@"::: {.callout-%@}\n## A **title**\n\nA *body* with [link](https://example.com).\n:::",type]];
         check([html containsString:[@"mp-callout-" stringByAppendingString:type]], @"Missing callout type");
