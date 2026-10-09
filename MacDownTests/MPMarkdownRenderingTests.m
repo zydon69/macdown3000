@@ -433,6 +433,8 @@
 {
     MPDocument *document=[MPDocument new];
     WebView *web=[[WebView alloc] initWithFrame:NSMakeRect(0,0,640,480)];
+    NSWindow *window=[[NSWindow alloc] initWithContentRect:web.frame styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+    window.releasedWhenClosed=NO;window.contentView=web;[window makeKeyAndOrderFront:nil];
     MPEditorView *editor=[[MPEditorView alloc] initWithFrame:web.frame];
     document.editor=editor; document.preview=web; document.renderer=[MPRenderer new];
     document.renderer.dataSource=(id<MPRendererDataSource>)document;
@@ -444,24 +446,27 @@
     NSString *source=@"- [ ] zaert\n- azerty\n\nzaertyt\n\n- Parent\n    - [x] nested task\n    - nested bullet\n\n1. [ ] ordered task\n\n2. ordered item\n";
     @try {
         p.htmlTaskList=YES;p.htmlMathJax=NO;p.htmlMermaid=NO;p.htmlGraphviz=NO;
-        for (NSString *theme in @[@"GitHub2",@"GitHub Tomorrow",@"Dracula",@"GitHub-2020"]) {
+        for (NSString *theme in @[@"GitHub2",@"GitHub Tomorrow",@"Dracula",@"GitHub-2020",@"Github2 (dark)"]) {
             p.htmlStyleName=theme;document.renderer.rendererFlags=HOEDOWN_HTML_USE_TASK_LIST;
             [self renderCalloutDocument:document source:source];
+            [web stringByEvaluatingJavaScriptFromString:@"document.body.style.fontSize='24px'"];
             NSArray *measurements=[[web.mainFrame.javaScriptContext evaluateScript:
-                @"(function(){function textStart(row){var w=document.createTreeWalker(row,NodeFilter.SHOW_TEXT),n;while(n=w.nextNode()){if(n.parentElement.closest('li')!==row)continue;var at=n.nodeValue.search(/\\S/);if(at<0)continue;var r=document.createRange();r.setStart(n,at);r.setEnd(n,at+1);return r.getBoundingClientRect().left;}return null;}return Array.from(document.querySelectorAll('ul,ol')).map(function(list){var rows=Array.from(list.children).filter(function(e){return e.tagName==='LI';}),task=rows.find(function(e){return e.classList.contains('task-list-item');}),ordinary=rows.find(function(e){return !e.classList.contains('task-list-item');});if(!task||!ordinary)return null;var box=task.querySelector('input[type=checkbox]').getBoundingClientRect(),item=task.getBoundingClientRect();return {task:textStart(task),ordinary:textStart(ordinary),boxLeft:box.left,boxRight:box.right,itemLeft:item.left,listLeft:list.getBoundingClientRect().left,width:box.width};}).filter(Boolean);})()"] toArray];
+                @"(function(){function textStart(row){var w=document.createTreeWalker(row,NodeFilter.SHOW_TEXT),n;while(n=w.nextNode()){if(n.parentElement.closest('li')!==row)continue;var at=n.nodeValue.search(/\\S/);if(at<0)continue;var r=document.createRange();r.setStart(n,at);r.setEnd(n,at+1);return r.getBoundingClientRect().left;}return null;}return Array.from(document.querySelectorAll('ul,ol')).map(function(list){var rows=Array.from(list.children).filter(function(e){return e.tagName==='LI';}),task=rows.find(function(e){return e.classList.contains('task-list-item');}),ordinary=rows.find(function(e){return !e.classList.contains('task-list-item');});if(!task||!ordinary)return null;var box=task.querySelector('input[type=checkbox]').getBoundingClientRect(),item=task.getBoundingClientRect();return {task:textStart(task),ordinary:textStart(ordinary),boxLeft:box.left,boxRight:box.right,itemLeft:item.left,listLeft:list.getBoundingClientRect().left,width:box.width,itemFont:parseFloat(getComputedStyle(task).fontSize),boxFont:parseFloat(getComputedStyle(task.querySelector('input[type=checkbox]')).fontSize)};}).filter(Boolean);})()"] toArray];
             XCTAssertEqual(measurements.count,3u,@"Tight, nested and loose ordered lists: %@",theme);
             for (NSDictionary *m in measurements) {
                 XCTAssertNotEqualObjects(m[@"task"],NSNull.null);
                 XCTAssertNotEqualObjects(m[@"ordinary"],NSNull.null);
                 XCTAssertEqualWithAccuracy([m[@"task"] doubleValue],[m[@"ordinary"] doubleValue],0.5,@"Task and ordinary text must share their start: %@ %@",theme,m);
                 XCTAssertGreaterThan([m[@"width"] doubleValue],0.0);
+                XCTAssertEqualWithAccuracy([m[@"boxFont"] doubleValue],[m[@"itemFont"] doubleValue],0.01,@"The marker offset must scale with the list text, not the native input font: %@",theme);
                 XCTAssertLessThan([m[@"boxRight"] doubleValue],[m[@"itemLeft"] doubleValue],@"Checkbox belongs in the list-marker column: %@ %@",theme,m);
                 XCTAssertGreaterThanOrEqual([m[@"boxLeft"] doubleValue],[m[@"listLeft"] doubleValue],@"Checkbox remains inside list indentation: %@ %@",theme,m);
             }
             XCTAssertEqualObjects(editor.string,source);
+
         }
     } @finally {
-        web.frameLoadDelegate=nil;[document close];
+        web.frameLoadDelegate=nil;window.contentView=nil;[window close];[document close];
         p.htmlTaskList=tasks;p.htmlMathJax=math;p.htmlMermaid=mermaid;p.htmlGraphviz=graph;p.htmlStyleName=style;
     }
 }
