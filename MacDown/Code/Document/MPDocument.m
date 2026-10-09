@@ -5468,8 +5468,8 @@ to link outside that scope.", \
         [[context evaluateScript:@"Boolean(window.macdownPreviewEditor&&typeof window.macdownPreviewEditor.elements==='function'&&window.macdownPreviewEditor.elements().spans.some(function(n){return n.isConnected;}))"] toBool]) return;
     NSString *token = [[context evaluateScript:@"(function(){var m=document.querySelector('meta[name=\"macdown-checkbox-token\"]');return m?m.content:'';})()"] toString];
     if (![token isEqualToString:self.renderer.checkboxBridgeToken]) return;
-    // Collect document text and inline code, excluding generated diagrams,
-    // code blocks, navigation and controls. Every source match is proven below.
+    // Collect prose and inline code; fenced code is proven separately below.
+    // Exclude generated diagrams, navigation and controls from both mappings.
     NSString *scan = @"(function(){var a=[],ui=window.macdownPreviewEditor&&typeof window.macdownPreviewEditor.elements==='function'&&window.macdownPreviewEditor.elements(),owned=ui?[ui.panel,ui.style].concat(ui.spans).filter(function(e){return e&&e.isConnected;}):[],w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,null,false),n;while((n=w.nextNode())){var p=n.parentElement;if(!p||owned.some(function(e){return e&&e.contains(n);})||(!n.nodeValue.trim()&&(!p.closest('p,h1,h2,h3,h4,h5,h6,li,summary')||/[\\r\\n]/.test(n.nodeValue)))||p.closest('script,style,pre,nav,textarea,button,select,svg,math,.MathJax,.MathJax_Display'))continue;if(a.length>=2000)return '[]';a.push(n);}window.__macdownPreviewEditNodes=a;return JSON.stringify(a.map(function(n){return n.nodeValue;}));})()";
     NSString *json = [[context evaluateScript:scan] toString];
     NSArray *texts = json ? [NSJSONSerialization JSONObjectWithData:[json dataUsingEncoding:NSUTF8StringEncoding]
@@ -5606,9 +5606,97 @@ to link outside that scope.", \
             [validMapping addObject:mapping[i]]; [validNodes addObject:node];
         }
     }
+    // Prism splits a fenced block into token leaves. Prove the complete CODE
+    // container through the renderer first, then translate its UTF-16 leaves
+    // to the original physical source; token markup is never reverse-parsed.
+    NSString *codeJSON = [[context evaluateScript:@"(function(){var a=window.__macdownPreviewEditNodes;return JSON.stringify(Array.from(document.querySelectorAll('pre>code')).map(function(code){var leaves=[],w=document.createTreeWalker(code,NodeFilter.SHOW_TEXT,null,false),n,offset=0;while(n=w.nextNode()){if(!n.nodeValue.length)continue;leaves.push({node:n,text:n.nodeValue,start:offset});offset+=n.nodeValue.length;}if(code.closest('blockquote,li')||a.length+leaves.length>2000)return {text:code.textContent,leaves:[]};return {text:code.textContent,leaves:leaves.map(function(leaf){var index=a.length;a.push(leaf.node);return {node:index,text:leaf.text,start:leaf.start};})};}));})()"] toString];
+    NSArray *codeContainers = codeJSON ? [NSJSONSerialization JSONObjectWithData:[codeJSON dataUsingEncoding:NSUTF8StringEncoding] options:0 error:NULL] : nil;
+    if (self.preferences.extensionFencedCode && [codeContainers isKindOfClass:NSArray.class] && codeContainers.count) {
+        NSUInteger openingStart=NSNotFound, contentStart=0, fenceWidth=0;
+        unichar fenceCharacter=0;
+        NSMutableSet *mappedCodeContainers=[NSMutableSet set];
+        for (NSUInteger offset=0;offset<source.length;) {
+            NSUInteger start,end,contentsEnd;
+            [source getLineStart:&start end:&end contentsEnd:&contentsEnd forRange:NSMakeRange(offset,0)];
+            NSString *line=[source substringWithRange:NSMakeRange(start,contentsEnd-start)];
+            unichar marker=0;NSUInteger width=0;BOOL trailing=NO;
+            BOOL fence=MPScanFenceMarker(line,&marker,&width,&trailing);
+            offset=end;
+            if (openingStart==NSNotFound) {
+                // Container/indented fences need non-linear source mapping and
+                // stay outside this literal fenced-block editing contract.
+                if (fence && line.length && [line characterAtIndex:0]==marker) {
+                    openingStart=start;contentStart=end;fenceCharacter=marker;fenceWidth=width;
+                }
+                continue;
+            }
+            if (!fence || marker!=fenceCharacter || width<fenceWidth || trailing) continue;
+            NSRange blockRange=NSMakeRange(openingStart,end-openingStart);
+            NSRange contentRange=NSMakeRange(contentStart,start-contentStart);
+            openingStart=NSNotFound;
+            if (!contentRange.length || !remainingOccurrenceProbes) continue;
+            NSString *content=[source substringWithRange:contentRange];
+            NSString *normalized=[[content stringByReplacingOccurrencesOfString:@"\r\n" withString:@"\n"] stringByReplacingOccurrencesOfString:@"\r" withString:@"\n"];
+            if (![normalized hasSuffix:@"\n"]) continue;
+            // Hoedown omits the physical newline immediately before the
+            // closing fence from CODE text. Internal blank lines stay literal.
+            normalized=[normalized substringToIndex:normalized.length-1];
+            NSUInteger endingWidth=[content hasSuffix:@"\r\n"] ? 2 : 1;
+            NSUInteger lastEnding=NSMaxRange(contentRange)-endingWidth;
+            NSString *probeMarker=[NSString stringWithFormat:@"\uE000%@\uE001",NSUUID.UUID.UUIDString];
+            NSMutableString *probeMarkdown=[source mutableCopy];
+            [probeMarkdown insertString:probeMarker atIndex:lastEnding];
+            [probeMarkdown insertString:probeMarker atIndex:contentStart];
+            remainingOccurrenceProbes--;
+            context[@"window"][@"__mpCodeProbeHTML"]=[self.renderer HTMLForMarkdownSnapshot:probeMarkdown];
+            context[@"window"][@"__mpCodeProbeMarker"]=probeMarker;
+            context[@"window"][@"__mpCodeOriginal"]=codeContainers;
+            JSValue *found=[context evaluateScript:@"(function(){var d=new DOMParser().parseFromString(window.__mpCodeProbeHTML,'text/html'),codes=Array.from(d.querySelectorAll('pre>code')),old=window.__mpCodeOriginal,m=window.__mpCodeProbeMarker,found=-1;if(codes.length!==old.length)return -1;for(var i=0;i<codes.length;i++){var text=old[i].text,marked=m+text+m;if(codes[i].textContent===marked){if(found!==-1)return -1;found=i;}else if(codes[i].textContent!==text)return -1;}return found;})()"];
+            [context evaluateScript:@"delete window.__mpCodeProbeHTML;delete window.__mpCodeProbeMarker;delete window.__mpCodeOriginal;"];
+            if (!found.isNumber || found.toInt32<0 || (NSUInteger)found.toInt32>=codeContainers.count) continue;
+            NSNumber *containerIndex=@(found.toInt32);
+            NSDictionary *container=codeContainers[containerIndex.unsignedIntegerValue];
+            if ([mappedCodeContainers containsObject:containerIndex] || ![container[@"text"] isEqualToString:normalized] || ![container[@"leaves"] count]) continue;
+            // Each displayed UTF-16 boundary maps monotonically through CRLF.
+            // The extra terminal boundary is needed for a selection ending at
+            // the final character, and emoji retain their two source units.
+            NSMutableArray<NSNumber *> *boundaries=[NSMutableArray arrayWithObject:@(contentStart)];
+            for (NSUInteger position=contentStart;position<lastEnding;position++) {
+                if ([source characterAtIndex:position]=='\r' && position+1<lastEnding && [source characterAtIndex:position+1]=='\n') position++;
+                [boundaries addObject:@(position+1)];
+            }
+            BOOL valid=boundaries.count==normalized.length+1;
+            NSMutableArray *codeMappings=[NSMutableArray array], *codeNodes=[NSMutableArray array];
+            for (NSDictionary *leaf in container[@"leaves"]) {
+                NSUInteger leafStart=[leaf[@"start"] unsignedIntegerValue],leafLength=[leaf[@"text"] length];
+                if (!valid || leafStart>normalized.length || leafLength>normalized.length-leafStart) { valid=NO;break; }
+                NSRange original=NSMakeRange(boundaries[leafStart].unsignedIntegerValue,boundaries[leafStart+leafLength].unsignedIntegerValue-boundaries[leafStart].unsignedIntegerValue);
+                // Source ranges containing CRLF have a different length than
+                // DOM leaves; retain an explicit boundary map for validation.
+                NSArray *leafBoundaries=[boundaries subarrayWithRange:NSMakeRange(leafStart,leafLength+1)];
+                [codeMappings addObject:@{@"location":@(original.location),@"length":@(original.length),@"text":[source substringWithRange:original],@"displayText":leaf[@"text"],@"sourceBoundaries":leafBoundaries,
+                    @"codeBlockRange":[NSValue valueWithRange:blockRange],@"codeContentRange":[NSValue valueWithRange:contentRange]}];
+                [codeNodes addObject:@{@"node":leaf[@"node"],@"id":@(validMapping.count+codeNodes.count),@"text":leaf[@"text"]}];
+            }
+            if (valid) {
+                [validMapping addObjectsFromArray:codeMappings];[validNodes addObjectsFromArray:codeNodes];
+                [mappedCodeContainers addObject:containerIndex];
+            }
+        }
+    }
+    // Appended code leaves must join prose in actual DOM order, so selections
+    // and continuation restoration remain monotonic across both kinds.
+    NSString *orderJSON=[[context evaluateScript:@"(function(){var a=window.__macdownPreviewEditNodes,order=a.map(function(n,i){return i;});order.sort(function(i,j){return a[i]===a[j]?0:(a[i].compareDocumentPosition(a[j])&4)?-1:1;});var ranks=[];order.forEach(function(index,rank){ranks[index]=rank;});return JSON.stringify(ranks);})()"] toString];
+    NSArray *DOMRanks=orderJSON ? [NSJSONSerialization JSONObjectWithData:[orderJSON dataUsingEncoding:NSUTF8StringEncoding] options:0 error:NULL] : nil;
+    if (![DOMRanks isKindOfClass:NSArray.class]) return;
+    for (NSDictionary *node in validNodes)
+        if ([node[@"node"] unsignedIntegerValue]>=DOMRanks.count) return;
     NSMutableArray *indices=[NSMutableArray array];
     for (NSUInteger i=0;i<validNodes.count;i++) [indices addObject:@(i)];
-    [indices sortUsingComparator:^NSComparisonResult(NSNumber *a,NSNumber *b){return [validNodes[a.unsignedIntegerValue][@"node"] compare:validNodes[b.unsignedIntegerValue][@"node"]];}];
+    [indices sortUsingComparator:^NSComparisonResult(NSNumber *a,NSNumber *b){
+        NSNumber *left=validNodes[a.unsignedIntegerValue][@"node"],*right=validNodes[b.unsignedIntegerValue][@"node"];
+        return [DOMRanks[left.unsignedIntegerValue] compare:DOMRanks[right.unsignedIntegerValue]];
+    }];
     mapping=[NSMutableArray array];nodes=[NSMutableArray array];
     for (NSNumber *index in indices) {
         [mapping addObject:validMapping[index.unsignedIntegerValue]];
@@ -5630,10 +5718,16 @@ to link outside that scope.", \
             NSRange mapped = NSMakeRange([item[@"location"] unsignedIntegerValue],[item[@"length"] unsignedIntegerValue]);
             NSRange intersection = NSIntersectionRange(mapped,restoreRange);
             if (!intersection.length) continue;
-            [runs addObject:@{@"id":@(i),@"start":@(intersection.location-mapped.location),@"end":@(NSMaxRange(intersection)-mapped.location)}];
+            NSArray<NSNumber *> *boundaries=item[@"sourceBoundaries"];
+            NSUInteger start=boundaries ? [boundaries indexOfObject:@(intersection.location)] : intersection.location-mapped.location;
+            NSUInteger end=boundaries ? [boundaries indexOfObject:@(NSMaxRange(intersection))] : NSMaxRange(intersection)-mapped.location;
+            if (start==NSNotFound || end==NSNotFound) continue;
+            [runs addObject:@{@"id":@(i),@"start":@(start),@"end":@(end)}];
             if (visible.length && runs.count>1) {
                 NSDictionary *previous=mapping[[runs[runs.count-2][@"id"] unsignedIntegerValue]];
-                NSUInteger previousEnd=[previous[@"location"] unsignedIntegerValue]+[runs[runs.count-2][@"end"] unsignedIntegerValue];
+                NSUInteger previousIndex=[runs[runs.count-2][@"end"] unsignedIntegerValue];
+                NSArray<NSNumber *> *previousBoundaries=previous[@"sourceBoundaries"];
+                NSUInteger previousEnd=previousBoundaries ? previousBoundaries[previousIndex].unsignedIntegerValue : [previous[@"location"] unsignedIntegerValue]+previousIndex;
                 [visible appendString:MPPreviewSourceSeparators(source,previousEnd,intersection.location)];
             }
             [visible appendString:[source substringWithRange:intersection]];
@@ -5729,6 +5823,8 @@ to link outside that scope.", \
     NSString *source = self.previewEditSource;
     NSUInteger previousEnd = 0;
     NSMutableSet *seen = [NSMutableSet set];
+    NSValue *codeBlockRange=nil,*codeContentRange=nil;
+    BOOL containsProse=NO;
     for (id run in runs) {
         if (![run isKindOfClass:NSDictionary.class]) return nil;
         NSNumber *identifier=run[@"id"], *start=run[@"start"], *end=run[@"end"];
@@ -5739,9 +5835,29 @@ to link outside that scope.", \
         [seen addObject:identifier];
         NSDictionary *entry=self.previewEditRanges[identifier.unsignedIntegerValue];
         NSRange mapped=NSMakeRange([entry[@"location"] unsignedIntegerValue],[entry[@"length"] unsignedIntegerValue]);
+        NSArray<NSNumber *> *boundaries=entry[@"sourceBoundaries"];
+        if (boundaries && (![boundaries isKindOfClass:NSArray.class] || ![entry[@"displayText"] isKindOfClass:NSString.class])) return nil;
+        NSUInteger displayLength=boundaries ? [entry[@"displayText"] length] : mapped.length;
         if (mapped.location>source.length || mapped.length>source.length-mapped.location ||
-            ![[source substringWithRange:mapped] isEqualToString:entry[@"text"]] || start.doubleValue>=end.doubleValue || end.doubleValue>mapped.length) return nil;
-        NSRange selected=NSMakeRange(mapped.location+start.unsignedIntegerValue,end.unsignedIntegerValue-start.unsignedIntegerValue);
+            ![[source substringWithRange:mapped] isEqualToString:entry[@"text"]] || start.doubleValue>=end.doubleValue || end.doubleValue>displayLength) return nil;
+        if (boundaries && boundaries.count!=displayLength+1) return nil;
+        NSUInteger selectedStart=boundaries ? boundaries[start.unsignedIntegerValue].unsignedIntegerValue : mapped.location+start.unsignedIntegerValue;
+        NSUInteger selectedEnd=boundaries ? boundaries[end.unsignedIntegerValue].unsignedIntegerValue : mapped.location+end.unsignedIntegerValue;
+        if (selectedStart<mapped.location || selectedEnd>NSMaxRange(mapped) || selectedEnd<=selectedStart) return nil;
+        NSRange selected=NSMakeRange(selectedStart,selectedEnd-selectedStart);
+        NSValue *block=entry[@"codeBlockRange"];
+        if (block) {
+            if (![block isKindOfClass:NSValue.class] || ![entry[@"codeContentRange"] isKindOfClass:NSValue.class] || !boundaries) return nil;
+            NSRange whole=block.rangeValue,content=[entry[@"codeContentRange"] rangeValue];
+            if (whole.location>source.length || whole.length>source.length-whole.location ||
+                content.location<whole.location || content.location>NSMaxRange(whole) || content.length>NSMaxRange(whole)-content.location ||
+                selected.location<content.location || NSMaxRange(selected)>NSMaxRange(content)) return nil;
+            if (containsProse || (codeBlockRange && ![codeBlockRange isEqual:block])) return nil;
+            codeBlockRange=block;codeContentRange=entry[@"codeContentRange"];
+        } else {
+            if (codeBlockRange || boundaries) return nil;
+            containsProse=YES;
+        }
         if (ranges.count && selected.location<previousEnd) return nil;
         for (NSNumber *boundary in @[@(selected.location),@(NSMaxRange(selected))]) {
             NSUInteger position=boundary.unsignedIntegerValue;
@@ -5752,8 +5868,11 @@ to link outside that scope.", \
         [visible appendString:[source substringWithRange:selected]];
         [ranges addObject:[NSValue valueWithRange:selected]];
     }
-    if (submitted && (![payload[@"text"] isKindOfClass:NSString.class] || ![MPNormalizePreviewSelectionText(payload[@"text"]) isEqualToString:MPNormalizePreviewSelectionText(visible)])) return nil;
-    if (ranges.count==1 && [visible containsString:@"\n\n"]) return nil;
+    NSString *(^normalizeText)(NSString *)=^NSString *(NSString *text){
+        return codeBlockRange ? [[text stringByReplacingOccurrencesOfString:@"\r\n" withString:@"\n"] stringByReplacingOccurrencesOfString:@"\r" withString:@"\n"] : MPNormalizePreviewSelectionText(text);
+    };
+    if (submitted && (![payload[@"text"] isKindOfClass:NSString.class] || ![normalizeText(payload[@"text"]) isEqualToString:normalizeText(visible)])) return nil;
+    if (!codeBlockRange && ranges.count==1 && [visible containsString:@"\n\n"]) return nil;
     NSRange first=[ranges.firstObject rangeValue],last=[ranges.lastObject rangeValue];
     NSRange total=NSMakeRange(first.location,NSMaxRange(last)-first.location);
     // Every proven run touched by this contiguous selection must be present.
@@ -5762,7 +5881,11 @@ to link outside that scope.", \
         NSRange mapped=NSMakeRange([entry[@"location"] unsignedIntegerValue],[entry[@"length"] unsignedIntegerValue]);
         if (NSIntersectionRange(mapped,total).length && ![seen containsObject:@(i)]) return nil;
     }
-    return @{@"range":[NSValue valueWithRange:total],@"text":visible,@"runs":ranges};
+    NSMutableDictionary *verified=[@{@"range":[NSValue valueWithRange:total],@"text":visible,@"runs":ranges} mutableCopy];
+    if (codeBlockRange) {
+        verified[@"codeBlockRange"]=codeBlockRange;verified[@"codeContentRange"]=codeContentRange;
+    }
+    return verified;
 }
 
 - (BOOL)applyPreviewEditPayload:(NSDictionary *)payload
@@ -5783,6 +5906,7 @@ to link outside that scope.", \
         ![[source substringWithRange:range] isEqualToString:entry[@"text"]]) return NO;
     NSString *action = payload[@"action"];
     if (![action isKindOfClass:NSString.class]) return NO;
+    if (entry[@"codeBlockRange"] && ![action isEqualToString:@"block"]) return NO;
     if ([action isEqualToString:@"replace"]) {
         NSString *text = payload[@"text"];
         if (![text isKindOfClass:NSString.class] || text.length > 100000 ||
@@ -5794,7 +5918,7 @@ to link outside that scope.", \
         return [self replacePreviewRange:range withString:[self escapePreviewPlainText:text]];
     }
     NSDictionary *verified = [self verifiedPreviewSelection:payload];
-    if (!verified) return NO;
+    if (!verified || (verified[@"codeBlockRange"] && ![action isEqualToString:@"block"])) return NO;
     range = [verified[@"range"] rangeValue];
     NSString *selected = [source substringWithRange:range];
     NSRange selectedRange = range;
@@ -5806,6 +5930,43 @@ to link outside that scope.", \
         NSString *originalSource = source;
         NSRange originalSelection = selectedRange;
         NSMutableArray *structuralEdits = [NSMutableArray array];
+        NSValue *codeBlock = verified[@"codeBlockRange"], *codeContent = verified[@"codeContentRange"];
+        if (codeBlock) {
+            if (!codeContent || [value isEqualToString:@"code-block"]) return codeContent != nil;
+            NSRange block = codeBlock.rangeValue, content = codeContent.rangeValue;
+            if (NSMaxRange(block)>source.length || content.location<block.location || NSMaxRange(content)>NSMaxRange(block)) return NO;
+            // Code is literal text. Escape its entire body before exposing it
+            // to Markdown, including unselected lines, so HTML and markers
+            // cannot acquire meaning during the conversion.
+            NSString *literal = [source substringWithRange:content];
+            NSMutableString *escaped = [NSMutableString string];
+            NSMutableArray *positions = [NSMutableArray arrayWithObject:@0];
+            NSUInteger indentationEnd=0;
+            for (NSUInteger i=0;i<literal.length;i++) {
+                NSString *character=[literal substringWithRange:NSMakeRange(i,1)];
+                // Four leading ASCII spaces (or a tab) would recreate an
+                // indented code block. Nonbreaking spaces preserve the
+                // visible indentation as plain Unicode Markdown text.
+                BOOL lineStart=i==0 || [literal characterAtIndex:i-1]=='\n' || [literal characterAtIndex:i-1]=='\r';
+                if (lineStart) {
+                    NSUInteger end=i;
+                    BOOL tab=NO;
+                    while (end<literal.length && ([literal characterAtIndex:end]==' ' || [literal characterAtIndex:end]=='\t')) {
+                        tab|=[literal characterAtIndex:end]=='\t'; end++;
+                    }
+                    indentationEnd=tab || end-i>=4 ? end : i;
+                }
+                BOOL indented=i<indentationEnd;
+                // A literal ::: must not become a callout delimiter after
+                // exposing the code body to the surrounding Markdown parser.
+                NSString *plain=indented ? ([character isEqualToString:@"\t"] ? @"\u00a0\u00a0\u00a0\u00a0" : @"\u00a0")
+                    : [character isEqualToString:@":"] ? @"\\:" : [self escapePreviewPlainText:character];
+                [escaped appendString:plain];
+                [positions addObject:@(escaped.length)];
+            }
+            [structuralEdits addObject:@{@"range":codeBlock,@"replacement":escaped,
+                @"content":codeContent,@"positions":positions}];
+        }
         // Only paired, parser-owned containers can be removed. Choose the
         // innermost callout containing the complete proven visual selection.
         NSDictionary *container = nil;
@@ -6088,10 +6249,10 @@ to link outside that scope.", \
             }
         }
         if ([value isEqualToString:@"code-block"]) {
-            restoredSelection=NSMakeRange(NSNotFound,0);
             NSUInteger longest = 0, run = 0;
             for (NSUInteger i=0;i<body.length;i++) { run=[body characterAtIndex:i]=='`'?run+1:0;longest=MAX(longest,run); }
             NSString *fence = [@"" stringByPaddingToLength:MAX((NSUInteger)3,longest+1) withString:@"`" startingAtIndex:0];
+            if (restoredSelection.location!=NSNotFound) restoredSelection.location+=fence.length+2;
             body = [NSString stringWithFormat:@"\n%@\n%@\n%@\n",fence,body,fence];
         } else if ([value isEqualToString:@"callout"] || [value hasPrefix:@"callout-"] || [value isEqualToString:@"toggle"] || [value hasPrefix:@"toggle-h"]) {
             BOOL collapsible=[value isEqualToString:@"toggle"] || [value hasPrefix:@"toggle-h"];

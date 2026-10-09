@@ -309,6 +309,41 @@ final class MacDownUITests: XCTestCase {
         option.click()
     }
 
+    func testPreviewCodeSelectionDisablesInlineStylesAndConvertsBackToText() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("CodeSelection.md")
+        let source = "```text\nCodeword\n```\n\nNeighbor\n"
+        try source.write(to: file, atomically: true, encoding: .utf8)
+        let window = openPreviewBlockFixture(file)
+        let editor = window.textViews.matching(identifier: "editor-text-view").firstMatch
+        XCTAssertTrue(editor.waitForExistence(timeout: 10))
+        let text = window.webViews.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", "Codeword", "Codeword")).firstMatch
+        XCTAssertTrue(text.waitForExistence(timeout: 10), window.debugDescription)
+        text.doubleClick()
+        for label in ["Gras", "Italique", "Souligné", "Barré", "Code", "Retirer les styles", "Lien", "Modifier le texte"] {
+            let button = window.webViews.descendants(matching: .any).matching(
+                NSPredicate(format: "label == %@", label)).firstMatch
+            XCTAssertTrue(button.waitForExistence(timeout: 5), window.debugDescription)
+            XCTAssertFalse(button.isEnabled, "Inline action \(label) must be unavailable inside a code block")
+        }
+        XCTAssertEqual(editor.value as? String, source)
+        choosePreviewBlock("Texte normal", window: window)
+        wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "NOT (value CONTAINS %@)", "```"), object: editor)], timeout: 10)
+        let converted = try XCTUnwrap(editor.value as? String)
+        XCTAssertFalse(converted.contains("```"))
+        XCTAssertTrue(converted.contains("Neighbor"))
+        let bold = window.webViews.descendants(matching: .any).matching(
+            NSPredicate(format: "label == %@", "Gras")).firstMatch
+        XCTAssertTrue(bold.waitForExistence(timeout: 5))
+        wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "enabled == true"), object: bold)], timeout: 10)
+        XCTAssertTrue(bold.isEnabled, "Returning to text must restore ordinary formatting capabilities")
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertEqual(editor.value as? String, source)
+    }
+
     func testPreviewQuoteToCodeRemovesQuotePrefixAndKeepsNeighbor() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

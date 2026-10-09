@@ -2898,4 +2898,103 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
     }
 }
 
+- (void)testFencedPreviewSelectionKeepsPrismAndMapsPhysicalUTF16Source
+{
+    MPPreferences *preferences=self.document.preferences;
+    BOOL oldSyntax=preferences.htmlSyntaxHighlighting,oldFenced=preferences.extensionFencedCode;
+    BOOL oldMath=preferences.htmlMathJax,oldMermaid=preferences.htmlMermaid,oldGraphviz=preferences.htmlGraphviz;
+    NSString *oldTheme=[preferences.htmlHighlightingThemeName copy];
+    @try {
+        preferences.htmlSyntaxHighlighting=YES;preferences.extensionFencedCode=YES;
+        preferences.htmlMathJax=NO;preferences.htmlMermaid=NO;preferences.htmlGraphviz=NO;
+        preferences.htmlHighlightingThemeName=nil;
+        for (NSString *newline in @[@"\n",@"\r\n"]) {
+            MPDocument *document=[MPDocument new];
+            MPEditorView *editor=[[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+            WebView *web=[[WebView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+            MPRenderer *renderer=[MPRenderer new];
+            document.editor=editor;document.preview=web;document.renderer=renderer;
+            renderer.dataSource=(id<MPRendererDataSource>)document;renderer.delegate=(id<MPRendererDelegate>)document;
+            web.frameLoadDelegate=(id<WebFrameLoadDelegate>)document;
+            @try {
+                NSString *source=[@"Before\n\n```javascript\nconst emoji = \"😀\";\n\nconst answer = 42;\n    **word** <b> :::\n```\n\nAfter\n"
+                    stringByReplacingOccurrencesOfString:@"\n" withString:newline];
+                editor.string=source;renderer.rendererFlags=preferences.rendererFlags;
+                [renderer parseMarkdown:source];[renderer render];
+                [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:
+                    [NSPredicate predicateWithBlock:^BOOL(id object,NSDictionary *bindings) {
+                        return document.isPreviewReady && !document.alreadyRenderingInWeb &&
+                            [[web.mainFrame.javaScriptContext evaluateScript:
+                            @"Boolean(window.macdownPreviewEditor)&&document.querySelectorAll('pre>code span.token').length>0&&window.macdownPreviewEditor.elements().spans.some(function(span){return !!span.closest('pre');})"] toBool];
+                    }] object:document]] timeout:10];
+                XCTAssertTrue([[web.mainFrame.javaScriptContext evaluateScript:@"!!(window.Prism&&Prism.languages.javascript)"] toBool]);
+                XCTAssertGreaterThan([[web.mainFrame.javaScriptContext evaluateScript:@"document.querySelectorAll('pre>code span.token').length"] toInt32],0);
+                NSUInteger codeLeaves=0;
+                for (NSDictionary *entry in document.previewEditRanges) {
+                    if (!entry[@"codeBlockRange"]) continue;
+                    codeLeaves++;
+                    NSRange range=NSMakeRange([entry[@"location"] unsignedIntegerValue],[entry[@"length"] unsignedIntegerValue]);
+                    XCTAssertEqualObjects([source substringWithRange:range],entry[@"text"]);
+                    NSString *normalized=[[entry[@"text"] stringByReplacingOccurrencesOfString:@"\r\n" withString:@"\n"] stringByReplacingOccurrencesOfString:@"\r" withString:@"\n"];
+                    XCTAssertEqualObjects(normalized,entry[@"displayText"]);
+                    XCTAssertEqual([entry[@"sourceBoundaries"] count],[entry[@"displayText"] length]+1);
+                    XCTAssertTrue(NSLocationInRange(range.location,[entry[@"codeContentRange"] rangeValue]));
+                }
+                XCTAssertGreaterThan(codeLeaves,1u,@"Real Prism leaves must retain their source provenance");
+                NSDictionary *payload=[[web.mainFrame.javaScriptContext evaluateScript:
+                    @"(function(){var code=document.querySelector('pre>code'),r=document.createRange();r.selectNodeContents(code);var selection=getSelection();selection.removeAllRanges();selection.addRange(r);return window.macdownPreviewEditor.selectionPayload('bold');})()"] toObject];
+                XCTAssertTrue([payload isKindOfClass:NSDictionary.class]);
+                if (![payload isKindOfClass:NSDictionary.class]) {
+                    XCTFail(@"Code selection was not mapped. Actual CODE text: %@; renderer snapshot: %@",
+                        [[web.mainFrame.javaScriptContext evaluateScript:@"document.querySelector('pre>code').textContent"] toString],
+                        [renderer HTMLForMarkdownSnapshot:source]);
+                    continue;
+                }
+                XCTAssertFalse([document applyPreviewEditPayload:payload]);
+                XCTAssertEqualObjects(editor.string,source);
+                // The primary id is not the authority for a run-based
+                // selection. A prose id must not bypass literal-code rules.
+                NSMutableDictionary *proseIDPayload=[payload mutableCopy];
+                for (NSUInteger i=0;i<document.previewEditRanges.count;i++) {
+                    NSDictionary *entry=document.previewEditRanges[i];
+                    if (!entry[@"codeBlockRange"] && [entry[@"text"] isEqualToString:@"Before"]) {
+                        proseIDPayload[@"id"]=@(i);break;
+                    }
+                }
+                XCTAssertNotEqualObjects(proseIDPayload[@"id"],payload[@"id"]);
+                XCTAssertFalse([document applyPreviewEditPayload:proseIDPayload]);
+                XCTAssertEqualObjects(editor.string,source);
+                // UTF-16 offsets inside a surrogate pair never become valid
+                // source edit boundaries, even for literal code selections.
+                for (NSUInteger i=0;i<document.previewEditRanges.count;i++) {
+                    NSDictionary *entry=document.previewEditRanges[i];
+                    if (!entry[@"codeBlockRange"]) continue;
+                    NSRange emoji=[entry[@"displayText"] rangeOfString:@"😀"];
+                    if (emoji.location==NSNotFound) continue;
+                    NSDictionary *split=@{@"token":document.previewEditToken,@"id":@(i),@"start":@(emoji.location+1),@"end":@(emoji.location+2),@"action":@"block",@"value":@"paragraph"};
+                    XCTAssertFalse([document applyPreviewEditPayload:split]);
+                    XCTAssertEqualObjects(editor.string,source);
+                }
+                NSMutableDictionary *normal=[payload mutableCopy];normal[@"action"]=@"block";normal[@"value"]=@"paragraph";
+                XCTAssertTrue([document applyPreviewEditPayload:normal]);
+                XCTAssertFalse([editor.string containsString:@"```"]);
+                XCTAssertTrue([editor.string hasPrefix:[@"Before\n\n" stringByReplacingOccurrencesOfString:@"\n" withString:newline]]);
+                XCTAssertTrue([editor.string hasSuffix:[@"\n\nAfter\n" stringByReplacingOccurrencesOfString:@"\n" withString:newline]]);
+                NSString *HTML=[renderer HTMLForMarkdownSnapshot:editor.string];
+                XCTAssertFalse([HTML containsString:@"<pre>"]);
+                NSXMLDocument *DOM=[[NSXMLDocument alloc] initWithXMLString:HTML options:NSXMLDocumentTidyHTML error:NULL];
+                XCTAssertTrue([DOM.stringValue containsString:@"const emoji = \"😀\";"]);
+                XCTAssertTrue([[DOM.stringValue stringByReplacingOccurrencesOfString:@"\u00a0" withString:@" "] containsString:@"    **word** <b> :::"],@"source=%@ HTML=%@ DOM=%@",editor.string,HTML,DOM.stringValue);
+                XCTAssertFalse([HTML containsString:@"<strong>"]);
+                XCTAssertFalse([HTML containsString:@"<b>"]);
+                XCTAssertFalse([HTML containsString:@"class=\"mp-callout"]);
+            } @finally { web.frameLoadDelegate=nil;[document close]; }
+        }
+    } @finally {
+        preferences.htmlSyntaxHighlighting=oldSyntax;preferences.extensionFencedCode=oldFenced;
+        preferences.htmlMathJax=oldMath;preferences.htmlMermaid=oldMermaid;preferences.htmlGraphviz=oldGraphviz;
+        preferences.htmlHighlightingThemeName=oldTheme;
+    }
+}
+
 @end

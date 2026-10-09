@@ -74,15 +74,15 @@
         var selectedText=node.nodeValue.substring(start,end);
         if(!selectedText || spans.some(function(span){return span.contains(node);})) continue;
         if(/\S/.test(selectedText) || !/[\r\n]/.test(selectedText) ||
-          node.parentElement.closest('p,h1,h2,h3,h4,h5,h6,li')) return null;
+          node.parentElement.closest('p,h1,h2,h3,h4,h5,h6,li,pre')) return null;
         var before=null, after=null;
         spans.forEach(function(span){
           var position=span.compareDocumentPosition(node);
           if(position&4) before=span;
           else if((position&2) && !after) after=span;
         });
-        var beforeBlock=before && before.closest('p,h1,h2,h3,h4,h5,h6,li');
-        var afterBlock=after && after.closest('p,h1,h2,h3,h4,h5,h6,li');
+        var beforeBlock=before && before.closest('p,h1,h2,h3,h4,h5,h6,li,pre');
+        var afterBlock=after && after.closest('p,h1,h2,h3,h4,h5,h6,li,pre');
         if(!beforeBlock || !afterBlock || beforeBlock===afterBlock) return null;
       }
     }
@@ -196,17 +196,22 @@
   function updateStyles(selected) {
     var runs=selected ? (selected.runs || [selected]) : [];
     var spans=runs.map(function(run){return mappedSpan(run.id);});
+    // A fenced block contains literal text. Keep its block selector available
+    // so users can return to prose, but never offer inline Markdown inside it.
+    var containsCodeBlock=spans.some(function(span){return !!(span && span.closest('pre'));});
+    panel.querySelectorAll('button').forEach(function(control){control.disabled=containsCodeBlock;});
     var selectors={bold:'strong,b',italic:'em,i',underline:'u',strike:'del,s,strike',code:'code',link:'a[href]',math:'.MathJax,.MathJax_Display'};
     panel.querySelectorAll('[data-mp-style]').forEach(function(control){
       var style=control.getAttribute('data-mp-style'), selector=selectors[style];
       var eligible=spans.filter(function(span,index){
         return style!=='code' || (span && span.textContent.substring(runs[index].start,runs[index].end).trim().length>0);
       });
-      control.setAttribute('aria-pressed',String(eligible.length>0 && eligible.every(function(span){return !!(span && span.closest(selector));})));
+      control.setAttribute('aria-pressed',String(!containsCodeBlock && eligible.length>0 && eligible.every(function(span){return !!(span && span.closest(selector));})));
     });
     function blockType(span) {
       if(!span) return '';
       var heading=span.closest('h1,h2,h3,h4,h5,h6'), details=span.closest('details');
+      if(span.closest('pre')) return 'code-block';
       if(details) return heading?'toggle-'+heading.tagName.toLowerCase():'toggle';
       var callout=span.closest('.mp-callout');
       if(callout) {
@@ -220,7 +225,7 @@
     }
     var block=spans.length?blockType(spans[0]):'';
     if(!spans.every(function(span){return blockType(span)===block;})) block='';
-    panel.querySelector('[data-mp-edit-text]').disabled=runs.length!==1 || !!(spans[0] && spans[0].closest('code'));
+    panel.querySelector('[data-mp-edit-text]').disabled=containsCodeBlock || runs.length!==1 || !!(spans[0] && spans[0].closest('code'));
     var menu=panel.querySelector('select');
     menu.querySelectorAll('option').forEach(function(option){
       if(option.value && option.value===block) option.setAttribute('data-mp-active','');
