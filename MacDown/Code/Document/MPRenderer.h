@@ -43,6 +43,8 @@ typedef NS_ENUM(NSUInteger, MPCodeBlockAccessoryType)
 /// Own callout transport identities are omitted from this semantic HTML oracle;
 /// authored attributes and the published preview state are preserved.
 - (NSString *)HTMLForMarkdownSnapshot:(NSString *)markdown;
+/// Parser-owned callout ranges without changing the published preview.
+- (NSArray<NSDictionary *> *)calloutSourceEntriesForMarkdownSnapshot:(NSString *)markdown;
 - (NSString *)HTMLForExportWithStyles:(BOOL)withStyles
                          highlighting:(BOOL)withHighlighting;
 

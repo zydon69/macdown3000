@@ -839,6 +839,11 @@ NS_INLINE NSString *MPPreviewHeadTags(NSString *checkboxBridgeToken)
     return html;
 }
 
+- (NSArray<NSDictionary *> *)calloutSourceEntriesForMarkdownSnapshot:(NSString *)markdown
+{
+    return [self parseResultForMarkdown:markdown options:[self parseOptions]][@"calloutEntries"];
+}
+
 - (void)publishParseResult:(NSDictionary *)result options:(NSDictionary *)options
 {
     self.currentHtml = result[@"html"];

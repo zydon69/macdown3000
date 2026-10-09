@@ -11,6 +11,7 @@
 
 #import <XCTest/XCTest.h>
 #import "MPDocument.h"
+#import "MPToolbarController.h"
 #import "../MacDownCore/MPMarkdownPreprocessor.h"
 #import "MPPreferences.h"
 #import "MPRenderer.h"
@@ -33,6 +34,11 @@
 - (int)rendererFlags;
 
 
+@end
+
+@interface MPDocument (ListFormattingTests)
+- (IBAction)toggleOrderedList:(id)sender;
+- (IBAction)toggleUnorderedList:(id)sender;
 @end
 
 // A real loopback HTTP response exercises WebKit navigation and its delegates.
@@ -1561,6 +1567,85 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
         [document close];
         document.preferences.extensionSmartyPants = oldSmarty;
         document.preferences.htmlTaskList = oldTasks;
+    }
+}
+
+- (void)testPreviewListToolbarUsesTheSameConversionAsBlockMenu
+{
+    MPDocument *document=[MPDocument new];
+    document.fileURL=self.testFileURL;
+    MPEditorView *editor=[[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,640,480)];
+    WebView *web=[[WebView alloc] initWithFrame:NSMakeRect(0,0,640,480)];
+    NSWindow *window=[[NSWindow alloc] initWithContentRect:web.frame styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+    window.releasedWhenClosed=NO; window.contentView=web;
+    MPRenderer *renderer=[MPRenderer new];
+    document.editor=editor; document.preview=web; document.renderer=renderer;
+    renderer.delegate=(id<MPRendererDelegate>)document; renderer.dataSource=(id<MPRendererDataSource>)document;
+    web.frameLoadDelegate=(id<WebFrameLoadDelegate>)document;
+    web.policyDelegate=(id<WebPolicyDelegate>)document;
+    MPToolbarController *toolbar=[MPToolbarController new]; toolbar.document=document;
+    BOOL math=document.preferences.htmlMathJax,smart=document.preferences.extensionSmartyPants;
+    NSString *source=@"# **Selected**\n\nNeighbor.\n";
+    @try {
+        document.preferences.htmlMathJax=NO; document.preferences.extensionSmartyPants=NO;
+        for (NSUInteger index=0;index<2;index++) {
+            NSString *value=index==0 ? @"unordered" : @"ordered";
+            NSString *menuSource=nil;
+            for (NSUInteger mode=0;mode<2;mode++) {
+                editor.string=source; [renderer parseMarkdown:source]; [renderer render];
+                NSString *token=renderer.checkboxBridgeToken;
+                [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:
+                    [NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return !web.isLoading && !document.alreadyRenderingInWeb && [document.previewEditToken isEqualToString:token];}] object:web]] timeout:10];
+                XCTAssertTrue([window makeFirstResponder:web]);
+                XCTAssertTrue([document previewHasFindFocus]);
+                editor.selectedRange=[source rangeOfString:@"Neighbor"];
+                XCTAssertTrue([[web stringByEvaluatingJavaScriptFromString:@"(function(){var s=macdownPreviewEditor.elements().spans.find(function(e){return e.textContent==='Selected';});if(!s)return false;var r=document.createRange();r.selectNodeContents(s);getSelection().removeAllRanges();getSelection().addRange(r);window.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,button:0}));return true;})()"] boolValue]);
+                if (mode==0) {
+                    NSDictionary *payload=[[web.mainFrame.javaScriptContext evaluateScript:[NSString stringWithFormat:@"macdownPreviewEditor.selectionPayload('block','%@')",value]] toDictionary];
+                    XCTAssertTrue([document applyPreviewEditPayload:payload]);
+                    menuSource=editor.string.copy;
+                } else {
+                    NSToolbarItemGroup *group=(id)[toolbar toolbar:nil itemForItemIdentifier:@"list-group" willBeInsertedIntoToolbar:YES];
+                    NSButton *button=(id)group.subitems[index].view;
+                    [button performClick:nil];
+                    XCTAssertEqualObjects(editor.string,menuSource,@"%@",value);
+                }
+                [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:
+                    [NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return !web.isLoading && !document.alreadyRenderingInWeb && [document.previewEditSource isEqualToString:editor.string];}] object:web]] timeout:10];
+                NSString *expected=[NSString stringWithFormat:@"%@**Selected**\n\nNeighbor.\n",index==0 ? @"- " : @"1. "];
+                XCTAssertEqualObjects(editor.string,expected);
+                XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"getSelection().toString()"],@"Selected");
+            }
+        }
+    } @finally {
+        web.frameLoadDelegate=nil; web.policyDelegate=nil; window.contentView=nil; [window close]; [document close];
+        document.preferences.htmlMathJax=math; document.preferences.extensionSmartyPants=smart;
+    }
+}
+
+- (void)testSourceListButtonsConvertBlocksRatherThanStackOrTogglePrefixes
+{
+    NSArray *cases=@[
+        @[@"# **word**\n",@"toggleUnorderedList:",@"- **word**\n"],
+        @[@"> word\n",@"toggleOrderedList:",@"1. word\n"],
+        @[@"1. first\n2. second\n",@"toggleUnorderedList:",@"- first\n- second\n"],
+        @[@"- first\n- second\n",@"toggleOrderedList:",@"1. first\n1. second\n"],
+        @[@"- first\n",@"toggleUnorderedList:",@"- first\n"]
+    ];
+    for (NSArray *scenario in cases) {
+        MPDocument *document=[MPDocument new];
+        MPEditorView *editor=[[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+        MPRenderer *renderer=[MPRenderer new];
+        document.editor=editor; document.renderer=renderer;
+        renderer.delegate=(id<MPRendererDelegate>)document;
+        renderer.dataSource=(id<MPRendererDataSource>)document;
+        @try {
+            editor.string=scenario[0];
+            editor.selectedRange=NSMakeRange(0,editor.string.length);
+            SEL action=NSSelectorFromString(scenario[1]);
+            [NSApp sendAction:action to:document from:nil];
+            XCTAssertEqualObjects(editor.string,scenario[2],@"%@",scenario[1]);
+        } @finally { [document close]; }
     }
 }
 
