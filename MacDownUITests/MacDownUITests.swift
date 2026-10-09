@@ -368,6 +368,39 @@ final class MacDownUITests: XCTestCase {
         XCTAssertEqual(editor.value as? String, source)
     }
 
+    func testListToolbarConvertsExistingBlockAndSupportsUndo() throws {
+        app.terminate()
+        app.launchArguments = ["-ApplePersistenceIgnoreState", "YES",
+                               "-MPDisableUpdater", "YES",
+                               "-editorStartInPreviewMode", "NO",
+                               "-htmlTaskList", "YES",
+                               "-AppleLanguages", "(en)"]
+        app.launch()
+        let editor = try XCTUnwrap(waitForEditor(timeout: 10))
+        editor.click()
+        editor.typeText("# Selected\n\nNeighbor.")
+        editor.typeKey(XCUIKeyboardKey.upArrow.rawValue, modifierFlags: .command)
+        let conversions = [("Unordered List", "- Selected\n\nNeighbor."),
+                           ("Ordered List", "1. Selected\n\nNeighbor."),
+                           ("Task List", "- [ ] Selected\n\nNeighbor.")]
+        // AppKit exposes icon-only segments as unnamed buttons within the
+        // identified group; segment order and localized tooltips have native coverage.
+        let group = app.toolbars.groups["list-group"]
+        XCTAssertTrue(group.waitForExistence(timeout: 5))
+        XCTAssertEqual(group.buttons.count, conversions.count)
+        for (index, conversion) in conversions.enumerated() {
+            let (label, expected) = conversion
+            let button = group.buttons.element(boundBy: index)
+            XCTAssertTrue(button.exists, label)
+            button.click()
+            XCTAssertEqual(editor.value as? String, expected)
+        }
+        app.typeKey("z", modifierFlags: .command)
+        XCTAssertEqual(editor.value as? String, "1. Selected\n\nNeighbor.")
+        app.typeKey("z", modifierFlags: [.command, .shift])
+        XCTAssertEqual(editor.value as? String, "- [ ] Selected\n\nNeighbor.")
+    }
+
     func testNormalTextToolbarRemovesCurrentHeadingAndSupportsUndo() throws {
         app.terminate()
         app.launchArguments = ["-ApplePersistenceIgnoreState", "YES",
