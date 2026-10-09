@@ -24,6 +24,7 @@
 // Used to verify toolbar dispatch reaches the document with the correct action.
 @interface MPToolbarDispatchRecorder : NSObject
 @property (nonatomic, strong) NSMutableArray<NSString *> *invokedSelectors;
+@property (nonatomic, strong) id lastSender;
 @end
 
 @implementation MPToolbarDispatchRecorder
@@ -47,6 +48,9 @@
 - (void)forwardInvocation:(NSInvocation *)anInvocation
 {
     [self.invokedSelectors addObject:NSStringFromSelector(anInvocation.selector)];
+    __unsafe_unretained id sender = nil;
+    [anInvocation getArgument:&sender atIndex:2];
+    self.lastSender = sender;
 }
 
 - (BOOL)respondsToSelector:(SEL)aSelector
@@ -777,12 +781,83 @@
 
 #pragma mark - Grouped Toolbar Item Dispatch Tests (Issue #566)
 
+- (void)testListGroupIncludesTaskListAfterExistingListButtons
+{
+    NSToolbarItemGroup *group = (NSToolbarItemGroup *)[self.controller toolbar:nil
+                                                  itemForItemIdentifier:@"list-group"
+                                              willBeInsertedIntoToolbar:YES];
+    NSSegmentedControl *control = (NSSegmentedControl *)group.view;
+    XCTAssertEqualObjects([group.subitems valueForKey:@"itemIdentifier"],
+                          (@[@"unordered-list", @"ordered-list", @"task-list"]));
+    XCTAssertEqual(control.segmentCount, 3);
+    if (group.subitems.count != 3 || control.segmentCount != 3) return;
+
+    NSToolbarItem *taskItem = group.subitems[2];
+    NSButton *button = (NSButton *)taskItem.view;
+    NSImage *taskImage = [NSImage imageNamed:@"ToolbarIconTaskList"];
+    XCTAssertEqualObjects(taskItem.label, NSLocalizedString(@"Task List", @""));
+    XCTAssertEqualObjects(taskItem.paletteLabel, taskItem.label);
+    XCTAssertEqualObjects(taskItem.toolTip, taskItem.label);
+    XCTAssertEqualObjects(button.identifier, @"task-list");
+    XCTAssertNotNil(taskImage);
+    XCTAssertEqual(button.image, taskImage);
+    XCTAssertEqual([control imageForSegment:2], taskImage);
+    XCTAssertTrue(taskImage.isTemplate);
+    XCTAssertTrue(NSEqualSizes(taskImage.size, NSMakeSize(19, 19)));
+    if (@available(macOS 10.13, *)) {
+        XCTAssertEqualObjects([control toolTipForSegment:2], taskItem.label);
+    }
+}
+
+- (void)testActualListGroupControlDispatchesAllThreeListActions
+{
+    NSToolbarItemGroup *group = (NSToolbarItemGroup *)[self.controller toolbar:nil
+                                                  itemForItemIdentifier:@"list-group"
+                                              willBeInsertedIntoToolbar:YES];
+    NSSegmentedControl *control = (NSSegmentedControl *)group.view;
+    NSArray<NSString *> *actions = @[@"toggleUnorderedList:", @"toggleOrderedList:",
+                                    @"toggleTaskList:"];
+    XCTAssertEqual(control.segmentCount, actions.count);
+    if (control.segmentCount != actions.count || group.subitems.count != actions.count) return;
+
+    // Momentary controls expose the active segment only during a mouse event.
+    // Retain that selection in this fixture to simulate dispatch during the click.
+    control.trackingMode = NSSegmentSwitchTrackingSelectOne;
+
+    MPToolbarDispatchRecorder *recorder = [[MPToolbarDispatchRecorder alloc] init];
+    self.controller.document = (MPDocument *)recorder;
+    for (NSUInteger segment = 0; segment < actions.count; segment++) {
+        [recorder.invokedSelectors removeAllObjects];
+        control.selectedSegment = segment;
+        XCTAssertTrue([control sendAction:control.action to:control.target]);
+        XCTAssertEqualObjects(recorder.invokedSelectors, (@[actions[segment]]));
+        XCTAssertEqual(recorder.lastSender, group.subitems[segment]);
+    }
+}
+
+- (void)testActualTaskListButtonDispatchesToDocument
+{
+    NSToolbarItemGroup *group = (NSToolbarItemGroup *)[self.controller toolbar:nil
+                                                  itemForItemIdentifier:@"list-group"
+                                              willBeInsertedIntoToolbar:YES];
+    XCTAssertEqual(group.subitems.count, 3);
+    if (group.subitems.count != 3) return;
+
+    NSButton *button = (NSButton *)group.subitems[2].view;
+    MPToolbarDispatchRecorder *recorder = [[MPToolbarDispatchRecorder alloc] init];
+    self.controller.document = (MPDocument *)recorder;
+    [button performClick:nil];
+
+    XCTAssertEqualObjects(recorder.invokedSelectors, (@[@"toggleTaskList:"]));
+    XCTAssertEqual(recorder.lastSender, button);
+}
+
 - (void)testGroupedDispatchAllActionMappings
 {
     // Verify every grouped/segmented toolbar item dispatches the correct
     // action. Keyed by (group identifier, segment index, segment count)
     // since that's what selectedToolbarItemGroupItem: actually receives
-    // from a segmented control's identifier and selectedSegment -- the 10
+    // from a segmented control's identifier and selectedSegment -- the 12
     // individual subitem identifiers (e.g. "bold") are not independently
     // reachable via toolbar:itemForItemIdentifier:willBeInsertedIntoToolbar:.
     NSArray<NSArray *> *expectedMappings = @[
@@ -795,8 +870,9 @@
         @[@"heading-group", @1, @4, @"convertToH2:"],
         @[@"heading-group", @2, @4, @"convertToH3:"],
         @[@"heading-group", @3, @4, @"convertToParagraph:"],
-        @[@"list-group", @0, @2, @"toggleUnorderedList:"],
-        @[@"list-group", @1, @2, @"toggleOrderedList:"],
+        @[@"list-group", @0, @3, @"toggleUnorderedList:"],
+        @[@"list-group", @1, @3, @"toggleOrderedList:"],
+        @[@"list-group", @2, @3, @"toggleTaskList:"],
     ];
 
     for (NSArray *mapping in expectedMappings) {

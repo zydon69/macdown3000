@@ -39,6 +39,7 @@
 @interface MPDocument (ListFormattingTests)
 - (IBAction)toggleOrderedList:(id)sender;
 - (IBAction)toggleUnorderedList:(id)sender;
+- (IBAction)toggleTaskList:(id)sender;
 @end
 
 // A real loopback HTTP response exercises WebKit navigation and its delegates.
@@ -1584,12 +1585,13 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
     web.frameLoadDelegate=(id<WebFrameLoadDelegate>)document;
     web.policyDelegate=(id<WebPolicyDelegate>)document;
     MPToolbarController *toolbar=[MPToolbarController new]; toolbar.document=document;
-    BOOL math=document.preferences.htmlMathJax,smart=document.preferences.extensionSmartyPants;
+    BOOL math=document.preferences.htmlMathJax,smart=document.preferences.extensionSmartyPants,tasks=document.preferences.htmlTaskList;
     NSString *source=@"# **Selected**\n\nNeighbor.\n";
     @try {
-        document.preferences.htmlMathJax=NO; document.preferences.extensionSmartyPants=NO;
-        for (NSUInteger index=0;index<2;index++) {
-            NSString *value=index==0 ? @"unordered" : @"ordered";
+        document.preferences.htmlMathJax=NO; document.preferences.extensionSmartyPants=NO; document.preferences.htmlTaskList=YES;
+        renderer.rendererFlags=document.preferences.rendererFlags;
+        for (NSUInteger index=0;index<3;index++) {
+            NSString *value=@[@"unordered",@"ordered",@"tasks"][index];
             NSString *menuSource=nil;
             for (NSUInteger mode=0;mode<2;mode++) {
                 editor.string=source; [renderer parseMarkdown:source]; [renderer render];
@@ -1612,14 +1614,14 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
                 }
                 [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:
                     [NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return !web.isLoading && !document.alreadyRenderingInWeb && [document.previewEditSource isEqualToString:editor.string];}] object:web]] timeout:10];
-                NSString *expected=[NSString stringWithFormat:@"%@**Selected**\n\nNeighbor.\n",index==0 ? @"- " : @"1. "];
+                NSString *expected=[NSString stringWithFormat:@"%@**Selected**\n\nNeighbor.\n",@[@"- ",@"1. ",@"- [ ] "][index]];
                 XCTAssertEqualObjects(editor.string,expected);
                 XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"getSelection().toString()"],@"Selected");
             }
         }
     } @finally {
         web.frameLoadDelegate=nil; web.policyDelegate=nil; window.contentView=nil; [window close]; [document close];
-        document.preferences.htmlMathJax=math; document.preferences.extensionSmartyPants=smart;
+        document.preferences.htmlMathJax=math; document.preferences.extensionSmartyPants=smart; document.preferences.htmlTaskList=tasks;
     }
 }
 
@@ -1647,6 +1649,36 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
             XCTAssertEqualObjects(editor.string,scenario[2],@"%@",scenario[1]);
         } @finally { [document close]; }
     }
+}
+
+- (void)testSourceTaskListButtonUsesSharedConversionAndHonorsDisabledSyntax
+{
+    MPDocument *document=[MPDocument new];
+    MPEditorView *editor=[[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+    MPRenderer *renderer=[MPRenderer new];
+    document.editor=editor; document.renderer=renderer;
+    renderer.delegate=(id<MPRendererDelegate>)document; renderer.dataSource=(id<MPRendererDataSource>)document;
+    BOOL tasks=document.preferences.htmlTaskList;
+    @try {
+        document.preferences.htmlTaskList=YES;
+        NSArray *cases=@[
+            @[@"",@"",@"- [ ] "],
+            @[@"\nNeighbor.\n",@"",@"- [ ] \nNeighbor.\n"],
+            @[@"# **word**\n",@"word",@"- [ ] **word**\n"],
+            @[@"1. word\r\n",@"word",@"- [ ] word\r\n"],
+            @[@"::: {.callout-note}\n## Title\nword\n:::\n",@"word",@"## Title\n- [ ] word\n"]
+        ];
+        for (NSArray *scenario in cases) {
+            editor.string=scenario[0]; editor.selectedRange=[scenario[1] length] ? [editor.string rangeOfString:scenario[1]] : NSMakeRange(0,0);
+            [document toggleTaskList:nil];
+            XCTAssertEqualObjects(editor.string,scenario[2]);
+            XCTAssertTrue(NSMaxRange(editor.selectedRange)<=editor.string.length);
+        }
+        document.preferences.htmlTaskList=NO;
+        editor.string=@"word\n"; editor.selectedRange=NSMakeRange(0,4);
+        [document toggleTaskList:nil];
+        XCTAssertEqualObjects(editor.string,@"word\n");
+    } @finally { [document close]; document.preferences.htmlTaskList=tasks; }
 }
 
 - (void)testPreviewQuoteToCodeRemovesOnlyStructuralPrefix

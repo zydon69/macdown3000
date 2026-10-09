@@ -87,6 +87,9 @@
 /* Ordered list toolbar button */
 "Ordered List" = "Liste ordonnée";
 
+/* Task list toolbar button */
+"Task List" = "Liste de tâches";
+
 /* No comment provided by engineer. */
 "Ordered/Unordered List" = "Liste ordonnée/non-ordonnée";
 

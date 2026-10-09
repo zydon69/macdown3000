@@ -3852,6 +3852,11 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     [self convertSelectionToList:@"unordered"];
 }
 
+- (IBAction)toggleTaskList:(id)sender
+{
+    [self convertSelectionToList:@"tasks"];
+}
+
 - (IBAction)toggleBlockquote:(id)sender
 {
     [self.editor toggleBlockWithPattern:@"^>[ \t]?" prefix:@"> "];

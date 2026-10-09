@@ -8,6 +8,9 @@
 
 "JJ_PLURAL_FORM_RULE" = "1";
 
+/* Task list toolbar button */
+"Task List" = "Task List";
+
 "WORDS_PLURAL_STRING" = "%@ word;%@ words";
 
 "CHARACTERS_PLURAL_STRING" = "%@ character;%@ characters";
