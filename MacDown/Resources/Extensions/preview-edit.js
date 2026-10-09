@@ -113,7 +113,6 @@
     svg.setAttribute('viewBox','0 0 24 24'); svg.setAttribute('width','22'); svg.setAttribute('height','22');
     svg.setAttribute('aria-hidden','true'); svg.setAttribute('focusable','false');
     var paths={
-      format:'M4 5h16M12 5v14M8 19h8M17 15l3 3 3-3',
       unordered:'M8 6h12M8 12h12M8 18h12M3 6h1M3 12h1M3 18h1',
       ordered:'M9 6h12M9 12h12M9 18h12M3 3h1v5M2 11c3-2 4 1 0 4h4M2 18h3l-2 2h2v2H2',
       tasks:'M9 6h12M9 12h12M9 18h12M2 4h4v4H2zM2 10h4v4H2zM2 16h4v4H2zM2 12l1 1 3-3',
@@ -157,7 +156,8 @@
     return svg;
   }
   function button(title, action, style, iconName, parent) {
-    var b=document.createElement('button'); b.type='button'; b.appendChild(icon(iconName || style));
+    var b=document.createElement('button'); b.type='button';
+    if(iconName===false) b.textContent=title; else b.appendChild(icon(iconName || style));
     b.setAttribute('aria-label',title); b.setAttribute('title',title);
     if(style) b.setAttribute('data-mp-style',style);
     if(style || iconName==='clear') b.setAttribute('data-mp-inline','');
@@ -168,7 +168,8 @@
     var opener=button('Type de ligne et encadré',function(){
       var open=opener.getAttribute('aria-expanded')!=='true';
       opener.setAttribute('aria-expanded',String(open)); menu.hidden=!open; positionPanel();
-    },null,'format');
+    },null,false);
+    opener.textContent='Texte normal ▾';
     opener.setAttribute('data-mp-format-menu',''); opener.setAttribute('aria-haspopup','menu');
     opener.setAttribute('aria-expanded','false'); opener.setAttribute('aria-controls','macdown-preview-format-options');
     var menu=document.createElement('div'); menu.id='macdown-preview-format-options'; menu.hidden=true;
@@ -180,12 +181,17 @@
         var choice=button(item[0],function(){
           menu.hidden=true; opener.setAttribute('aria-expanded','false'); command('block',item[1]);
         },null,item[1],group);
+        var label=document.createElement('span'); label.textContent=item[0]; choice.appendChild(label);
         choice.setAttribute('data-mp-option',item[1]); choice.setAttribute('role','menuitemradio');
         choice.setAttribute('aria-checked','false');
         choice.disabled=(item[1]==='math-block' && !config.math) || (item[1]==='tasks' && !config.tasks) || (item[1]==='code-block' && !config.fenced);
       });
     }
     group('block','Type de ligne',blockOptions);
+    if(config.math) {
+      var equation=button('Équation en ligne',function(){menu.hidden=true;opener.setAttribute('aria-expanded','false');command('math');},'math','math',menu.querySelector('[data-mp-scope=block]'));
+      var equationLabel=document.createElement('span');equationLabel.textContent='Équation en ligne';equation.appendChild(equationLabel);
+    }
     var separator=document.createElement('div'); separator.setAttribute('role','separator'); menu.appendChild(separator);
     group('container','Encadré et menu dépliant',containerOptions);
     panel.appendChild(menu);
@@ -233,7 +239,6 @@
     if(config.strike) button('Barré',function(){command('strike');},'strike');
     button('Code',function(){command('code');},'code');
     button('Retirer les styles',function(){command('clear');},null,'clear');
-    if(config.math) button('Équation',function(){command('math');},'math');
     button('Lien',function(){var url=window.prompt('Adresse du lien (https://…)','https://');if(url) command('link',url);},'link');
     var editButton=button('Modifier le texte',function(){
       if(!saved || (saved.runs && saved.runs.length!==1)) return;
@@ -245,7 +250,7 @@
     panel.appendChild(panel.querySelector('[role="menu"]'));
     panelStyle = retainedUI ? retainedUI.style : document.createElement('style'); panelStyle.id='macdown-preview-edit-style';
     var selector='.'+panelClass;
-    panelStyle.textContent=selector+' button{font:inherit;color:#fff;background:#3c3c3c;border:1px solid #666;border-radius:4px;margin:2px;padding:6px;cursor:pointer;vertical-align:middle;width:36px;height:36px} '+selector+' svg{display:block;pointer-events:none} '+selector+' button:disabled{opacity:.5;cursor:default} '+selector+' [aria-pressed="true"],'+selector+' [data-mp-active]{color:#2784DE} '+selector+' [role="menu"]{margin-top:6px} '+selector+' [role="menu"][hidden]{display:none!important} '+selector+' [role="group"]{display:grid;grid-template-columns:repeat(7,1fr)} '+selector+' [role="separator"]{border-top:1px solid #666;margin:8px 2px} '+selector+' button:focus-visible{outline:2px solid #2784DE;outline-offset:1px} .'+runClass+'[contenteditable]{outline:2px solid #4385be;outline-offset:3px} @media print{'+selector+'{display:none!important}}';
+    panelStyle.textContent=selector+' button{font:inherit;color:#fff;background:#3c3c3c;border:1px solid #666;border-radius:4px;margin:2px;padding:6px;cursor:pointer;vertical-align:middle;width:36px;height:36px} '+selector+' svg{display:block;pointer-events:none} '+selector+' button:disabled{opacity:.5;cursor:default} '+selector+' [aria-pressed="true"],'+selector+' [data-mp-active]{color:#2784DE} '+selector+' [role="menu"]{margin-top:6px} '+selector+' [role="menu"][hidden]{display:none!important} '+selector+' [data-mp-format-menu]{display:block;width:calc(100% - 4px);text-align:left} '+selector+' [role="group"]{display:block} '+selector+' [role="menu"] button{display:flex;align-items:center;gap:10px;width:calc(100% - 4px);height:auto;min-height:36px;text-align:left} '+selector+' [role="menu"] svg{flex-shrink:0} '+selector+' [role="separator"]{border-top:1px solid #666;margin:8px 2px} '+selector+' button:focus-visible{outline:2px solid #2784DE;outline-offset:1px} .'+runClass+'[contenteditable]{outline:2px solid #4385be;outline-offset:3px} @media print{'+selector+'{display:none!important}}';
     document.body.appendChild(panelStyle); document.body.appendChild(panel);
   }
   function begin(span) {
@@ -338,6 +343,10 @@
     panel.querySelector('[data-mp-edit-text]').disabled=containsCodeBlock || runs.length!==1 || !!(spans[0] && spans[0].closest('code'));
     updateMenu('block',blockType);
     updateMenu('container',containerType);
+    var current=panel.querySelector('[data-mp-scope=block] [data-mp-option][data-mp-active]');
+    var opener=panel.querySelector('[data-mp-format-menu]');
+    opener.textContent=(current ? current.getAttribute('aria-label') : 'Type de ligne')+' ▾';
+    if(current) opener.setAttribute('data-mp-active',''); else opener.removeAttribute('data-mp-active');
   }
   function updatePanel() {
     if(active || rendering || selectingWithMouse) return;

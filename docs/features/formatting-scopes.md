@@ -62,8 +62,10 @@ Deux tests lancés sur le code antérieur ont produit 12 échecs : ils démontre
 
 La suite complète termine par `TEST SUCCEEDED` et la restauration vérifiée des préférences. Les avertissements de dépréciation WebKit/AppKit existants restent présents ; cette refonte ne migre pas le moteur WebView historique.
 
-## Révision du menu à icônes
+## Révision du menu déroulant et des icônes
 
-Les deux sélecteurs ont été réunis dans un menu de pictogrammes, avec un séparateur entre les deux portées. Tous les boutons de mise en forme utilisent des SVG ; leur nom reste accessible et apparaît dans une infobulle native au survol prolongé. Les états communs restent bleus dans chaque groupe. Le menu conserve la sélection, propose une navigation au clavier et se repositionne à l'ouverture pour rester dans la fenêtre.
+Les deux sélecteurs sont réunis dans un menu déroulant à lignes avec leurs libellés et un séparateur entre les deux portées. Le bouton d'ouverture affiche le type de ligne commun à la sélection. Seules les actions gras, italique, souligné, barré, code en ligne, effacement des styles, lien et modification du texte sont des boutons à icône sans libellé visible ; leur nom reste accessible et apparaît dans une infobulle native au survol prolongé. L'équation en ligne, lorsqu'elle est disponible, figure dans le menu. Les états communs restent bleus dans chaque groupe. Le menu conserve la sélection, propose une navigation au clavier et se repositionne à l'ouverture pour rester dans la fenêtre.
 
 Validation ciblée : 95 tests de cycle de vie et de menu examinés. Le premier lancement a passé 94 tests ; une assertion visant l'ancien élément `select` a ensuite été adaptée à la nouvelle option active et vérifiée dans une relance de sept tests, sans échec. Les six tests du menu ont été relancés après l'ajustement final de positionnement. Journaux : `icon-menu-tests.log`, `icon-menu-confirmation.log` et `icon-menu-final.log` dans `build/ListToolbarUnification`. La suite complète de 1 538 tests ci-dessus correspond à la refonte précédente ; elle n'a pas été intégralement relancée pour cette modification d'interface.
+
+La présentation initiale sous forme de grille de pictogrammes a été corrigée après clarification : les choix structurels affichent toujours leur texte dans le menu déroulant. Les six tests WebView ont été relancés pour vérifier les libellés, les icônes inline, les états communs, le clavier et la conservation de la sélection (`build/ListToolbarUnification/text-dropdown-tests.log`).
