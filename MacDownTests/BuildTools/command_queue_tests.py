@@ -127,6 +127,41 @@ with tempfile.TemporaryDirectory(prefix='macdown-command-queue-') as directory:
     assert result.returncode == 0
     requests = plistlib.loads((cli_queue / 'requests.plist').read_bytes())
     assert len(requests) == 2 and requests[-1]['pipedContent'] == b''
+    # Reject an oversized stream before EOF. Keep its writer open so this
+    # proves bounded input collection rather than the later queue-size check.
+    before = (cli_queue / 'requests.plist').read_bytes()
+    stream = subprocess.Popen([str(cli), str(cli_queue)], stdin=subprocess.PIPE,
+                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    try:
+        try:
+            for _ in range(2049):
+                stream.stdin.write(b'x' * 16384)
+            stream.stdin.flush()
+        except BrokenPipeError:
+            pass  # A bounded consumer may reject while the writer is active.
+        try:
+            status = stream.wait(timeout=5)
+        except subprocess.TimeoutExpired as error:
+            raise AssertionError('Oversized stdin must be rejected without waiting for EOF') from error
+        assert status != 0 and not stream.stdout.read()
+        assert b'Could not read standard input' in stream.stderr.read()
+        assert (cli_queue / 'requests.plist').read_bytes() == before
+    finally:
+        if stream.poll() is None:
+            stream.kill()
+            stream.wait(timeout=5)
+        for pipe in (stream.stdin, stream.stdout, stream.stderr):
+            try:
+                pipe.close()
+            except BrokenPipeError:
+                pass
+    # Exactly the input limit reaches serialization. XML/base64 overhead then
+    # exceeds the queue limit, so this is a queue error, not a read error.
+    result = subprocess.run([str(cli), str(cli_queue)], input=b'x' * (32 * 1024 * 1024),
+                            capture_output=True, timeout=30)
+    assert result.returncode != 0 and not result.stdout
+    assert b'Could not queue command input' in result.stderr
+    assert (cli_queue / 'requests.plist').read_bytes() == before
     (cli_queue / 'requests.plist').write_bytes(b'corrupt')
     result = subprocess.run([str(cli), str(cli_queue), 'next.md'], input=b'',
                             capture_output=True, timeout=30)
