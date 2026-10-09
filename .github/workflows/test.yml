@@ -31,6 +31,7 @@ jobs:
       run: |
         set -euo pipefail
         python3 MacDownTests/BuildTools/scripts_tests.py
+        python3 MacDownTests/BuildTools/smoke_launch_tests.py
         python3 MacDownTests/BuildTools/stall_empty_suite_tests.py
         python3 MacDownTests/BuildTools/version_tests.py
         python3 MacDownTests/BuildTools/release_identity_tests.py
