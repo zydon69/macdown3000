@@ -2622,6 +2622,50 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
     }
 }
 
+- (void)testNestedCalloutBodyFormattingKeepsManuallyOpenedDisclosure
+{
+    MPDocument *document=[MPDocument new];
+    document.fileURL=self.testFileURL;
+    MPEditorView *editor=[[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,640,480)];
+    WebView *web=[[WebView alloc] initWithFrame:NSMakeRect(0,0,640,480)];
+    MPRenderer *renderer=[MPRenderer new];
+    document.editor=editor; document.preview=web; document.renderer=renderer;
+    renderer.delegate=(id<MPRendererDelegate>)document;
+    renderer.dataSource=(id<MPRendererDataSource>)document;
+    web.frameLoadDelegate=(id<WebFrameLoadDelegate>)document;
+    web.policyDelegate=(id<WebPolicyDelegate>)document;
+    MPPreferences *preferences=document.preferences;
+    BOOL math=preferences.htmlMathJax, smart=preferences.extensionSmartyPants;
+    BOOL mermaid=preferences.htmlMermaid, graphviz=preferences.htmlGraphviz;
+    NSString *source=@"::: {.callout-note}\n\ntest ***encore*** pour lui\n::: {.callout-note collapse=\"true\"}\n# **nouveau**\ncontenu interne\n:::\n\n:::\n";
+    @try {
+        preferences.htmlMathJax=NO; preferences.extensionSmartyPants=NO;
+        preferences.htmlMermaid=NO; preferences.htmlGraphviz=NO;
+        editor.string=source;
+        [renderer parseMarkdown:source]; [renderer render];
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:
+            [NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return !web.isLoading && [document.previewEditSource isEqualToString:source];}] object:web]] timeout:10];
+        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"String(document.querySelector('details').open)"],@"false");
+        XCTAssertTrue([[web stringByEvaluatingJavaScriptFromString:
+            @"(function(){document.querySelector('details').open=true;var spans=macdownPreviewEditor.elements().spans;var s=spans.find(function(e){return e.textContent==='contenu interne';});if(!s)return false;var r=document.createRange();r.setStart(s.firstChild,8);r.setEnd(s.firstChild,15);getSelection().removeAllRanges();getSelection().addRange(r);window.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,button:0}));return getSelection().toString()==='interne';})()"] boolValue]);
+        for (NSUInteger step=0;step<2;step++) {
+            NSString *before=editor.string.copy;
+            [web stringByEvaluatingJavaScriptFromString:@"macdownPreviewEditor.elements().panel.querySelector('button[data-mp-style=bold]').click()"];
+            [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:
+                [NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return ![editor.string isEqualToString:before] && !web.isLoading && !document.alreadyRenderingInWeb && [document.previewEditSource isEqualToString:editor.string];}] object:web]] timeout:10];
+            NSString *expected=step==0 ? [source stringByReplacingOccurrencesOfString:@"contenu interne" withString:@"contenu **interne**"] : source;
+            XCTAssertEqualObjects(editor.string,expected);
+            XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"String(document.querySelector('details').open)"],@"true");
+            XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"getSelection().toString()"],@"interne");
+            XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"document.querySelector('details summary').textContent.trim()"],@"nouveau");
+        }
+    } @finally {
+        web.frameLoadDelegate=nil; web.policyDelegate=nil; [document close];
+        preferences.htmlMathJax=math; preferences.extensionSmartyPants=smart;
+        preferences.htmlMermaid=mermaid; preferences.htmlGraphviz=graphviz;
+    }
+}
+
 - (void)testPreviewPopupQueuesRapidFormattingWithoutReselecting
 {
     MPDocument *document = [MPDocument new];
