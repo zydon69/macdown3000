@@ -550,8 +550,12 @@ static NSString * const kMPBlockquoteLinePattern = @"^((?:\\> ?)+).*$";
         range.length -= 1;      // Exclude trailing space.
         NSString *captured = [line substringWithRange:range];
         NSInteger i = captured.integerValue;
-        if (autoIncrement)
+        if (autoIncrement) {
+            // integerValue saturates out-of-range markers at NSIntegerMax.
+            // Refuse before changing text rather than wrapping to a negative list.
+            if (i == NSIntegerMax) return NO;
             i += 1;
+        }
         t = [NSString stringWithFormat:@"%ld.", i];
     }
     if (!t)
