@@ -1651,6 +1651,29 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
     }
 }
 
+- (void)testSourceListConversionPreservesCaretAtBoundariesAndInsideCallout
+{
+    NSString *callout=@"::: {.callout-note}\nword\n:::\n";
+    NSArray *cases=@[
+        @[@"word\n",@0,@"- word\n",@2],
+        @[@"word",@4,@"- word",@6],
+        @[callout,@([callout rangeOfString:@"word"].location+2),@"- word\n",@4]
+    ];
+    for (NSArray *scenario in cases) {
+        MPDocument *document=[MPDocument new];
+        MPEditorView *editor=[[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+        MPRenderer *renderer=[MPRenderer new];
+        document.editor=editor; document.renderer=renderer;
+        renderer.delegate=(id<MPRendererDelegate>)document; renderer.dataSource=(id<MPRendererDataSource>)document;
+        @try {
+            editor.string=scenario[0]; editor.selectedRange=NSMakeRange([scenario[1] unsignedIntegerValue],0);
+            [document toggleUnorderedList:nil];
+            XCTAssertEqualObjects(editor.string,scenario[2]);
+            XCTAssertTrue(NSEqualRanges(editor.selectedRange,NSMakeRange([scenario[3] unsignedIntegerValue],0)),@"Actual caret: %@",NSStringFromRange(editor.selectedRange));
+        } @finally { [document close]; }
+    }
+}
+
 - (void)testSourceTaskListButtonUsesSharedConversionAndHonorsDisabledSyntax
 {
     MPDocument *document=[MPDocument new];

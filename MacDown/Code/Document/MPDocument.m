@@ -6123,6 +6123,9 @@ to link outside that scope.", \
             NSUInteger offset=MIN(position>content.location ? position-content.location : 0,content.length);
             return removed.location+[edit[@"positions"][offset] unsignedIntegerValue];
         };
+        NSUInteger selectionStart=translate(selectedRange.location);
+        NSUInteger selectionEnd=translate(NSMaxRange(selectedRange));
+        selectedRange=NSMakeRange(selectionStart,selectionEnd-selectionStart);
         for (NSUInteger i=0;i<workingRuns.count;i++) {
             NSRange run=[workingRuns[i] rangeValue];
             NSUInteger start=translate(run.location),end=translate(NSMaxRange(run));
@@ -6133,7 +6136,6 @@ to link outside that scope.", \
     if (structuralEdits.count) {
         NSRange first=[workingRuns.firstObject rangeValue],last=[workingRuns.lastObject rangeValue];
         range=NSMakeRange(first.location,NSMaxRange(last)-first.location);
-        selectedRange=range;
         NSMutableDictionary *updated=[verified mutableCopy]; updated[@"runs"]=workingRuns;
         verified=updated;
     }
@@ -6361,8 +6363,10 @@ to link outside that scope.", \
             NSUInteger positions[] = {selectedRange.location,NSMaxRange(selectedRange)};
             for (NSUInteger boundary=0;boundary<2;boundary++) {
                 NSUInteger position = positions[boundary];
-                BOOL belongs = boundary == 0 ? position>=original.location && position<NSMaxRange(original)
-                    : position>original.location && position<=NSMaxRange(original);
+                BOOL belongs = selectedRange.length == 0
+                    ? position>=original.location && position<=NSMaxRange(original)
+                    : (boundary == 0 ? position>=original.location && position<NSMaxRange(original)
+                       : position>original.location && position<=NSMaxRange(original));
                 if (!belongs) continue;
                 NSUInteger relative = position-original.location, mapped;
                 if (relative>text.length) mapped = outputText.length+relative-text.length;
