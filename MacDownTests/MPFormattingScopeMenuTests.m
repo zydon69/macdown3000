@@ -144,18 +144,19 @@
 
 - (void)assertMenuScope:(NSString *)scope value:(NSString *)value active:(BOOL)active
 {
-    NSString *selector=[NSString stringWithFormat:@"document.querySelector('#macdown-preview-format select[data-mp-scope=\"%@\"]')",scope];
-    XCTAssertEqualObjects([self JS:[selector stringByAppendingString:@".value"]],value);
-    XCTAssertEqual([[self JS:[selector stringByAppendingString:@".hasAttribute('data-mp-active')"]] boolValue],active);
-    if (active) {
-        XCTAssertEqualObjects(([self JS:[NSString stringWithFormat:@"getComputedStyle(%@).color",selector]]),@"rgb(39, 132, 222)");
-        XCTAssertTrue([[self JS:[selector stringByAppendingString:@".selectedOptions[0].hasAttribute('data-mp-active')"]] boolValue]);
+    NSString *selector=[NSString stringWithFormat:@"document.querySelector('[data-mp-scope=\"%@\"] [data-mp-option=\"%@\"]')",scope,value];
+    if (!value.length) {
+        XCTAssertEqualObjects(([self JS:[NSString stringWithFormat:@"String(document.querySelectorAll('[data-mp-scope=\"%@\"] [data-mp-active]').length)",scope]]),@"0");
+        return;
     }
+    XCTAssertEqual([[self JS:[selector stringByAppendingString:@".hasAttribute('data-mp-active')"]] boolValue],active);
+    XCTAssertEqualObjects([self JS:[selector stringByAppendingString:@".getAttribute('aria-checked')"]],active ? @"true" : @"false");
+    if (active) XCTAssertEqualObjects(([self JS:[NSString stringWithFormat:@"getComputedStyle(%@).color",selector]]),@"rgb(39, 132, 222)");
 }
 
 - (void)chooseContainer:(NSString *)value
 {
-    [self JS:[NSString stringWithFormat:@"(function(){var s=document.querySelector('#macdown-preview-format select[data-mp-scope=container]');s.value='%@';s.dispatchEvent(new Event('change',{bubbles:true}));})()",value]];
+    [self JS:[NSString stringWithFormat:@"(function(){document.querySelector('[data-mp-format-menu]').click();document.querySelector('[data-mp-scope=container] [data-mp-option=\"%@\"]').click();})()",value]];
 }
 
 - (NSArray<NSView *> *)allSubviewsOf:(NSView *)view
@@ -243,11 +244,41 @@
     XCTAssertEqualObjects([self JS:@"document.querySelector('[data-mp-style=link]').getAttribute('aria-pressed')"],@"true");
 }
 
+- (void)testUnifiedIconMenuHasSeparatedScopesTooltipsAndKeyboardNavigation
+{
+    [self loadSource:@"# **Heading**\n\nBody\n"];
+    [self selectFromText:@"Heading" throughText:@"Heading"];
+    XCTAssertEqualObjects([self JS:@"String(document.querySelectorAll('#macdown-preview-format select').length)"],@"0");
+    XCTAssertEqualObjects([self JS:@"String(document.querySelectorAll('#macdown-preview-format [role=separator]').length)"],@"1");
+    XCTAssertTrue([[self JS:@"Array.from(document.querySelectorAll('#macdown-preview-format button')).every(function(b){return b.querySelector('svg') && b.title && b.getAttribute('aria-label')===b.title && !Array.from(b.childNodes).some(function(n){return n.nodeType===3 && n.textContent.trim();});})"] boolValue]);
+    XCTAssertTrue([[self JS:@"document.querySelector('[role=menu]').hidden"] boolValue]);
+    [self JS:@"document.querySelector('[data-mp-format-menu]').click()"];
+    XCTAssertFalse([[self JS:@"document.querySelector('[role=menu]').hidden"] boolValue]);
+    XCTAssertTrue([[self JS:@"(function(){var r=document.querySelector('#macdown-preview-format').getBoundingClientRect();return r.top>=0 && r.bottom<=innerHeight;})()"] boolValue]);
+    [self assertMenuScope:@"block" value:@"h1" active:YES];
+    [self assertMenuScope:@"container" value:@"no-container" active:YES];
+    XCTAssertEqualObjects([self JS:@"getSelection().toString()"],@"Heading");
+    [self JS:@"document.querySelector('[data-mp-format-menu]').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}))"];
+    XCTAssertEqualObjects([self JS:@"document.activeElement.getAttribute('data-mp-option')"],@"paragraph");
+    [self JS:@"document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true}))"];
+    XCTAssertEqualObjects([self JS:@"document.activeElement.getAttribute('data-mp-option')"],@"h1");
+    [self JS:@"document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))"];
+    XCTAssertTrue([[self JS:@"document.querySelector('[role=menu]').hidden"] boolValue]);
+    XCTAssertTrue([[self JS:@"document.activeElement.hasAttribute('data-mp-format-menu')"] boolValue]);
+    XCTAssertEqualObjects(self.editor.string,@"# **Heading**\n\nBody\n");
+    [self JS:@"document.querySelector('[data-mp-format-menu]').click();document.querySelector('[data-mp-option=h2]').click()"];
+    [self waitForFormatting];
+    XCTAssertEqualObjects(self.editor.string,@"## **Heading**\n\nBody\n");
+    XCTAssertEqualObjects([self JS:@"getSelection().toString()"],@"Heading");
+    [self assertMenuScope:@"block" value:@"h2" active:YES];
+    [self assertMenuScope:@"container" value:@"no-container" active:YES];
+}
+
 - (void)testHeadingAndContainerAreIndependentAndMixedBlocksKeepOnlyTheirCommonContainer
 {
     [self loadSource:@"::: {.callout-note}\n## Title\n# **Heading**\n\nBody\n:::\n\nNeighbor.\n"];
     [self selectFromText:@"Heading" throughText:@"Heading"];
-    XCTAssertEqualObjects([self JS:@"String(document.querySelectorAll('#macdown-preview-format select').length)"],@"2");
+    XCTAssertEqualObjects([self JS:@"String(document.querySelectorAll('#macdown-preview-format [data-mp-format-menu]').length)"],@"1");
     [self assertMenuScope:@"block" value:@"h1" active:YES];
     [self assertMenuScope:@"container" value:@"callout-note" active:YES];
     XCTAssertEqualObjects([self JS:@"document.querySelector('[data-mp-style=bold]').getAttribute('aria-pressed')"],@"true");
@@ -285,8 +316,8 @@
     [self selectFromText:@"Literal" throughText:@"Literal"];
     [self assertMenuScope:@"block" value:@"code-block" active:YES];
     [self assertMenuScope:@"container" value:@"callout-tip" active:YES];
-    XCTAssertTrue([[self JS:@"Array.from(document.querySelectorAll('#macdown-preview-format button')).every(function(b){return b.disabled;})"] boolValue]);
-    XCTAssertTrue([[self JS:@"Array.from(document.querySelectorAll('#macdown-preview-format select')).every(function(s){return !s.disabled;})"] boolValue]);
+    XCTAssertTrue([[self JS:@"Array.from(document.querySelectorAll('#macdown-preview-format [data-mp-inline],#macdown-preview-format [data-mp-edit-text]')).every(function(b){return b.disabled;})"] boolValue]);
+    XCTAssertTrue([[self JS:@"!document.querySelector('[data-mp-format-menu]').disabled && !document.querySelector('[data-mp-option=paragraph]').disabled"] boolValue]);
 }
 
 - (void)testRemovingContainerViaItsMenuPreservesTitleBodyHeadingAndInlineStyle

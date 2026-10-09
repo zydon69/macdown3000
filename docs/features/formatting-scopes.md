@@ -4,7 +4,7 @@
 
 Les styles de caractères sont cumulables : gras, italique, souligné Markdown, barré, lien et code en ligne. Une sélection mixte reçoit le style sur tous ses caractères ; un style commun à toute la sélection peut être retiré. Les marqueurs d'emphase autour d'un code en ligne restent à l'extérieur des backticks.
 
-Le premier sélecteur choisit le type des lignes concernées : texte normal, H1 à H6, liste à puces, numérotée, de tâches, citation, code ou équation. Ces types se remplacent. Le deuxième sélecteur choisit l'enveloppe : aucun encadré, cinq types de callout, menu dépliant ou titre dépliant H1 à H4. Changer le type d'une ligne ne retire plus son encadré.
+Un menu unique réunit deux groupes séparés : le type des lignes (texte normal, H1 à H6, listes, citation, code, équation) et l'enveloppe (aucun encadré, cinq callouts, menu dépliant ou titre dépliant H1 à H4). Les choix sont exclusifs dans chaque groupe et indépendants entre groupes. Changer le type d'une ligne ne retire plus son encadré.
 
 Un nouvel encadré possède son titre localisé, distinct du contenu sélectionné. Un H1 du contenu reste donc H1 même si le nouveau dépliant demande un titre H3. Remplacer une enveloppe existante conserve son titre personnalisé et son contenu ; un choix explicite de niveau de titre dépliant modifie son titre. « Aucun encadré » retire les délimiteurs et conserve les frontières des blocs voisins. L'enveloppe la plus intérieure est ciblée dans un document déjà imbriqué.
 
@@ -61,3 +61,9 @@ Deux tests lancés sur le code antérieur ont produit 12 échecs : ils démontre
 - Changements enregistrés séparément : correction Setext, refonte des portées, correction du lien natif, puis ce rapport. Aucun push effectué pour cette demande.
 
 La suite complète termine par `TEST SUCCEEDED` et la restauration vérifiée des préférences. Les avertissements de dépréciation WebKit/AppKit existants restent présents ; cette refonte ne migre pas le moteur WebView historique.
+
+## Révision du menu à icônes
+
+Les deux sélecteurs ont été réunis dans un menu de pictogrammes, avec un séparateur entre les deux portées. Tous les boutons de mise en forme utilisent des SVG ; leur nom reste accessible et apparaît dans une infobulle native au survol prolongé. Les états communs restent bleus dans chaque groupe. Le menu conserve la sélection, propose une navigation au clavier et se repositionne à l'ouverture pour rester dans la fenêtre.
+
+Validation ciblée : 95 tests de cycle de vie et de menu examinés. Le premier lancement a passé 94 tests ; une assertion visant l'ancien élément `select` a ensuite été adaptée à la nouvelle option active et vérifiée dans une relance de sept tests, sans échec. Les six tests du menu ont été relancés après l'ajustement final de positionnement. Journaux : `icon-menu-tests.log`, `icon-menu-confirmation.log` et `icon-menu-final.log` dans `build/ListToolbarUnification`. La suite complète de 1 538 tests ci-dessus correspond à la refonte précédente ; elle n'a pas été intégralement relancée pour cette modification d'interface.

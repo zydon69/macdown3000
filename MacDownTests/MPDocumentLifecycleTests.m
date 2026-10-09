@@ -1891,7 +1891,7 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
             [NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return !web.isLoading && !document.alreadyRenderingInWeb && document.previewEditRanges.count>0;}] object:web]] timeout:10];
         NSMutableArray *expectedOptions=[[[self blockConversionTypes] arrayByAddingObject:@"math-block"] mutableCopy];
         [expectedOptions addObject:@"no-container"];
-        NSArray *actualOptions=[[web.mainFrame.javaScriptContext evaluateScript:@"Array.from(document.querySelectorAll('#macdown-preview-format select option')).map(function(o){return o.value;}).filter(Boolean)"] toArray];
+        NSArray *actualOptions=[[web.mainFrame.javaScriptContext evaluateScript:@"Array.from(document.querySelectorAll('#macdown-preview-format [data-mp-option]')).map(function(o){return o.getAttribute('data-mp-option');})"] toArray];
         XCTAssertEqualObjects([NSSet setWithArray:actualOptions ?: @[]],[NSSet setWithArray:expectedOptions],@"Every menu option must belong to the conversion matrix");
         [web stringByEvaluatingJavaScriptFromString:@"(function(){var r=document.createRange();r.selectNodeContents(document.querySelector('p'));getSelection().removeAllRanges();getSelection().addRange(r);})()"];
         NSDictionary *payload=[[web.mainFrame.javaScriptContext evaluateScript:@"macdownPreviewEditor.selectionPayload('block','ordered')"] toDictionary];
@@ -2292,7 +2292,7 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
         XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"getSelection().toString()"], @"Editable");
         XCTAssertFalse([[web stringByEvaluatingJavaScriptFromString:@"!!document.querySelector('[contenteditable]')"] boolValue]);
         [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:panel.predicate object:web]] timeout:5];
-        [web stringByEvaluatingJavaScriptFromString:@"Array.from(document.querySelectorAll('#macdown-preview-format button')).find(function(b){return b.textContent==='Modifier le texte';}).click();document.querySelector('[contenteditable]').textContent='Changed <safe>'"];
+        [web stringByEvaluatingJavaScriptFromString:@"Array.from(document.querySelectorAll('#macdown-preview-format button')).find(function(b){return b.hasAttribute('data-mp-edit-text');}).click();document.querySelector('[contenteditable]').textContent='Changed <safe>'"];
 
         XCTAssertTrue(document.isDocumentEdited);
         NSError *saveError = nil;
@@ -2372,10 +2372,10 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
         [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return !web.isLoading&&[editor.string isEqualToString:@"first\n\nsecond\n\nUntouched neighbor.\n"];} ] object:web]] timeout:10];
         // Block conversion must preserve a multi-paragraph visual selection
         // even though new markers are inserted inside its source range.
-        [web stringByEvaluatingJavaScriptFromString:@"(function(){var s=document.querySelector('#macdown-preview-format select');s.value='h1';s.dispatchEvent(new Event('change',{bubbles:true}));})()"];
+        [web stringByEvaluatingJavaScriptFromString:@"(function(){document.querySelector('[data-mp-option=h1]').click();})()"];
         [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return !web.isLoading&&[editor.string isEqualToString:@"# first\n\n# second\n\nUntouched neighbor.\n"];} ] object:web]] timeout:10];
         XCTAssertEqualObjects([[web stringByEvaluatingJavaScriptFromString:@"getSelection().toString()"] stringByReplacingOccurrencesOfString:@"\n\n" withString:@"\n"],@"first\nsecond");
-        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"document.querySelector('#macdown-preview-format select').value"],@"h1");
+        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"document.querySelector('[data-mp-scope=block] [data-mp-active]').getAttribute('data-mp-option')"],@"h1");
         [web stringByEvaluatingJavaScriptFromString:@"document.querySelector('[data-mp-style=italic]').click()"];
         [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return !web.isLoading&&[editor.string isEqualToString:@"# *first*\n\n# *second*\n\nUntouched neighbor.\n"];} ] object:web]] timeout:10];
         // All heading levels admit element-boundary selections. Exercise each
@@ -2473,8 +2473,8 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
         XCTAssertTrue([[web stringByEvaluatingJavaScriptFromString:@"window.__panelBeforeFormatting===document.getElementById('macdown-preview-format')"] boolValue]);
         XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"window.__panelSampling=false;String(window.__panelHiddenFrames)"], @"0");
         XCTAssertTrue([[web stringByEvaluatingJavaScriptFromString:@"['bold','italic','underline'].every(function(s){var b=document.querySelector('[data-mp-style='+s+']');return b.getAttribute('aria-pressed')==='true' && getComputedStyle(b).color==='rgb(39, 132, 222)';})"] boolValue]);
-        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"document.querySelector('#macdown-preview-format select').value"], @"h1");
-        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"getComputedStyle(document.querySelector('#macdown-preview-format select')).color"], @"rgb(39, 132, 222)");
+        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"document.querySelector('[data-mp-scope=block] [data-mp-active]').getAttribute('data-mp-option')"], @"h1");
+        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"getComputedStyle(document.querySelector('[data-mp-scope=block] [data-mp-active]')).color"], @"rgb(39, 132, 222)");
         XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"document.querySelector('[data-mp-style=strike]').getAttribute('aria-pressed')"], @"false");
         [web stringByEvaluatingJavaScriptFromString:@"getSelection().removeAllRanges();document.activeElement.blur();document.dispatchEvent(new Event('selectionchange'));"];
         [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o, NSDictionary *b) {
@@ -3262,7 +3262,7 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
             @"(function(){var e=macdownPreviewEditor,s=e.elements().spans.find(function(s){return s.textContent==='Original text';});if(!s)return false;var r=document.createRange();r.selectNodeContents(s);getSelection().removeAllRanges();getSelection().addRange(r);window.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,button:0}));return true;})()"] boolValue]);
         [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:
             [NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return [[web stringByEvaluatingJavaScriptFromString:@"getComputedStyle(macdownPreviewEditor.elements().panel).display"] isEqualToString:@"block"];} ] object:web]] timeout:5];
-        [web stringByEvaluatingJavaScriptFromString:@"Array.from(macdownPreviewEditor.elements().panel.querySelectorAll('button')).find(function(b){return b.textContent==='Modifier le texte';}).click();document.querySelector('[contenteditable]').textContent='Changed text'"];
+        [web stringByEvaluatingJavaScriptFromString:@"Array.from(macdownPreviewEditor.elements().panel.querySelectorAll('button')).find(function(b){return b.hasAttribute('data-mp-edit-text');}).click();document.querySelector('[contenteditable]').textContent='Changed text'"];
         XCTAssertTrue([[web stringByEvaluatingJavaScriptFromString:@"Boolean(macdownPreviewEditor.draft())"] boolValue]);
         // A stale draft refuses the save before appending a newline or marking
         // the document as self-saving; the draft remains available to recover.
@@ -3318,7 +3318,7 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
             @"(function(){var e=macdownPreviewEditor,s=e.elements().spans.find(function(s){return s.textContent==='Original text';});if(!s)return false;var r=document.createRange();r.selectNodeContents(s);getSelection().removeAllRanges();getSelection().addRange(r);window.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,button:0}));return true;})()"] boolValue]);
         [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:
             [NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return [[web stringByEvaluatingJavaScriptFromString:@"getComputedStyle(macdownPreviewEditor.elements().panel).display"] isEqualToString:@"block"];} ] object:web]] timeout:5];
-        [web stringByEvaluatingJavaScriptFromString:@"Array.from(macdownPreviewEditor.elements().panel.querySelectorAll('button')).find(function(b){return b.textContent==='Modifier le texte';}).click();document.querySelector('[contenteditable]').textContent='Changed text'"];
+        [web stringByEvaluatingJavaScriptFromString:@"Array.from(macdownPreviewEditor.elements().panel.querySelectorAll('button')).find(function(b){return b.hasAttribute('data-mp-edit-text');}).click();document.querySelector('[contenteditable]').textContent='Changed text'"];
         XCTAssertTrue([[web stringByEvaluatingJavaScriptFromString:@"Boolean(macdownPreviewEditor.draft())"] boolValue]);
         editor.string=@"Concurrent source";
         [document exportPdf:nil];
