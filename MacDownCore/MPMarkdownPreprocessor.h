@@ -105,6 +105,8 @@ NS_INLINE NSUInteger MPMarkdownQuoteDepth(NSString *line, NSUInteger *contentSta
 // A deliberately small Quarto subset. Unknown attributes and incomplete divs
 // remain source text. Opaque markers let the existing Markdown renderer parse
 // callout contents, rather than introducing another Markdown implementation.
+// Source ranges identify physical delimiter lines in this exact input; callers
+// must not apply ranges from a transformed/preprocessed input to original text.
 NS_INLINE NSDictionary *MPPrepareCallouts(NSString *text)
 {
     if (![text containsString:@":::"]) return @{@"text":text, @"callouts":@[]};
@@ -130,26 +132,32 @@ NS_INLINE NSDictionary *MPPrepareCallouts(NSString *text)
         }];
     NSUInteger offset = 0, literalIndex = 0;
     for (NSUInteger i = 0; i < lines.count; i++) {
-        NSString *line = lines[i];
+        NSString *rawLine = lines[i];
+        // Rendering normalizes CRLF first; provenance must still refer to the
+        // original UTF-16 source, including each physical line ending.
+        NSString *line = [rawLine hasSuffix:@"\r"] ? [rawLine substringToIndex:rawLine.length - 1] : rawLine;
+        NSUInteger lineStart = offset;
+        NSUInteger lineEnd = offset + rawLine.length + (i + 1 < lines.count ? 1 : 0);
         NSTextCheckingResult *cm = [code firstMatchInString:line options:0 range:NSMakeRange(0,line.length)];
         NSString *run = cm ? [line substringWithRange:[cm rangeAtIndex:1]] : nil;
         if (fence) {
             if (run && [run characterAtIndex:0] == [fence characterAtIndex:0] && run.length >= fence.length &&
                 ![[line substringWithRange:[cm rangeAtIndex:2]] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet].length) fence = nil;
-            offset += line.length + 1; continue;
+            offset = lineEnd; continue;
         }
-        if (run) { fence = run; offset += line.length + 1; continue; }
+        if (run) { fence = run; offset = lineEnd; continue; }
         while (literalIndex < literals.count &&
                NSMaxRange(literals[literalIndex].rangeValue) <= offset) literalIndex++;
         BOOL literal = literalIndex < literals.count &&
             NSIntersectionRange(NSMakeRange(offset,line.length), literals[literalIndex].rangeValue).length > 0;
-        offset += line.length + 1;
+        offset = lineEnd;
         if (literal) continue;
         NSTextCheckingResult *match = [opening firstMatchInString:line options:0 range:NSMakeRange(0,line.length)];
         if (match) {
             NSString *attributes = [line substringWithRange:[match rangeAtIndex:2]];
             NSTextCheckingResult *valid = [supported firstMatchInString:attributes options:0 range:NSMakeRange(0,attributes.length)];
-            NSMutableDictionary *entry = [@{@"start":@(i)} mutableCopy];
+            NSMutableDictionary *entry = [@{@"start":@(i),
+                @"sourceOpenRange":[NSValue valueWithRange:NSMakeRange(lineStart,lineEnd-lineStart)]} mutableCopy];
             if (valid) {
                 entry[@"type"] = [attributes substringWithRange:[valid rangeAtIndex:1]];
                 for (NSUInteger n = 2; n <= 4; n++) if ([valid rangeAtIndex:n].location != NSNotFound)
@@ -161,6 +169,10 @@ NS_INLINE NSDictionary *MPPrepareCallouts(NSString *text)
             if (!entry[@"type"]) continue;
             NSString *token = [prefix stringByAppendingFormat:@"%lu",(unsigned long)pairs.count];
             entry[@"token"] = token;
+            entry[@"end"] = @(i);
+            entry[@"sourceCloseRange"] = [NSValue valueWithRange:NSMakeRange(lineStart,lineEnd-lineStart)];
+            NSUInteger contentStart = NSMaxRange([entry[@"sourceOpenRange"] rangeValue]);
+            entry[@"sourceContentRange"] = [NSValue valueWithRange:NSMakeRange(contentStart,lineStart-contentStart)];
             entry[@"sourceOpen"] = lines[[entry[@"start"] unsignedIntegerValue]];
             output[[entry[@"start"] unsignedIntegerValue]] = [NSString stringWithFormat:@"\n%@OPEN\n",token];
             output[i] = [NSString stringWithFormat:@"\n%@CLOSE\n",token];
@@ -186,13 +198,13 @@ NS_INLINE NSString *MPFinishCallouts(NSString *html, NSArray<NSDictionary *> *ca
         NSTextCheckingResult *match = [heading firstMatchInString:body options:0 range:NSMakeRange(0,body.length)];
         if (match) { title = [[body substringWithRange:match.range] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet]; body = [body substringFromIndex:NSMaxRange(match.range)]; }
         NSString *replacement;
-        if (entry[@"collapse"]) replacement = [NSString stringWithFormat:@"<details class=\"mp-callout mp-callout-%@\"%@><summary>%@</summary><div class=\"mp-callout-body\">%@</div></details>",entry[@"type"],[entry[@"collapse"] isEqual:@"false"] ? @" open" : @"",title,body];
-        else replacement = [NSString stringWithFormat:@"<aside class=\"mp-callout mp-callout-%@\"><div class=\"mp-callout-title\">%@</div><div class=\"mp-callout-body\">%@</div></aside>",entry[@"type"],title,body];
+        if (entry[@"collapse"]) replacement = [NSString stringWithFormat:@"<details class=\"mp-callout mp-callout-%@\" data-macdown-callout-token=\"%@\"%@><summary>%@</summary><div class=\"mp-callout-body\">%@</div></details>",entry[@"type"],entry[@"token"],[entry[@"collapse"] isEqual:@"false"] ? @" open" : @"",title,body];
+        else replacement = [NSString stringWithFormat:@"<aside class=\"mp-callout mp-callout-%@\" data-macdown-callout-token=\"%@\"><div class=\"mp-callout-title\">%@</div><div class=\"mp-callout-body\">%@</div></aside>",entry[@"type"],entry[@"token"],title,body];
         html = [html stringByReplacingCharactersInRange:NSMakeRange(start.location,NSMaxRange(end)-start.location) withString:replacement];
         rendered = YES;
     }
     // Hoedown may keep a marker inside a raw HTML block instead of making a
-    // paragraph. Restore the original delimiters there; never leak opaque ids.
+    // paragraph. Restore original delimiters there; never leave marker text.
     for (NSDictionary *entry in callouts) {
         NSString *source = entry[@"sourceOpen"];
         source = [[source stringByReplacingOccurrencesOfString:@"&" withString:@"&amp;"] stringByReplacingOccurrencesOfString:@"<" withString:@"&lt;"];

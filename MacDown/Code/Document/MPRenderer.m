@@ -99,7 +99,45 @@ NS_INLINE NSString *MPHTMLFromMarkdown(
     hoedown_renderer *htmlRenderer, hoedown_renderer *tocRenderer)
 {
     // Preprocess markdown for Hoedown compatibility (Issues #254, #36, #37)
+    NSString *source = text ?: @"";
     NSDictionary *preprocessed = MPPreprocessMarkdown(text, (flags & HOEDOWN_EXT_FENCED_CODE) != 0, sourceOffset);
+    // Reuse the same callout grammar on the original snapshot. Compatibility
+    // preprocessing inserts task markers/newlines and normalizes CRLF, so its
+    // offsets cannot be published as source offsets. Associate proven pairs
+    // in closing order; omit metadata if preprocessing changed that structure.
+    NSArray *originalCallouts = MPPrepareCallouts(source)[@"callouts"];
+    NSArray *renderedCallouts = preprocessed[@"callouts"];
+    BOOL sameStructure = originalCallouts.count == renderedCallouts.count;
+    for (NSUInteger i = 0; sameStructure && i < originalCallouts.count; i++) {
+        NSDictionary *original = originalCallouts[i], *rendered = renderedCallouts[i];
+        NSString *opening = original[@"sourceOpen"];
+        if ([opening hasSuffix:@"\r"]) opening = [opening substringToIndex:opening.length-1];
+        sameStructure = [opening isEqualToString:rendered[@"sourceOpen"]] &&
+            [original[@"type"] isEqual:rendered[@"type"]] &&
+            ((!original[@"collapse"] && !rendered[@"collapse"]) ||
+             [original[@"collapse"] isEqual:rendered[@"collapse"]]);
+    }
+    if (sameStructure) {
+        hoedown_html_renderer_state_extra *state =
+            ((hoedown_html_renderer_state *)htmlRenderer->opaque)->opaque;
+        NSDictionary *context = (__bridge NSDictionary *)state->owner;
+        NSMutableArray *entries = context[@"calloutEntries"];
+        NSString *fullSource = context[@"sourceMarkdown"];
+        NSUInteger sourceLineOffset = sourceOffset ?
+            [[fullSource substringToIndex:sourceOffset] componentsSeparatedByString:@"\n"].count-1 : 0;
+        for (NSUInteger i = 0; i < originalCallouts.count; i++) {
+            NSMutableDictionary *entry = [originalCallouts[i] mutableCopy];
+            entry[@"token"] = renderedCallouts[i][@"token"];
+            entry[@"start"] = @([entry[@"start"] unsignedIntegerValue]+sourceLineOffset);
+            entry[@"end"] = @([entry[@"end"] unsignedIntegerValue]+sourceLineOffset);
+            for (NSString *key in @[@"sourceOpenRange", @"sourceCloseRange", @"sourceContentRange"]) {
+                NSRange range = [entry[key] rangeValue];
+                range.location += sourceOffset;
+                entry[key] = [NSValue valueWithRange:range];
+            }
+            [entries addObject:[entry copy]];
+        }
+    }
     text = preprocessed[@"text"];
     __attribute__((objc_precise_lifetime)) NSString *codeEscapeToken = preprocessed[@"codeEscapeToken"];
     hoedown_html_renderer_state_extra *extra =
@@ -152,6 +190,16 @@ NS_INLINE NSString *MPHTMLFromMarkdown(
         hoedown_buffer_free(ob);
     }
     result = MPFinishCallouts(result, preprocessed[@"callouts"]);
+    // Raw HTML can retain a recognized pair as literal delimiters. Publish
+    // source ownership only for identities actually emitted by MPFinishCallouts;
+    // its per-parse prefix was proven absent from the original source.
+    NSMutableArray *entries = ((__bridge NSDictionary *)extra->owner)[@"calloutEntries"];
+    NSIndexSet *unrendered = [entries indexesOfObjectsPassingTest:
+        ^BOOL(NSDictionary *entry, NSUInteger index, BOOL *stop) {
+            NSString *identity = [NSString stringWithFormat:@"data-macdown-callout-token=\"%@\"",entry[@"token"]];
+            return [result rangeOfString:identity].location == NSNotFound;
+        }];
+    [entries removeObjectsAtIndexes:unrendered];
     if (frontMatter)
         result = [NSString stringWithFormat:@"%@\n%@", frontMatter, result];
     
@@ -252,6 +300,7 @@ NS_INLINE BOOL MPAreNilableStringsEqual(NSString *s1, NSString *s2)
 @property (nonatomic, copy, readwrite) NSString *checkboxBridgeToken;
 @property (nonatomic, copy, readwrite) NSArray<NSNumber *> *checkboxSourceOffsets;
 @property (nonatomic, copy, readwrite) NSString *checkboxSourceMarkdown;
+@property (nonatomic, copy, readwrite) NSArray<NSDictionary *> *calloutSourceEntries;
 
 // Issue #110: Cache-busting timestamps for local resources
 @property (strong) NSMutableDictionary<NSString *, NSNumber *> *resourceTimestamps;
@@ -747,8 +796,10 @@ NS_INLINE NSString *MPPreviewHeadTags(NSString *checkboxBridgeToken)
     NSString *sourceMarkdown = markdown ?: @"";
     NSMutableArray *languages = [NSMutableArray array];
     NSMutableArray *checkboxOffsets = [NSMutableArray array];
+    NSMutableArray *calloutEntries = [NSMutableArray array];
     __attribute__((objc_precise_lifetime)) NSDictionary *context = @{@"languages": languages, @"checkboxOffsets": checkboxOffsets,
-        @"headingSlugs": [NSMutableDictionary dictionary]};
+        @"headingSlugs": [NSMutableDictionary dictionary], @"calloutEntries":calloutEntries,
+        @"sourceMarkdown":sourceMarkdown};
     __attribute__((objc_precise_lifetime)) NSDictionary *tocContext = @{@"headingSlugs": [NSMutableDictionary dictionary]};
     NSUInteger sourceOffset = 0;
     if ([options[@"frontMatter"] boolValue])
@@ -769,12 +820,23 @@ NS_INLINE NSString *MPPreviewHeadTags(NSString *checkboxBridgeToken)
     MPFreeHTMLRenderer(htmlRenderer);
     return @{@"html": html ?: @"", @"languages": [languages copy],
              @"checkboxOffsets": [checkboxOffsets copy], @"sourceMarkdown": sourceMarkdown,
+             @"calloutEntries": [calloutEntries copy],
              @"checkboxToken": NSUUID.UUID.UUIDString};
 }
 
 - (NSString *)HTMLForMarkdownSnapshot:(NSString *)markdown
 {
-    return [self parseResultForMarkdown:markdown options:[self parseOptions]][@"html"];
+    NSDictionary *result = [self parseResultForMarkdown:markdown options:[self parseOptions]];
+    NSString *html = result[@"html"];
+    // Snapshot HTML is the semantic oracle for source transactions. Its own
+    // per-parse transport identities vary on every parse and must not enter
+    // that comparison. Keep authored attributes and the published live page
+    // intact; only these proven, newly generated identities are removed.
+    for (NSDictionary *entry in result[@"calloutEntries"]) {
+        NSString *attribute = [NSString stringWithFormat:@" data-macdown-callout-token=\"%@\"",entry[@"token"]];
+        html = [html stringByReplacingOccurrencesOfString:attribute withString:@""];
+    }
+    return html;
 }
 
 - (void)publishParseResult:(NSDictionary *)result options:(NSDictionary *)options
@@ -782,6 +844,7 @@ NS_INLINE NSString *MPPreviewHeadTags(NSString *checkboxBridgeToken)
     self.currentHtml = result[@"html"];
     self.checkboxSourceOffsets = result[@"checkboxOffsets"];
     self.checkboxSourceMarkdown = result[@"sourceMarkdown"];
+    self.calloutSourceEntries = result[@"calloutEntries"];
     self.checkboxBridgeToken = result[@"checkboxToken"];
     self.currentLanguages = [result[@"languages"] mutableCopy];
     self.extensions = [options[@"extensions"] intValue];

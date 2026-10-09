@@ -1307,4 +1307,51 @@
     XCTAssertTrue([html containsString:@".callout-note"]);
 }
 
+- (void)testCalloutSourceMetadataIncludesOnlyGeneratedContainers
+{
+    NSString *source = @"<div>\n::: {.callout-note collapse=\"true\"}\n## Raw title\nRaw body\n:::\n</div>\n\n::: {.callout-tip collapse=\"true\"}\n## Real title\nReal body\n:::\n";
+    NSString *html = [self renderMarkdown:source withExtensions:HOEDOWN_EXT_FENCED_CODE rendererFlags:0];
+    XCTAssertTrue([html containsString:@".callout-note"], @"Raw HTML keeps the original delimiter literal");
+    XCTAssertEqual(self.renderer.calloutSourceEntries.count,1u,
+        @"An unrendered source pair cannot authorize a callout conversion");
+    NSDictionary *entry = self.renderer.calloutSourceEntries.lastObject;
+    XCTAssertEqualObjects(entry[@"type"],@"tip");
+    NSRange opening = [source rangeOfString:@"::: {.callout-tip collapse=\"true\"}\n"];
+    XCTAssertTrue(NSEqualRanges([entry[@"sourceOpenRange"] rangeValue],opening));
+    NSString *attribute = [NSString stringWithFormat:@"data-macdown-callout-token=\"%@\"",entry[@"token"]];
+    XCTAssertTrue([html containsString:attribute]);
+}
+
+- (void)testCalloutSnapshotsRemoveOnlyTheirOwnTransportIdentities
+{
+    NSString *source = @"<p data-macdown-callout-token=\"authored\">Authored identity</p>\n\n::: {.callout-caution}\n## Attention\n**Body**\n:::\n\n::: {.callout-note collapse=\"true\"}\n## Prerequisites\nOther body\n:::\n";
+    self.dataSource.markdown = source;
+    [self.renderer parseMarkdown:source];
+    [self.renderer render];
+    NSString *publishedHTML = self.renderer.currentHtml;
+    NSString *publishedPage = self.delegate.lastHTML;
+    NSArray *publishedEntries = self.renderer.calloutSourceEntries;
+    NSString *publishedToken = self.renderer.checkboxBridgeToken;
+    XCTAssertEqual(publishedEntries.count,2u);
+    NSString *snapshot = [self.renderer HTMLForMarkdownSnapshot:source];
+    XCTAssertEqualObjects([self.renderer HTMLForMarkdownSnapshot:source],snapshot,
+        @"Equivalent callout snapshots have stable semantic HTML");
+    XCTAssertTrue([snapshot containsString:@"data-macdown-callout-token=\"authored\""],
+        @"An authored attribute remains part of the semantic oracle");
+    XCTAssertTrue([snapshot containsString:@"<aside class=\"mp-callout mp-callout-caution\">"]);
+    XCTAssertTrue([snapshot containsString:@"<details class=\"mp-callout mp-callout-note\">"]);
+    XCTAssertTrue([snapshot containsString:@"<strong>Body</strong>"]);
+    for (NSDictionary *entry in publishedEntries) {
+        NSString *attribute = [NSString stringWithFormat:@"data-macdown-callout-token=\"%@\"",entry[@"token"]];
+        XCTAssertTrue([publishedHTML containsString:attribute]);
+        XCTAssertTrue([publishedPage containsString:attribute]);
+        XCTAssertFalse([snapshot containsString:attribute]);
+    }
+    XCTAssertEqualObjects(self.renderer.currentHtml,publishedHTML);
+    XCTAssertEqualObjects(self.delegate.lastHTML,publishedPage);
+    XCTAssertEqualObjects(self.renderer.calloutSourceEntries,publishedEntries);
+    XCTAssertEqualObjects(self.renderer.checkboxBridgeToken,publishedToken);
+    XCTAssertEqualObjects(self.renderer.checkboxSourceMarkdown,source);
+}
+
 @end

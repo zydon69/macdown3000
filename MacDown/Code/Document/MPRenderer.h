@@ -27,6 +27,8 @@ typedef NS_ENUM(NSUInteger, MPCodeBlockAccessoryType)
 @property (nonatomic, copy, readonly) NSString *checkboxBridgeToken;
 @property (nonatomic, copy, readonly) NSArray<NSNumber *> *checkboxSourceOffsets;
 @property (nonatomic, copy, readonly) NSString *checkboxSourceMarkdown;
+/// Generated callout tokens and their ranges in the original published Markdown.
+@property (nonatomic, copy, readonly) NSArray<NSDictionary *> *calloutSourceEntries;
 
 + (NSArray<NSNumber *> *)checkboxOffsetsForMarkdown:(NSString *)markdown;
 
@@ -38,6 +40,8 @@ typedef NS_ENUM(NSUInteger, MPCodeBlockAccessoryType)
 
 - (NSString *)currentHtml;
 /// Parse a snapshot with the current options without publishing or scheduling it.
+/// Own callout transport identities are omitted from this semantic HTML oracle;
+/// authored attributes and the published preview state are preserved.
 - (NSString *)HTMLForMarkdownSnapshot:(NSString *)markdown;
 - (NSString *)HTMLForExportWithStyles:(BOOL)withStyles
                          highlighting:(BOOL)withHighlighting;

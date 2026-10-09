@@ -1175,4 +1175,65 @@
     XCTAssertNoThrow([view performSelector:NSSelectorFromString(@"updateContentGeometry")]);
 }
 
+- (void)testCalloutSourceMetadataPreservesExactUTF16DelimiterRanges {
+    for (NSString *ending in @[@"\n", @"\r\n"]) {
+        NSString *source = [NSString stringWithFormat:@"Before 😀%@::: {.callout-caution}%@## Attention%@Test%@:::%@After%@",
+            ending, ending, ending, ending, ending, ending];
+        NSArray *pairs = MPPrepareCallouts(source)[@"callouts"];
+        XCTAssertEqual(pairs.count, 1u);
+        if (pairs.count != 1) continue;
+        NSDictionary *pair = pairs.firstObject;
+        XCTAssertNotNil(pair[@"sourceOpenRange"]);
+        XCTAssertNotNil(pair[@"sourceCloseRange"]);
+        XCTAssertNotNil(pair[@"sourceContentRange"]);
+        if (!pair[@"sourceOpenRange"] || !pair[@"sourceCloseRange"] || !pair[@"sourceContentRange"]) continue;
+        NSRange opening = [pair[@"sourceOpenRange"] rangeValue];
+        NSRange closing = [pair[@"sourceCloseRange"] rangeValue];
+        NSRange content = [pair[@"sourceContentRange"] rangeValue];
+        XCTAssertEqualObjects([source substringWithRange:opening], [@"::: {.callout-caution}" stringByAppendingString:ending]);
+        XCTAssertEqualObjects([source substringWithRange:closing], [@":::" stringByAppendingString:ending]);
+        XCTAssertEqualObjects([source substringWithRange:content], ([NSString stringWithFormat:@"## Attention%@Test%@", ending, ending]));
+        XCTAssertEqual(NSMaxRange(opening), content.location);
+        XCTAssertEqual(NSMaxRange(content), closing.location);
+        XCTAssertEqualObjects(pair[@"type"], @"caution");
+        XCTAssertEqualObjects(pair[@"start"], @1);
+        XCTAssertEqualObjects(pair[@"end"], @4);
+        NSMutableString *unwrapped = source.mutableCopy;
+        [unwrapped deleteCharactersInRange:closing];
+        [unwrapped deleteCharactersInRange:opening];
+        XCTAssertEqualObjects(unwrapped, ([NSString stringWithFormat:@"Before 😀%@## Attention%@Test%@After%@", ending, ending, ending, ending]));
+    }
+}
+
+- (void)testCalloutSourceMetadataPairsNestedContainersAndKeepsUnrecognizedSyntaxLiteral {
+    NSString *source = @"::: {.callout-note collapse=\"true\"}\n## Outer\n::: {.callout-tip}\nInner\n:::\n:::\n";
+    NSArray *pairs = MPPrepareCallouts(source)[@"callouts"];
+    XCTAssertEqual(pairs.count, 2u);
+    if (pairs.count == 2) {
+        NSDictionary *inner = pairs[0], *outer = pairs[1];
+        XCTAssertEqualObjects(inner[@"type"], @"tip");
+        XCTAssertEqualObjects(outer[@"collapse"], @"true");
+        XCTAssertEqualObjects(inner[@"start"], @2);
+        XCTAssertEqualObjects(inner[@"end"], @4);
+        XCTAssertEqualObjects(outer[@"start"], @0);
+        XCTAssertEqualObjects(outer[@"end"], @5);
+        XCTAssertNotNil(inner[@"sourceContentRange"]);
+        if (inner[@"sourceContentRange"])
+            XCTAssertEqualObjects([source substringWithRange:[inner[@"sourceContentRange"] rangeValue]], @"Inner\n");
+    }
+    for (NSString *literal in @[@"```markdown\n::: {.callout-note}\nLiteral\n:::\n```\n",
+        @"~~~\n::: {.callout-note}\nLiteral\n:::\n~~~\n",
+        @"    ::: {.callout-note}\n    Literal\n    :::\n",
+        @"`::: {.callout-note}\nLiteral\n:::`\n",
+        @"::: {.callout-unknown}\nLiteral\n:::\n", @"::: {.callout-note unknown=\"yes\"}\nLiteral\n:::\n",
+        @"::: {.callout-note}\nUnclosed\n"]) {
+        XCTAssertEqual([MPPrepareCallouts(literal)[@"callouts"] count], 0u, @"%@", literal);
+    }
+    NSString *eof = @"::: {.callout-note}\nContent\n:::";
+    NSDictionary *last = [MPPrepareCallouts(eof)[@"callouts"] firstObject];
+    XCTAssertNotNil(last[@"sourceCloseRange"]);
+    if (last[@"sourceCloseRange"])
+        XCTAssertEqual(NSMaxRange([last[@"sourceCloseRange"] rangeValue]), eof.length);
+}
+
 @end

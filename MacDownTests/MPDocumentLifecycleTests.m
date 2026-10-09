@@ -1579,6 +1579,16 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
         expected:@"\n```\n- item\n```\n\n" HTML:@"- item"];
 }
 
+- (void)testPreviewCalloutTitleAndBodyConvertWithoutLosingOtherContent
+{
+    [self assertPreviewBlockSource:@"::: {.callout-caution}\n## Attention\nTest\n:::\n\nNeighbor.\n"
+        texts:@[@"Attention"] value:@"paragraph" expected:@"Attention\nTest\n\nNeighbor.\n" HTML:@"Attention"];
+    [self assertPreviewBlockSource:@"::: {.callout-note collapse=\"true\"}\n## Prerequisites\nTest\n:::\n\nNeighbor.\n"
+        texts:@[@"Test"] value:@"h1" expected:@"## Prerequisites\n# Test\n\nNeighbor.\n" HTML:@"Test</h1>"];
+    [self assertPreviewBlockSource:@"::: {.callout-note}\n## Outer\n::: {.callout-tip}\n## Inner\nContent\n:::\nTail\n:::\n"
+        texts:@[@"Content"] value:@"h1" expected:@"::: {.callout-note}\n## Outer\n## Inner\n# Content\nTail\n:::\n" HTML:@"Content</h1>"];
+}
+
 - (void)testPreviewBlockConversionPreservesBlankSeparators
 {
     for (NSArray *scenario in @[@[@"h1",@"# ",@"<h1"],@[@"unordered",@"- ",@"<ul>"],@[@"tasks",@"- [ ] ",@"<ul>"],@[@"quote",@"> ",@"<blockquote>"]]) {

@@ -5798,6 +5798,53 @@ to link outside that scope.", \
     if ([action isEqualToString:@"block"]) {
         if (!value.length || ([value isEqualToString:@"tasks"] && !self.preferences.htmlTaskList) ||
             ([value isEqualToString:@"code-block"] && !self.preferences.extensionFencedCode)) return NO;
+        NSString *originalSource = source;
+        NSRange originalSelection = selectedRange;
+        NSMutableArray *structuralEdits = [NSMutableArray array];
+        // Only paired, parser-owned containers can be removed. Choose the
+        // innermost callout containing the complete proven visual selection.
+        NSDictionary *container = nil;
+        for (NSDictionary *candidate in self.renderer.calloutSourceEntries) {
+            NSRange content = [candidate[@"sourceContentRange"] rangeValue];
+            if (range.location<content.location || NSMaxRange(range)>NSMaxRange(content)) continue;
+            if (!container || content.length<[container[@"sourceContentRange"] rangeValue].length) container=candidate;
+        }
+        if (container) {
+            for (NSString *key in @[@"sourceOpenRange",@"sourceCloseRange"])
+                [structuralEdits addObject:@{@"range":container[key],@"replacement":@""}];
+        }
+        [structuralEdits sortUsingComparator:^NSComparisonResult(NSDictionary *a,NSDictionary *b) {
+            return [@([b[@"range"] rangeValue].location) compare:@([a[@"range"] rangeValue].location)];
+        }];
+        NSMutableArray *workingRuns = [verified[@"runs"] mutableCopy];
+        NSUInteger previousEditStart=source.length;
+        for (NSDictionary *edit in structuralEdits) {
+            NSRange removed=[edit[@"range"] rangeValue];
+            NSString *replacement=edit[@"replacement"];
+            if (NSMaxRange(removed)>previousEditStart) return NO;
+            previousEditStart=removed.location;
+            NSUInteger (^translate)(NSUInteger)=^NSUInteger(NSUInteger position) {
+                if (position<=removed.location) return position;
+                if (position>=NSMaxRange(removed)) return position-removed.length+replacement.length;
+                if (!edit[@"positions"]) return removed.location;
+                NSRange content=[edit[@"content"] rangeValue];
+                NSUInteger offset=MIN(position>content.location ? position-content.location : 0,content.length);
+                return removed.location+[edit[@"positions"][offset] unsignedIntegerValue];
+            };
+            for (NSUInteger i=0;i<workingRuns.count;i++) {
+                NSRange run=[workingRuns[i] rangeValue];
+                NSUInteger start=translate(run.location),end=translate(NSMaxRange(run));
+                workingRuns[i]=[NSValue valueWithRange:NSMakeRange(start,end-start)];
+            }
+            source=[source stringByReplacingCharactersInRange:removed withString:replacement];
+        }
+        if (structuralEdits.count) {
+            NSRange first=[workingRuns.firstObject rangeValue],last=[workingRuns.lastObject rangeValue];
+            range=NSMakeRange(first.location,NSMaxRange(last)-first.location);
+            selectedRange=range;
+            NSMutableDictionary *updated=[verified mutableCopy]; updated[@"runs"]=workingRuns;
+            verified=updated;
+        }
         NSRange lineRange = [source lineRangeForRange:range];
         NSMutableArray<NSMutableDictionary *> *sourceLines = [NSMutableArray array];
         NSRegularExpression *setext = [NSRegularExpression regularExpressionWithPattern:@"^(?:=+|-+)[ ]*$" options:0 error:NULL];
@@ -6036,7 +6083,7 @@ to link outside that scope.", \
             }
         }
         if ([value isEqualToString:@"code-block"]) {
-            restoredSelection=NSMakeRange(NSNotFound,0); // Code blocks leave the editable text domain.
+            restoredSelection=NSMakeRange(NSNotFound,0);
             NSUInteger longest = 0, run = 0;
             for (NSUInteger i=0;i<body.length;i++) { run=[body characterAtIndex:i]=='`'?run+1:0;longest=MAX(longest,run); }
             NSString *fence = [@"" stringByPaddingToLength:MAX((NSUInteger)3,longest+1) withString:@"`" startingAtIndex:0];
@@ -6068,7 +6115,26 @@ to link outside that scope.", \
             body = [NSString stringWithFormat:@"\n$$\n%@\n$$\n",body];
         } else if (prefix == nil) return NO;
         if (newline.length) body = [body stringByAppendingString:newline];
-        return [self replacePreviewRange:lineRange withString:body preservingSelection:selectedRange restoringRange:restoredSelection];
+        if (!structuralEdits.count)
+            return [self replacePreviewRange:lineRange withString:body preservingSelection:selectedRange restoringRange:restoredSelection];
+        NSString *result=[source stringByReplacingCharactersInRange:lineRange withString:body];
+        // Commit the structural unwrap and formatting as one native edit. A
+        // minimal contiguous envelope retains all neighboring source bytes.
+        NSUInteger start=0,common=MIN(originalSource.length,result.length);
+        while (start<common && [originalSource characterAtIndex:start]==[result characterAtIndex:start]) start++;
+        NSRange finalSelection=restoredSelection.location==NSNotFound ? restoredSelection
+            : NSMakeRange(lineRange.location+restoredSelection.location,restoredSelection.length);
+        start=MIN(start,originalSelection.location);
+        if (finalSelection.location!=NSNotFound) start=MIN(start,finalSelection.location);
+        NSUInteger oldEnd=originalSource.length,newEnd=result.length;
+        while (oldEnd>MAX(start,NSMaxRange(originalSelection)) &&
+            newEnd>MAX(start,finalSelection.location==NSNotFound ? start : NSMaxRange(finalSelection)) &&
+            [originalSource characterAtIndex:oldEnd-1]==[result characterAtIndex:newEnd-1]) { oldEnd--;newEnd--; }
+        NSRange replacementRange=NSMakeRange(start,oldEnd-start);
+        NSRange restoration=finalSelection.location==NSNotFound ? finalSelection
+            : NSMakeRange(finalSelection.location-start,finalSelection.length);
+        return [self replacePreviewRange:replacementRange withString:[result substringWithRange:NSMakeRange(start,newEnd-start)]
+            preservingSelection:originalSelection restoringRange:restoration];
     }
     if ([action isEqualToString:@"strike"] && !self.preferences.extensionStrikethough) return NO;
     BOOL emphasis = [@[@"bold",@"italic",@"underline",@"strike"] containsObject:action];
