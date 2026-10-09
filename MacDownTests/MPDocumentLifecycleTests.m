@@ -1580,6 +1580,14 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
         expected:@"\n```\n- item\n```\n\n" HTML:@"- item"];
 }
 
+- (void)testPreviewMultilineQuoteToCodeRemovesEmptyStructuralLines
+{
+    [self assertPreviewBlockSource:@"> first\n>\n> second\n\nNeighbor.\n" texts:@[@"first",@"second"] value:@"code-block"
+        expected:@"\n```\nfirst\n\nsecond\n```\n\n\nNeighbor.\n" HTML:@"first\n\nsecond"];
+    [self assertPreviewBlockSource:@"> > first\n> >\n> > second\n" texts:@[@"first",@"second"] value:@"code-block"
+        expected:@"\n```\nfirst\n\nsecond\n```\n\n" HTML:@"first\n\nsecond"];
+}
+
 - (void)testPreviewCalloutCreatesLocalizedDefaultTitleForEveryType
 {
     for (NSString *type in @[@"note",@"tip",@"warning",@"important",@"caution"]) {

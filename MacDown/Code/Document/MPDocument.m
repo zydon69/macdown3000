@@ -6321,7 +6321,20 @@ to link outside that scope.", \
                             [processed appendString:line[@"ending"]];
                         }
                     }
-                } else [processed appendString:text];
+                } else {
+                    if ([value isEqualToString:@"code-block"] && [text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet].length) {
+                        NSRegularExpression *emptyQuote=[NSRegularExpression regularExpressionWithPattern:@"^ {0,3}(?:>[ \t]?)+[ \t]*$" options:0 error:NULL];
+                        if ([emptyQuote firstMatchInString:text options:0 range:NSMakeRange(0,text.length)]) {
+                            NSXMLDocument *DOM=MPPIParseHTML([self.renderer HTMLForMarkdownSnapshot:text]);
+                            NSArray<NSXMLNode *> *roots=[DOM nodesForXPath:@"//body/*" error:NULL];
+                            NSXMLNode *body=[[DOM nodesForXPath:@"//body" error:NULL] firstObject];
+                            BOOL empty=body && ![body.stringValue stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet].length;
+                            if (!empty || (roots.count && (roots.count!=1 || ![roots.firstObject.name.lowercaseString isEqualToString:@"blockquote"]))) return NO;
+                            outputText=@"";
+                        }
+                    }
+                    [processed appendString:outputText];
+                }
                 // Carry exact source endpoints through each line's prefix and
                 // suffix edits. Searching the old union text cannot work when
                 // another selected paragraph gained markup inside that union.
