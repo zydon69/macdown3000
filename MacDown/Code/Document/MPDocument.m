@@ -2680,8 +2680,10 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
         return;
     }
 
-    if (self.printing)
+    if (self.printing) {
+        self.renderToWebPending = YES;
         return;
+    }
 
     [self preparePreviewCalloutStatesForRenderer:renderer];
     self.awaitingRequestedRender = NO;
@@ -5682,7 +5684,15 @@ to link outside that scope.", \
         }
     }
 
-    if ([doc respondsToSelector:@selector(setPrinting:)]) mpDoc.printing = NO;
+    if ([doc respondsToSelector:@selector(setPrinting:)]) {
+        mpDoc.printing = NO;
+        // Keep the print snapshot stable, then publish the latest source even
+        // when printing was cancelled. Completion consumers await that load.
+        if (!mpDoc.documentClosed && mpDoc.renderToWebPending && !mpDoc.alreadyRenderingInWeb) {
+            mpDoc.renderToWebPending = NO;
+            [mpDoc.renderer parseAndRenderNow];
+        }
+    }
     if (context)
     {
         NSInvocation *invocation = (__bridge_transfer NSInvocation *)context;

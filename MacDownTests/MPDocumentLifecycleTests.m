@@ -125,6 +125,7 @@
 @property (nonatomic) BOOL isPreviewReady;
 @property (nonatomic) BOOL alreadyRenderingInWeb;
 @property (nonatomic) BOOL renderToWebPending;
+@property (nonatomic) BOOL printing;
 @property (weak) WebView *preview;
 @property (strong) MPResourceWatcherSet *resourceWatcherSet;
 @property (strong) NSSearchField *previewFindField;
@@ -2801,6 +2802,70 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
     }
 }
 
+
+- (void)testPreviewAndDeferredConsumerResumeAfterPrinting
+{
+    MPDocumentExportAuditProbe *document = [MPDocumentExportAuditProbe new];
+    MPPreferences *preferences = document.preferences;
+    BOOL math = preferences.htmlMathJax, mermaid = preferences.htmlMermaid;
+    BOOL graphviz = preferences.htmlGraphviz;
+    MPEditorView *editor = [[MPEditorView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600)];
+    editor.string = @"# Before printing";
+    document.editor = editor;
+    WebView *preview = [[WebView alloc] initWithFrame:NSMakeRect(0, 0, 800, 600)];
+    document.preview = preview;
+    preview.frameLoadDelegate = (id<WebFrameLoadDelegate>)document;
+    MPRenderer *renderer = [MPRenderer new];
+    renderer.delegate = (id<MPRendererDelegate>)document;
+    renderer.dataSource = (id<MPRendererDataSource>)document;
+    document.renderer = renderer;
+    @try {
+        preferences.htmlMathJax = NO;
+        preferences.htmlMermaid = NO;
+        preferences.htmlGraphviz = NO;
+        XCTestExpectation *initial = [self expectationWithDescription:@"Preview before printing"];
+        [document performAfterRender:^{ [initial fulfill]; }];
+        [self waitForExpectations:@[initial] timeout:10];
+
+        for (NSNumber *printSucceeded in @[@YES, @NO]) {
+            NSString *heading = printSucceeded.boolValue ? @"Changed during print" : @"Changed during cancelled print";
+            document.printing = YES;
+            editor.string = [@"# " stringByAppendingString:heading];
+            // The real parser can finish while AppKit's print operation is
+            // running its nested event loop. The printed DOM must stay stable.
+            [renderer parseMarkdown:editor.string];
+            [renderer render];
+            XCTAssertNotEqualObjects([[preview.mainFrame.javaScriptContext
+                evaluateScript:@"document.querySelector('h1').textContent"] toString], heading);
+
+            XCTestExpectation *consumer = [self expectationWithDescription:@"Consumer resumes with current rendered content"];
+            NSUInteger publicationsBeforeRequest = document.publishedHTML.count;
+            __block BOOL consumed = NO;
+            XCTAssertTrue([document performAfterRender:^{
+                XCTAssertEqualObjects([[preview.mainFrame.javaScriptContext
+                    evaluateScript:@"document.querySelector('h1').textContent"] toString], heading);
+                XCTAssertEqualObjects(renderer.checkboxSourceMarkdown, editor.string);
+                consumed = YES;
+                [consumer fulfill];
+            }]);
+            XCTNSPredicateExpectation *parsed = [[XCTNSPredicateExpectation alloc]
+                initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id object, NSDictionary *bindings) {
+                    return document.publishedHTML.count > publicationsBeforeRequest;
+                }] object:document];
+            [self waitForExpectations:@[parsed] timeout:10];
+            XCTAssertFalse(consumed, @"The print snapshot must stay unchanged until print completion");
+            [document document:document didPrint:printSucceeded.boolValue context:NULL];
+            [self waitForExpectations:@[consumer] timeout:10];
+            XCTAssertFalse(document.printing);
+        }
+    } @finally {
+        preview.frameLoadDelegate = nil;
+        [document close];
+        preferences.htmlMathJax = math;
+        preferences.htmlMermaid = mermaid;
+        preferences.htmlGraphviz = graphviz;
+    }
+}
 
 - (void)testDeferredConsumerSeesCompletedRealMermaidDiagrams
 {
