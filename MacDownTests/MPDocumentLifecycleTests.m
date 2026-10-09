@@ -1571,6 +1571,177 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
     }
 }
 
+// Exercise the real preview endpoint, validator, parser and transaction. Only
+// literal DOM mappings are supplied, as in the focused block-conversion tests.
+- (NSArray<NSString *> *)blockConversionTypes
+{
+    return @[@"paragraph",@"h1",@"h2",@"h3",@"h4",@"h5",@"h6",@"unordered",@"ordered",@"tasks",@"quote",@"code-block",@"callout-note",@"callout-tip",@"callout-warning",@"callout-important",@"callout-caution",@"toggle",@"toggle-h1",@"toggle-h2",@"toggle-h3",@"toggle-h4"];
+}
+
+- (NSArray<NSDictionary *> *)blockConversionFixtures
+{
+    NSArray *types=[self blockConversionTypes];
+    NSMutableArray *fixtures=[NSMutableArray array];
+    NSString *text=@"Contenu é 日本語";
+    for (NSString *type in types) {
+        NSString *block;
+        BOOL container=[type hasPrefix:@"callout-"] || [type hasPrefix:@"toggle"];
+        if (container) {
+            NSString *kind=[type hasPrefix:@"callout-"] ? [type substringFromIndex:8] : @"note";
+            NSString *collapse=[type hasPrefix:@"toggle"] ? @" collapse=\"true\"" : @"";
+            NSUInteger level=[type hasPrefix:@"toggle-h"] ? [[type substringFromIndex:8] integerValue] : 2;
+            NSString *heading=[@"######" substringToIndex:level];
+            block=[NSString stringWithFormat:@"::: {.callout-%@%@}\n%@ Titre conservé\n%@\n:::\n",kind,collapse,heading,text];
+            [fixtures addObject:@{@"type":type,@"role":@"body",@"block":block,@"other":@"Titre conservé"}];
+            block=[NSString stringWithFormat:@"::: {.callout-%@%@}\n%@ %@\nCorps conservé\n:::\n",kind,collapse,heading,text];
+            [fixtures addObject:@{@"type":type,@"role":@"title",@"block":block,@"other":@"Corps conservé"}];
+            continue;
+        }
+        NSDictionary *markers=@{@"paragraph":@"",@"unordered":@"- ",@"ordered":@"7. ",@"tasks":@"- [ ] ",@"quote":@"> "};
+        if ([type isEqualToString:@"code-block"]) block=[NSString stringWithFormat:@"```text\n%@\n```\n",text];
+        else {
+            NSString *marker=[type hasPrefix:@"h"] ? [[@"######" substringToIndex:[[type substringFromIndex:1] integerValue]] stringByAppendingString:@" "] : markers[type];
+            block=[NSString stringWithFormat:@"%@%@\n",marker,text];
+        }
+        [fixtures addObject:@{@"type":type,@"role":@"body",@"block":block}];
+    }
+    return fixtures;
+}
+
+- (NSMutableDictionary *)blockConversionEntryForFixture:(NSDictionary *)fixture source:(NSString *)source
+{
+    NSString *text=@"Contenu é 日本語";
+    NSRange selected=[source rangeOfString:text];
+    NSMutableDictionary *entry=[@{@"location":@(selected.location),@"length":@(selected.length),@"text":text} mutableCopy];
+    if ([fixture[@"type"] isEqualToString:@"code-block"]) {
+        NSMutableArray *boundaries=[NSMutableArray array];
+        for (NSUInteger i=0;i<=text.length;i++) [boundaries addObject:@(selected.location+i)];
+        entry[@"displayText"]=text; entry[@"sourceBoundaries"]=boundaries;
+        entry[@"codeBlockRange"]=[NSValue valueWithRange:[source rangeOfString:fixture[@"block"]]];
+        entry[@"codeContentRange"]=[NSValue valueWithRange:NSMakeRange(selected.location,text.length+1)];
+    }
+    return entry;
+}
+
+- (void)testEveryEditableBlockConvertsToEveryBlockDestination
+{
+    NSArray *targets=[[self blockConversionTypes] arrayByAddingObject:@"math-block"];
+    NSArray *fixtures=[self blockConversionFixtures];
+    NSString *text=@"Contenu é 日本語";
+    MPPreferences *preferences=self.document.preferences;
+    BOOL tasks=preferences.htmlTaskList,fenced=preferences.extensionFencedCode,math=preferences.htmlMathJax,smart=preferences.extensionSmartyPants;
+    NSMutableArray *results=[NSMutableArray array];
+    @try {
+        preferences.htmlTaskList=YES; preferences.extensionFencedCode=YES; preferences.htmlMathJax=YES; preferences.extensionSmartyPants=NO;
+        for (NSDictionary *fixture in fixtures) for (NSString *target in targets) @autoreleasepool {
+            NSString *context=[NSString stringWithFormat:@"%@ (%@) → %@",fixture[@"type"],fixture[@"role"],target];
+            MPDocument *document=[MPDocument new];
+            MPEditorView *editor=[[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+            MPRenderer *renderer=[MPRenderer new];
+            document.editor=editor; document.renderer=renderer;
+            renderer.delegate=(id<MPRendererDelegate>)document; renderer.dataSource=(id<MPRendererDataSource>)document;
+            @try {
+                renderer.rendererFlags=preferences.rendererFlags;
+                NSString *before=@"Avant voisin.\n\n",*after=@"\nAprès voisin.\n";
+                NSString *source=[NSString stringWithFormat:@"%@%@%@",before,fixture[@"block"],after];
+                editor.string=source;
+                [renderer parseMarkdown:source];
+                NSMutableDictionary *entry=[self blockConversionEntryForFixture:fixture source:source];
+                document.previewEditRanges=@[entry]; document.previewEditSource=source;
+                document.previewEditToken=renderer.checkboxBridgeToken;
+                BOOL accepted=[document applyPreviewEditPayload:@{@"token":document.previewEditToken,@"id":@0,@"start":@0,@"end":@(text.length),@"text":text,@"action":@"block",@"value":target}];
+                XCTAssertTrue(accepted,@"%@",context);
+                if (!accepted) continue;
+                XCTAssertTrue([editor.string hasPrefix:before],@"%@ — preceding neighbor",context);
+                XCTAssertTrue([editor.string hasSuffix:after],@"%@ — following neighbor",context);
+                XCTAssertFalse([editor.string containsString:@"<"],@"%@ — Markdown source only",context);
+                NSString *HTML=[renderer HTMLForMarkdownSnapshot:editor.string];
+                // Parse the HTML5 containers as XML instead of HTML tidy, whose
+                // legacy recovery flattens aside/details/summary. Input is the
+                // only HTML void element emitted by these controlled fixtures.
+                NSRegularExpression *inputs=[NSRegularExpression regularExpressionWithPattern:@"<input([^>]*)>" options:0 error:NULL];
+                NSString *XML=[inputs stringByReplacingMatchesInString:HTML options:0 range:NSMakeRange(0,HTML.length) withTemplate:@"<input$1 />"];
+                XML=[NSString stringWithFormat:@"<html><body>%@</body></html>",XML];
+                NSXMLDocument *DOM=[[NSXMLDocument alloc] initWithXMLString:XML options:NSXMLNodeLoadExternalEntitiesNever error:NULL];
+                XCTAssertNotNil(DOM,@"%@",context);
+                NSXMLNode *body=[[DOM nodesForXPath:@"//body" error:NULL] firstObject];
+                XCTAssertTrue([body.stringValue containsString:text],@"%@ — selected content",context);
+                if (fixture[@"other"]) XCTAssertTrue([body.stringValue containsString:fixture[@"other"]],@"%@ — unselected container content",context);
+                NSString *path;
+                if ([target isEqualToString:@"code-block"]) path=@"//pre/code";
+                else if ([target isEqualToString:@"quote"]) path=@"//blockquote";
+                else if ([target isEqualToString:@"ordered"]) path=@"//ol/li";
+                else if ([target isEqualToString:@"tasks"]) path=@"//li[@class='task-list-item']";
+                else if ([target isEqualToString:@"unordered"]) path=@"//ul/li";
+                else if ([target hasPrefix:@"callout-"]) path=[NSString stringWithFormat:@"//*[contains(concat(' ',normalize-space(@class),' '),' mp-callout-%@ ')]",[target substringFromIndex:8]];
+                else if ([target hasPrefix:@"toggle"]) path=@"//details";
+                else if ([target hasPrefix:@"h"]) path=[NSString stringWithFormat:@"//%@",target];
+                else path=@"//p";
+                NSArray<NSXMLNode *> *nodes=[DOM nodesForXPath:path error:NULL];
+                BOOL matches=NO;
+                for (NSXMLNode *node in nodes) {
+                    NSString *visible=[node.stringValue stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+                    BOOL container=[target hasPrefix:@"callout-"] || [target hasPrefix:@"toggle"];
+                    BOOL selectedTitle=[fixture[@"role"] isEqualToString:@"title"];
+                    if (container ? [visible containsString:text] : selectedTitle ? [visible hasPrefix:text] : [visible isEqualToString:text]) { matches=YES; break; }
+                }
+                if ([target isEqualToString:@"math-block"]) {
+                    XCTAssertEqual([editor.string componentsSeparatedByString:@"$$"].count,3u,@"%@ — math delimiters",context);
+                } else XCTAssertTrue(matches,@"%@ — target structure %@; %@",context,path,HTML);
+                if ([target isEqualToString:@"tasks"]) XCTAssertEqual([DOM nodesForXPath:@"//li[@class='task-list-item']/input[@type='checkbox']" error:NULL].count,1u,@"%@",context);
+                if ([target hasPrefix:@"toggle-h"]) {
+                    NSString *headingPath=[NSString stringWithFormat:@"//details/summary/h%@",[target substringFromIndex:8]];
+                    XCTAssertEqual([DOM nodesForXPath:headingPath error:NULL].count,1u,@"%@ — disclosure heading",context);
+                }
+                if (![target hasPrefix:@"callout-"] && ![target hasPrefix:@"toggle"] && ![target isEqualToString:@"code-block"]) XCTAssertFalse([editor.string containsString:@":::"],@"%@ — old wrappers removed",context);
+                XCTAssertEqual([body.stringValue componentsSeparatedByString:text].count,2u,@"%@ — content appears once",context);
+                [results addObject:@{@"source":fixture[@"type"],@"selection":fixture[@"role"],@"target":target}];
+            } @finally { [document close]; }
+        }
+        XCTAssertEqual(results.count,fixtures.count*targets.count);
+        XCTAttachment *attachment=[XCTAttachment attachmentWithData:[NSJSONSerialization dataWithJSONObject:results options:NSJSONWritingPrettyPrinted error:NULL] uniformTypeIdentifier:@"public.json"];
+        attachment.name=@"Block conversion matrix — exercised pairs"; attachment.lifetime=XCTAttachmentLifetimeKeepAlways;
+        [self addAttachment:attachment];
+    } @finally {
+        preferences.htmlTaskList=tasks; preferences.extensionFencedCode=fenced; preferences.htmlMathJax=math; preferences.extensionSmartyPants=smart;
+    }
+}
+
+- (void)testAllBlockSourcesRefuseDisabledDestinationsWithoutChangingSourceOrSelection
+{
+    MPPreferences *preferences=self.document.preferences;
+    BOOL tasks=preferences.htmlTaskList,fenced=preferences.extensionFencedCode,math=preferences.htmlMathJax,smart=preferences.extensionSmartyPants;
+    NSString *text=@"Contenu é 日本語";
+    @try {
+        preferences.extensionSmartyPants=NO;
+        for (NSDictionary *fixture in [self blockConversionFixtures]) for (NSString *target in @[@"tasks",@"code-block",@"math-block"]) @autoreleasepool {
+            preferences.htmlTaskList=YES; preferences.extensionFencedCode=YES; preferences.htmlMathJax=YES;
+            MPDocument *document=[MPDocument new];
+            MPEditorView *editor=[[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+            MPRenderer *renderer=[MPRenderer new];
+            document.editor=editor; document.renderer=renderer;
+            renderer.delegate=(id<MPRendererDelegate>)document; renderer.dataSource=(id<MPRendererDataSource>)document;
+            @try {
+                NSString *source=[NSString stringWithFormat:@"Avant voisin.\n\n%@\nAprès voisin.\n",fixture[@"block"]];
+                editor.string=source; editor.selectedRange=[source rangeOfString:text];
+                renderer.rendererFlags=preferences.rendererFlags; [renderer parseMarkdown:source];
+                document.previewEditRanges=@[[self blockConversionEntryForFixture:fixture source:source]];
+                document.previewEditSource=source; document.previewEditToken=renderer.checkboxBridgeToken;
+                if ([target isEqualToString:@"tasks"]) preferences.htmlTaskList=NO;
+                else if ([target isEqualToString:@"code-block"]) preferences.extensionFencedCode=NO;
+                else preferences.htmlMathJax=NO;
+                NSString *context=[NSString stringWithFormat:@"%@ (%@) → %@ disabled",fixture[@"type"],fixture[@"role"],target];
+                BOOL accepted=[document applyPreviewEditPayload:@{@"token":document.previewEditToken,@"id":@0,@"start":@0,@"end":@(text.length),@"text":text,@"action":@"block",@"value":target}];
+                XCTAssertFalse(accepted,@"%@",context);
+                XCTAssertEqualObjects(editor.string,source,@"%@",context);
+                XCTAssertTrue(NSEqualRanges(editor.selectedRange,[source rangeOfString:text]),@"%@",context);
+            } @finally { [document close]; }
+        }
+    } @finally {
+        preferences.htmlTaskList=tasks; preferences.extensionFencedCode=fenced; preferences.htmlMathJax=math; preferences.extensionSmartyPants=smart;
+    }
+}
+
 - (void)testPreviewListToolbarUsesTheSameConversionAsBlockMenu
 {
     MPDocument *document=[MPDocument new];
@@ -1622,6 +1793,45 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
     } @finally {
         web.frameLoadDelegate=nil; web.policyDelegate=nil; window.contentView=nil; [window close]; [document close];
         document.preferences.htmlMathJax=math; document.preferences.extensionSmartyPants=smart; document.preferences.htmlTaskList=tasks;
+    }
+}
+
+- (void)testPreviewOrderedListWritesSequentialSourceNumbers
+{
+    MPDocument *document=[MPDocument new];
+    document.fileURL=self.testFileURL;
+    MPEditorView *editor=[[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,640,480)];
+    WebView *web=[[WebView alloc] initWithFrame:NSMakeRect(0,0,640,480)];
+    NSWindow *window=[[NSWindow alloc] initWithContentRect:web.frame styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+    window.releasedWhenClosed=NO; window.contentView=web;
+    MPRenderer *renderer=[MPRenderer new];
+    document.editor=editor; document.preview=web; document.renderer=renderer;
+    renderer.delegate=(id<MPRendererDelegate>)document; renderer.dataSource=(id<MPRendererDataSource>)document;
+    web.frameLoadDelegate=(id<WebFrameLoadDelegate>)document; web.policyDelegate=(id<WebPolicyDelegate>)document;
+    BOOL math=document.preferences.htmlMathJax,smart=document.preferences.extensionSmartyPants;
+    @try {
+        document.preferences.htmlMathJax=NO; document.preferences.extensionSmartyPants=NO;
+        renderer.rendererFlags=document.preferences.rendererFlags;
+        editor.string=@"avant\nAprès\nlui\nmoi\ntoi\n\nNeighbor.\n";
+        [renderer parseMarkdown:editor.string]; [renderer render];
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:
+            [NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return !web.isLoading && !document.alreadyRenderingInWeb && document.previewEditRanges.count>0;}] object:web]] timeout:10];
+        NSMutableArray *expectedOptions=[[[self blockConversionTypes] arrayByAddingObject:@"math-block"] mutableCopy];
+        [expectedOptions removeObjectsInArray:@[@"h5",@"h6"]];
+        NSArray *actualOptions=[[web.mainFrame.javaScriptContext evaluateScript:@"Array.from(document.querySelector('#macdown-preview-format select').options).map(function(o){return o.value;}).filter(Boolean)"] toArray];
+        XCTAssertEqualObjects([NSSet setWithArray:actualOptions ?: @[]],[NSSet setWithArray:expectedOptions],@"Every menu option must belong to the conversion matrix");
+        [web stringByEvaluatingJavaScriptFromString:@"(function(){var r=document.createRange();r.selectNodeContents(document.querySelector('p'));getSelection().removeAllRanges();getSelection().addRange(r);})()"];
+        NSDictionary *payload=[[web.mainFrame.javaScriptContext evaluateScript:@"macdownPreviewEditor.selectionPayload('block','ordered')"] toDictionary];
+        XCTAssertNotNil(payload);
+        XCTAssertTrue([document applyPreviewEditPayload:payload]);
+        XCTAssertEqualObjects(editor.string,@"1. avant\n2. Après\n3. lui\n4. moi\n5. toi\n\nNeighbor.\n");
+        [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:
+            [NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return !web.isLoading && !document.alreadyRenderingInWeb && [document.previewEditSource isEqualToString:editor.string];}] object:web]] timeout:10];
+        XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"document.querySelectorAll('ol > li').length.toString()"],@"5");
+    } @finally {
+        document.preferences.htmlMathJax=math; document.preferences.extensionSmartyPants=smart;
+        web.frameLoadDelegate=nil; web.policyDelegate=nil;
+        window.contentView=nil; [window close]; [document close];
     }
 }
 
