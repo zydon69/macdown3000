@@ -2569,6 +2569,11 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
             XCTAssertTrue([editor.string containsString:@"**second**"],@"%@",value);
             XCTAssertTrue([editor.string hasSuffix:@"\nUntouched neighbor.\n"]);
             XCTAssertNotEqualObjects(editor.string,before);
+            [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:
+                [NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return !web.isLoading && !document.alreadyRenderingInWeb && [document.previewEditSource isEqualToString:editor.string];}] object:web]] timeout:10];
+            if (![value isEqualToString:@"callout"])
+                XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"String(document.querySelector('details').open)"],@"true",
+                    @"Native inline formatting must preserve the live disclosure state");
         }
     } @finally {
         web.frameLoadDelegate=nil; [document close];
@@ -2897,6 +2902,7 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
         if (customStylePath) [NSFileManager.defaultManager removeItemAtPath:customStylePath error:NULL];
     }
 }
+
 
 - (void)testFencedPreviewSelectionKeepsPrismAndMapsPhysicalUTF16Source
 {

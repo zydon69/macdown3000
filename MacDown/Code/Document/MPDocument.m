@@ -218,6 +218,42 @@ static NSString * const kMPPreparePDFAnchorsJS = @"(function(args) {\n"
 static const CGFloat kMPMinZoom = 0.5;
 static const CGFloat kMPMaxZoom = 3.0;
 
+// The native renderer provides the only identities eligible for restoration.
+// Authored <details>, even with the same callout classes, retain their own source
+// defaults. Run this before typesetting and scroll geometry on either load path.
+static NSString * const MPPreviewRestoreCalloutStateJavaScript =
+    @"(function(){var states=window.__macdownCalloutStates;delete window.__macdownCalloutStates;"
+    @"if(!states)return;var nodes=document.getElementsByTagName('details');"
+    @"for(var i=0;i<nodes.length;i++){var token=nodes[i].getAttribute('data-macdown-callout-token');"
+    @"if(token&&Object.prototype.hasOwnProperty.call(states,token))nodes[i].open=Boolean(states[token]);}})()";
+
+static NSRange MPPreviewRemapCalloutOpening(NSDictionary *entry, NSString *before,
+    NSString *after, NSUInteger prefix, NSUInteger suffix)
+{
+    NSRange opening = [entry[@"sourceOpenRange"] rangeValue];
+    NSRange closing = [entry[@"sourceCloseRange"] rangeValue];
+    if (!opening.length || opening.location > before.length ||
+        opening.length > before.length - opening.location ||
+        closing.location > before.length || closing.length > before.length - closing.location ||
+        closing.location < NSMaxRange(opening)) return NSMakeRange(NSNotFound,0);
+    if (NSMaxRange(opening) <= prefix) return opening;
+    if (opening.location >= before.length - suffix) {
+        opening.location = after.length - (before.length - opening.location);
+        return opening;
+    }
+    // Removing an outer wrapper changes two distant delimiters. A nested
+    // callout inside that edited span can still be identified by its entire
+    // unchanged source, but only when that source has one possible occurrence.
+    NSString *unchanged = [before substringWithRange:
+        NSMakeRange(opening.location,NSMaxRange(closing)-opening.location)];
+    NSRange match = [after rangeOfString:unchanged];
+    if (match.location == NSNotFound) return NSMakeRange(NSNotFound,0);
+    NSRange another = [after rangeOfString:unchanged options:0
+        range:NSMakeRange(match.location+1,after.length-match.location-1)];
+    if (another.location != NSNotFound) return NSMakeRange(NSNotFound,0);
+    return NSMakeRange(match.location,opening.length);
+}
+
 NS_INLINE NSString *MPEditorPreferenceKeyWithValueKey(NSString *key)
 {
     if (!key.length)
@@ -507,6 +543,10 @@ typedef NS_ENUM(NSInteger, MPReferenceKind) {
 @property (copy) NSString *previewEditToken;
 @property (copy) NSDictionary *previewSelectionToRestore;
 @property (strong) NSMutableArray<NSDictionary *> *previewQueuedFormatting;
+@property (copy) NSArray<NSDictionary *> *currentPreviewCallouts;
+@property (copy) NSString *currentPreviewCalloutSource;
+@property (copy) NSDictionary<NSString *, NSNumber *> *pendingPreviewCalloutStates;
+@property BOOL resetPreviewCalloutStates;
 @property (weak) IBOutlet NSPopUpButton *wordCountWidget;
 @property (strong) NSTextField *readingProgressLabel;
 @property (strong) NSArray<NSLayoutConstraint *> *readingProgressConstraints;
@@ -652,6 +692,8 @@ typedef NS_ENUM(NSInteger, MPReferenceKind) {
 - (BOOL)performAfterRender:(void (^)(void))handler;
 - (void)invokeRenderCompletionHandlers;
 - (void)finishPreviewRender;
+- (void)preparePreviewCalloutStatesForRenderer:(MPRenderer *)renderer;
+- (void)restorePreviewCalloutStates;
 + (NSInvocation *)printCompletionForDelegate:(id)delegate selector:(SEL)selector context:(void *)context;
 - (void)willStartPreviewLiveScroll:(NSNotification *)notification;
 - (void)didEndPreviewLiveScroll:(NSNotification *)notification;
@@ -1503,6 +1545,9 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     self.previewEditToken = nil;
     self.previewSelectionToRestore = nil;
     self.previewQueuedFormatting = nil;
+    self.currentPreviewCallouts = nil;
+    self.currentPreviewCalloutSource = nil;
+    self.pendingPreviewCalloutStates = nil;
     if (self.readingProgressScrollMonitor) {
         [NSEvent removeMonitor:self.readingProgressScrollMonitor];
         self.readingProgressScrollMonitor = nil;
@@ -2162,6 +2207,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 - (void)webView:(WebView *)sender didFinishLoadForFrame:(WebFrame *)frame
 {
     if (frame != sender.mainFrame || self.documentClosed) return;
+    [self restorePreviewCalloutStates];
     [self applyPreviewZoom];
     if (!self.preferences.htmlMathJax)
         [[NSOperationQueue mainQueue] addOperationWithBlock:MPGetPreviewLoadingCompletionHandler(self)];
@@ -2457,8 +2503,71 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     return items;
 }
 
+- (void)preparePreviewCalloutStatesForRenderer:(MPRenderer *)renderer
+{
+    if (self.resetPreviewCalloutStates || !self.currentPreviewCallouts.count ||
+        !renderer.calloutSourceEntries.count || !self.isPreviewReady) {
+        self.pendingPreviewCalloutStates = @{};
+        self.currentPreviewCallouts = renderer.calloutSourceEntries;
+        self.currentPreviewCalloutSource = renderer.checkboxSourceMarkdown;
+        self.resetPreviewCalloutStates = NO;
+        return;
+    }
+    NSMutableDictionary<NSString *, NSNumber *> *oldStates = [NSMutableDictionary dictionary];
+    {
+        NSMutableSet *owned = [NSMutableSet set], *duplicates = [NSMutableSet set];
+        for (NSDictionary *entry in self.currentPreviewCallouts) [owned addObject:entry[@"token"]];
+        DOMNodeList *nodes = [self.preview.mainFrame.DOMDocument getElementsByTagName:@"details"];
+        for (NSUInteger i = 0; i < nodes.length; i++) {
+            DOMElement *element = (DOMElement *)[nodes item:(unsigned)i];
+            NSString *token = [element getAttribute:@"data-macdown-callout-token"];
+            if (![owned containsObject:token]) continue;
+            if (oldStates[token]) [duplicates addObject:token];
+            oldStates[token] = @([element hasAttribute:@"open"]);
+        }
+        for (NSString *token in duplicates) [oldStates removeObjectForKey:token];
+    }
+    NSString *before = self.currentPreviewCalloutSource ?: @"";
+    NSString *after = renderer.checkboxSourceMarkdown ?: @"";
+    NSUInteger prefix = 0, suffix = 0, common = MIN(before.length,after.length);
+    while (prefix < common && [before characterAtIndex:prefix] == [after characterAtIndex:prefix]) prefix++;
+    while (suffix < common-prefix &&
+           [before characterAtIndex:before.length-suffix-1] == [after characterAtIndex:after.length-suffix-1]) suffix++;
+    NSMutableDictionary<NSValue *, NSDictionary *> *newOpenings = [NSMutableDictionary dictionary];
+    for (NSDictionary *entry in renderer.calloutSourceEntries)
+        newOpenings[entry[@"sourceOpenRange"]] = entry;
+    NSMutableDictionary *restored = [NSMutableDictionary dictionary];
+    for (NSDictionary *entry in self.currentPreviewCallouts) {
+        NSNumber *state = oldStates[entry[@"token"]];
+        if (!state) continue;
+        NSRange mapped = MPPreviewRemapCalloutOpening(entry,before,after,prefix,suffix);
+        if (mapped.location == NSNotFound || mapped.location > after.length ||
+            mapped.length > after.length-mapped.location) continue;
+        NSDictionary *target = newOpenings[[NSValue valueWithRange:mapped]];
+        NSRange oldOpening = [entry[@"sourceOpenRange"] rangeValue];
+        if (target && [[before substringWithRange:oldOpening]
+            isEqualToString:[after substringWithRange:mapped]]) restored[target[@"token"]] = state;
+    }
+    self.pendingPreviewCalloutStates = restored;
+    self.currentPreviewCallouts = renderer.calloutSourceEntries;
+    self.currentPreviewCalloutSource = after;
+    self.resetPreviewCalloutStates = NO;
+}
+
+- (void)restorePreviewCalloutStates
+{
+    if (!self.pendingPreviewCalloutStates) return;
+    JSContext *context = self.preview.mainFrame.javaScriptContext;
+    context[@"window"][@"__macdownCalloutStates"] = self.pendingPreviewCalloutStates;
+    [context evaluateScript:MPPreviewRestoreCalloutStateJavaScript];
+    self.pendingPreviewCalloutStates = nil;
+}
+
 - (void)reloadPreview:(id)sender
 {
+    // Explicit Reload returns each callout to its source collapse preference.
+    // Consume this only when a render can actually replace the current page.
+    self.resetPreviewCalloutStates = YES;
     // Issue #318: Force CSS refresh from disk on explicit reload
     [self invalidateStyleCaches];
     [self.renderer parseAndRenderNow];
@@ -2564,6 +2673,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     if (self.printing)
         return;
 
+    [self preparePreviewCalloutStatesForRenderer:renderer];
     self.awaitingRequestedRender = NO;
     self.previewRenderGeneration++;
     self.alreadyRenderingInWeb = YES;
@@ -2633,6 +2743,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
                 JSContext *context = self.preview.mainFrame.javaScriptContext;
                 context[@"window"][@"__macdownTempHtml"] = bodyContent;
                 context[@"window"][@"__macdownTempCheckboxToken"] = renderer.checkboxBridgeToken;
+                context[@"window"][@"__macdownCalloutStates"] = self.pendingPreviewCalloutStates ?: @{};
 
                 NSString *updateScript = [NSString stringWithFormat:
                     @"(function(){"
@@ -2647,6 +2758,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
                     @"  var panel=ui&&ui.panel,editStyle=ui&&ui.style;"
                     @"  if(panel)panel.remove();if(editStyle)editStyle.remove();"
                     @"  body.innerHTML = html;"
+                    @"  %@;"
                     @"  if(editStyle)body.appendChild(editStyle);if(panel)body.appendChild(panel);"
                     @"  if(window.Prism&&typeof Prism.highlightAll==='function'){Prism.highlightAll();}"
                     @"  if(typeof window.macdownInitTaskList==='function'){window.macdownInitTaskList();}"
@@ -2663,7 +2775,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
                     @"    window.scrollTo(0,scrollY);"
                     @"  }"
                     @"})();",
-                    scrollBefore];
+                    scrollBefore, MPPreviewRestoreCalloutStateJavaScript];
 
                 // Issue #325 / Commit 8 (gap 9): Set up MathJax completion callback to
                 // update header locations after typesetting, which may change document height.
@@ -2700,6 +2812,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
                 }
 
                 [context evaluateScript:updateScript];
+                self.pendingPreviewCalloutStates = nil;
 
                 // Issue #342: For non-MathJax, sync at render completion and
                 // transition ownership to Neither. The deferred window.scrollTo
