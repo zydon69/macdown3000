@@ -164,3 +164,11 @@
 "A file already exists at the installation path" = "Файл вже існує за шляхом встановлення";
 "The macdown shell utility has been installed to %@.\n\nTo use it from Terminal, add this line to your shell configuration file (~/.zshrc or ~/.bash_profile):\n\n    export PATH=\"$HOME/.local/bin:$PATH\"" = "Shell-утиліту macdown встановлено в %@.\n\nЩоб використовувати її з Терміналу, додайте цей рядок до файлу конфігурації shell (~/.zshrc або ~/.bash_profile):\n\n    export PATH=\"$HOME/.local/bin:$PATH\"";
 
+
+/* Default Markdown titles for preview callouts and collapsible blocks. */
+"PreviewCalloutTitleNote" = "Примітка";
+"PreviewCalloutTitleTip" = "Порада";
+"PreviewCalloutTitleWarning" = "Попередження";
+"PreviewCalloutTitleImportant" = "Важливо";
+"PreviewCalloutTitleCaution" = "Увага";
+"PreviewToggleTitle" = "Передумови";

@@ -43,3 +43,11 @@
 "This file has been changed by another application. Do you want to discard your changes?" = "This file has been changed by another application. Do you want to discard your changes?";
 "Discard" = "Discard";
 "Keep" = "Keep";
+
+/* Default Markdown titles for preview callouts and collapsible blocks. */
+"PreviewCalloutTitleNote" = "Note";
+"PreviewCalloutTitleTip" = "Tip";
+"PreviewCalloutTitleWarning" = "Warning";
+"PreviewCalloutTitleImportant" = "Important";
+"PreviewCalloutTitleCaution" = "Caution";
+"PreviewToggleTitle" = "Prerequisites";

@@ -11,6 +11,7 @@
 
 #import <XCTest/XCTest.h>
 #import "MPDocument.h"
+#import "../MacDownCore/MPMarkdownPreprocessor.h"
 #import "MPPreferences.h"
 #import "MPRenderer.h"
 #import "MPEditorView.h"
@@ -1577,6 +1578,17 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
         expected:@"\n```\n> literal\n```\n\n" HTML:@"> literal"];
     [self assertPreviewBlockSource:@"# - **item**\n" texts:@[@"item"] value:@"code-block"
         expected:@"\n```\n- item\n```\n\n" HTML:@"- item"];
+}
+
+- (void)testPreviewCalloutCreatesLocalizedDefaultTitleForEveryType
+{
+    for (NSString *type in @[@"note",@"tip",@"warning",@"important",@"caution"]) {
+        NSString *expected=[NSString stringWithFormat:@"\n::: {.callout-%@}\n## %@\nTest\n:::\n\n\nNeighbor.\n",type,MPPreviewDefaultCalloutTitle(type,NO)];
+        [self assertPreviewBlockSource:@"Test\n\nNeighbor.\n" texts:@[@"Test"] value:[@"callout-" stringByAppendingString:type]
+            expected:expected HTML:[@"callout-" stringByAppendingString:type]];
+    }
+    [self assertPreviewBlockSource:@"Test\n\nNeighbor.\n" texts:@[@"Test"] value:@"toggle"
+        expected:[NSString stringWithFormat:@"\n::: {.callout-note collapse=\"true\"}\n## %@\nTest\n:::\n\n\nNeighbor.\n",MPPreviewDefaultCalloutTitle(@"note",YES)] HTML:@"<details"];
 }
 
 - (void)testPreviewCalloutTitleAndBodyConvertWithoutLosingOtherContent

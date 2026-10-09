@@ -172,3 +172,11 @@
 
 /* Convert heading to normal text toolbar button */
 "Normal Text" = "Texte normal";
+
+/* Default Markdown titles for preview callouts and collapsible blocks. */
+"PreviewCalloutTitleNote" = "Note";
+"PreviewCalloutTitleTip" = "Conseil";
+"PreviewCalloutTitleWarning" = "Avertissement";
+"PreviewCalloutTitleImportant" = "Important";
+"PreviewCalloutTitleCaution" = "Attention";
+"PreviewToggleTitle" = "Pré-requis";

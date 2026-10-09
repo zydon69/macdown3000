@@ -34,6 +34,7 @@
 #import "MPResourceWatcherSet.h"
 #import "MPHTMLResourceURLs.h"
 #import "MPPreviewInlineTransaction.h"
+#import "../../../MacDownCore/MPMarkdownPreprocessor.h"
 #import "MPURLSecurityPolicy.h"
 #import "MPFolderSidebarViewController.h"
 #import "MPSidebarSplitView.h"
@@ -5617,6 +5618,10 @@ to link outside that scope.", \
     self.previewEditSource = source;
     self.previewEditToken = token;
     NSMutableDictionary *configuration = [@{@"nodes":nodes, @"token":token, @"math":@(self.preferences.htmlMathJax), @"strike":@(self.preferences.extensionStrikethough), @"tasks":@(self.preferences.htmlTaskList), @"fenced":@(self.preferences.extensionFencedCode)} mutableCopy];
+    NSMutableDictionary *calloutTitles=[NSMutableDictionary dictionary];
+    for (NSString *type in @[@"note",@"tip",@"warning",@"important",@"caution"])
+        calloutTitles[type]=MPPreviewDefaultCalloutTitle(type,NO);
+    configuration[@"calloutTitles"]=calloutTitles;
     if (restore) {
         NSMutableArray *runs = [NSMutableArray array];
         NSMutableString *visible = [NSMutableString string];
@@ -6088,25 +6093,19 @@ to link outside that scope.", \
             for (NSUInteger i=0;i<body.length;i++) { run=[body characterAtIndex:i]=='`'?run+1:0;longest=MAX(longest,run); }
             NSString *fence = [@"" stringByPaddingToLength:MAX((NSUInteger)3,longest+1) withString:@"`" startingAtIndex:0];
             body = [NSString stringWithFormat:@"\n%@\n%@\n%@\n",fence,body,fence];
-        } else if ([value isEqualToString:@"callout"] || [value isEqualToString:@"toggle"] || [value hasPrefix:@"toggle-h"]) {
-            NSString *heading = @"";
+        } else if ([value isEqualToString:@"callout"] || [value hasPrefix:@"callout-"] || [value isEqualToString:@"toggle"] || [value hasPrefix:@"toggle-h"]) {
+            BOOL collapsible=[value isEqualToString:@"toggle"] || [value hasPrefix:@"toggle-h"];
+            NSString *type=[value hasPrefix:@"callout-"] ? [value substringFromIndex:8] : @"note";
+            NSString *title=MPPreviewDefaultCalloutTitle(type,collapsible);
+            if (!title || [body containsString:@":::"]) return NO;
+            NSUInteger level=2;
             if ([value hasPrefix:@"toggle-h"]) {
                 if (![@[@"toggle-h1",@"toggle-h2",@"toggle-h3",@"toggle-h4"] containsObject:value]) return NO;
-                NSUInteger level = [[value substringFromIndex:8] integerValue];
-                heading = [[@"####" substringToIndex:level] stringByAppendingString:@" "];
-                NSRegularExpression *existingHeading = [NSRegularExpression regularExpressionWithPattern:@"^ {0,3}#{1,6}[ \\t]+" options:0 error:NULL];
-                NSTextCheckingResult *marker=[existingHeading firstMatchInString:body options:0 range:NSMakeRange(0,body.length)];
-                NSUInteger removed=marker ? marker.range.length : 0;
-                body=[body substringFromIndex:removed];
-                if (restoredSelection.location!=NSNotFound) {
-                    NSUInteger start=restoredSelection.location>removed ? restoredSelection.location-removed : 0;
-                    NSUInteger end=NSMaxRange(restoredSelection)>removed ? NSMaxRange(restoredSelection)-removed : 0;
-                    restoredSelection=NSMakeRange(start,end-start);
-                }
+                level=[[value substringFromIndex:8] integerValue];
             }
-            if ([body containsString:@":::"]) return NO;
-            NSString *opening=[NSString stringWithFormat:@"\n::: {.callout-note%@}\n%@",
-                [value isEqualToString:@"callout"]?@"":@" collapse=\"true\"",heading];
+            NSString *heading=[[@"####" substringToIndex:level] stringByAppendingString:@" "];
+            NSString *opening=[NSString stringWithFormat:@"\n::: {.callout-%@%@}\n%@%@\n",type,
+                collapsible ? @" collapse=\"true\"" : @"",heading,title];
             if (restoredSelection.location!=NSNotFound) restoredSelection.location+=opening.length;
             body=[NSString stringWithFormat:@"%@%@\n:::\n",opening,body];
         } else if ([value isEqualToString:@"math-block"]) {

@@ -18,6 +18,7 @@
 #import "NSPasteboard+Types.h"
 #import "MPRendererTestHelpers.h"
 #import <hoedown/document.h>
+#import "../MacDownCore/MPMarkdownPreprocessor.h"
 
 @interface MPAuditOutputStream : NSOutputStream
 @property (strong) NSOutputStream *backingStream;
@@ -1175,6 +1176,7 @@
     XCTAssertNoThrow([view performSelector:NSSelectorFromString(@"updateContentGeometry")]);
 }
 
+
 - (void)testCalloutSourceMetadataPreservesExactUTF16DelimiterRanges {
     for (NSString *ending in @[@"\n", @"\r\n"]) {
         NSString *source = [NSString stringWithFormat:@"Before 😀%@::: {.callout-caution}%@## Attention%@Test%@:::%@After%@",
@@ -1234,6 +1236,22 @@
     XCTAssertNotNil(last[@"sourceCloseRange"]);
     if (last[@"sourceCloseRange"])
         XCTAssertEqual(NSMaxRange([last[@"sourceCloseRange"] rangeValue]), eof.length);
+}
+
+- (void)testDefaultCalloutTitlesAreLocalizedInFrenchAndEnglishResources {
+    NSDictionary *expected = @{
+        @"en": @[@"Note", @"Tip", @"Warning", @"Important", @"Caution", @"Prerequisites"],
+        @"fr": @[@"Note", @"Conseil", @"Avertissement", @"Important", @"Attention", @"Pré-requis"]
+    };
+    NSArray *keys = @[@"PreviewCalloutTitleNote", @"PreviewCalloutTitleTip", @"PreviewCalloutTitleWarning",
+        @"PreviewCalloutTitleImportant", @"PreviewCalloutTitleCaution", @"PreviewToggleTitle"];
+    for (NSString *language in expected) {
+        NSString *path = [NSBundle.mainBundle pathForResource:language ofType:@"lproj"];
+        XCTAssertNotNil(path);
+        NSBundle *bundle = path ? [NSBundle bundleWithPath:path] : nil;
+        for (NSUInteger i = 0; i < keys.count; i++)
+            XCTAssertEqualObjects([bundle localizedStringForKey:keys[i] value:@"missing" table:nil], expected[language][i]);
+    }
 }
 
 @end

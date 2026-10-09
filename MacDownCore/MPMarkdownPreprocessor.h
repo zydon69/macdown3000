@@ -102,6 +102,27 @@ NS_INLINE NSUInteger MPMarkdownQuoteDepth(NSString *line, NSUInteger *contentSta
     return depth;
 }
 
+// Default titles are inserted into Markdown source, using the app's selected
+// localization. Missing translations have human-readable English defaults.
+NS_INLINE NSString *MPPreviewDefaultCalloutTitle(NSString *type, BOOL collapsible)
+{
+    if (collapsible) return [NSBundle.mainBundle localizedStringForKey:@"PreviewToggleTitle"
+        value:@"Prerequisites" table:nil];
+    static NSDictionary<NSString *, NSArray<NSString *> *> *titles;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        titles = @{
+            @"note": @[@"PreviewCalloutTitleNote", @"Note"],
+            @"tip": @[@"PreviewCalloutTitleTip", @"Tip"],
+            @"warning": @[@"PreviewCalloutTitleWarning", @"Warning"],
+            @"important": @[@"PreviewCalloutTitleImportant", @"Important"],
+            @"caution": @[@"PreviewCalloutTitleCaution", @"Caution"]
+        };
+    });
+    NSArray<NSString *> *entry = type.length ? titles[type] : nil;
+    return entry ? [NSBundle.mainBundle localizedStringForKey:entry[0] value:entry[1] table:nil] : nil;
+}
+
 // A deliberately small Quarto subset. Unknown attributes and incomplete divs
 // remain source text. Opaque markers let the existing Markdown renderer parse
 // callout contents, rather than introducing another Markdown implementation.

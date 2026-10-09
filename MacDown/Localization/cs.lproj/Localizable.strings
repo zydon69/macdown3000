@@ -169,3 +169,11 @@
 "Source file does not exist" = "Zdrojový soubor neexistuje";
 "A file already exists at the installation path" = "Na cestě instalace již existuje soubor";
 "The macdown shell utility has been installed to %@.\n\nTo use it from Terminal, add this line to your shell configuration file (~/.zshrc or ~/.bash_profile):\n\n    export PATH=\"$HOME/.local/bin:$PATH\"" = "Nástroj macdown pro shell byl nainstalován do %@.\n\nPro použití z Terminálu přidejte tento řádek do konfiguračního souboru shellu (~/.zshrc nebo ~/.bash_profile):\n\n    export PATH=\"$HOME/.local/bin:$PATH\"";
+
+/* Default Markdown titles for preview callouts and collapsible blocks. */
+"PreviewCalloutTitleNote" = "Poznámka";
+"PreviewCalloutTitleTip" = "Tip";
+"PreviewCalloutTitleWarning" = "Varování";
+"PreviewCalloutTitleImportant" = "Důležité";
+"PreviewCalloutTitleCaution" = "Pozor";
+"PreviewToggleTitle" = "Předpoklady";

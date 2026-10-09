@@ -11,6 +11,7 @@
   var panel = null, panelStyle = null, errorMessage = null, active = null, saved = null, timer = null, errorSelection = null;
   var mappedSpans = [], panelClass = 'macdown-preview-ui-' + config.token.replace(/[^a-zA-Z0-9_-]/g,''), runClass = panelClass + '-run';
   var handlers = [], rendering = false, selectingWithMouse = false;
+  var calloutTypes = ['note','tip','warning','important','caution'];
   function listen(target, name, fn) {
     target.addEventListener(name, fn, false);
     handlers.push([target, name, fn]);
@@ -128,13 +129,20 @@
     panel.style.cssText = 'position:fixed;box-sizing:border-box;display:none;z-index:2147483647;background:#292929;color:#fff;border:1px solid #666;border-radius:8px;padding:8px;box-shadow:0 4px 20px #0005;width:420px;max-width:calc(100vw - 24px);max-height:calc(100vh - 16px);overflow:auto;font:13px -apple-system,sans-serif;';
     if(previousStyle) panel.style.cssText=previousStyle;
     listen(panel,'mousedown',function(e){ if(e.target.tagName === 'BUTTON') e.preventDefault(); });
+    var defaultCalloutTitles={note:'Note',tip:'Tip',warning:'Warning',important:'Important',caution:'Caution'};
+    var calloutOptions=calloutTypes.map(function(type){
+      var title=config.calloutTitles && config.calloutTitles[type];
+      return ['Encadré — '+(typeof title==='string' && title.length ? title : defaultCalloutTitles[type]),'callout-'+type];
+    });
     select('Texte normal / Bloc',[
       ['Texte normal','paragraph'],['Titre 1','h1'],['Titre 2','h2'],['Titre 3','h3'],['Titre 4','h4'],
       ['Liste à puces','unordered'],['Liste numérotée','ordered'],['Liste de tâches','tasks'],
-      ['Citation','quote'],['Code — bloc','code-block'],['Encadré','callout'],['Menu dépliant','toggle'],
+      ['Citation','quote'],['Code — bloc','code-block']
+    ].concat(calloutOptions,[
+      ['Menu dépliant','toggle'],
       ['Titre dépliant 1','toggle-h1'],['Titre dépliant 2','toggle-h2'],['Titre dépliant 3','toggle-h3'],['Titre dépliant 4','toggle-h4'],
       ['Équation — bloc','math-block']
-    ],function(value){command('block',value);});
+    ]),function(value){command('block',value);});
     button('Gras',function(){command('bold');},'bold');
     button('Italique',function(){command('italic');},'italic');
     button('Souligné',function(){command('underline');},'underline');
@@ -199,8 +207,12 @@
     function blockType(span) {
       if(!span) return '';
       var heading=span.closest('h1,h2,h3,h4,h5,h6'), details=span.closest('details');
-      if(span.closest('.mp-callout')) return 'callout';
       if(details) return heading?'toggle-'+heading.tagName.toLowerCase():'toggle';
+      var callout=span.closest('.mp-callout');
+      if(callout) {
+        var type=calloutTypes.find(function(name){return callout.classList.contains('mp-callout-'+name);});
+        return type?'callout-'+type:'';
+      }
       if(span.closest('li') && span.closest('ol,ul')) return span.closest('li').querySelector('input[type="checkbox"]')?'tasks':span.closest('ol,ul').tagName==='OL'?'ordered':'unordered';
       if(span.closest('blockquote')) return 'quote';
       if(heading) return heading.tagName.toLowerCase();
