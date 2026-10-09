@@ -495,6 +495,34 @@ static NSDictionary *MPPreviewInlineSingleChange(NSString *source, NSRange selec
 }
 
 
+// A rendered selection crossing a Setext heading and its next block includes
+// the underline in its contiguous source envelope. It is structural syntax,
+// not selected text. Only the complete parser can authorize skipping it.
+static BOOL MPPIIsHeadingUnderline(NSString *source, NSRange line, NSString *(^render)(NSString *))
+{
+    if (!line.location) return NO;
+    NSString *raw=[source substringWithRange:line];
+    NSRegularExpression *underline=[NSRegularExpression regularExpressionWithPattern:@"\\A {0,3}(?:=+|-+)[ \\t]*(?:\\r?\\n)?\\z" options:0 error:NULL];
+    if (![underline firstMatchInString:raw options:0 range:NSMakeRange(0,raw.length)]) return NO;
+    NSRange previous=[source lineRangeForRange:NSMakeRange(line.location-1,0)];
+    NSRange pair=NSMakeRange(previous.location,NSMaxRange(line)-previous.location);
+    NSXMLDocument *pairDOM=MPPIParseHTML(render([source substringWithRange:pair]));
+    NSArray *roots=[pairDOM nodesForXPath:@"//body/*" error:NULL];
+    NSXMLNode *root=roots.firstObject;
+    if (roots.count!=1 || ![@[@"h1",@"h2"] containsObject:root.name.lowercaseString]) return NO;
+    NSUInteger end;
+    [source getLineStart:NULL end:NULL contentsEnd:&end forRange:NSMakeRange(line.location-1,0)];
+    NSString *marker=[@"macdownSetextProbe" stringByAppendingString:NSUUID.UUID.UUIDString];
+    NSString *HTML=render([source stringByReplacingCharactersInRange:NSMakeRange(end,0) withString:marker]);
+    NSXMLDocument *DOM=MPPIParseHTML(HTML);
+    NSString *path=[NSString stringWithFormat:@"//h1[contains(string(.),'%@')]|//h2[contains(string(.),'%@')]",marker,marker];
+    if ([DOM nodesForXPath:path error:NULL].count!=1) return NO;
+    // The probe changes the generated heading slug. Pair parsing establishes
+    // the underline, and the full-source probe establishes its real context;
+    // comparing IDs derived from the marked title would reject valid Setext.
+    return YES;
+}
+
 static NSDictionary *MPPreviewInlineChange(NSString *source, NSRange selection, NSString *action,
                                           NSString *value, NSString *(^render)(NSString *),
                                           NSString *(^escape)(NSString *))
@@ -520,7 +548,10 @@ static NSDictionary *MPPreviewInlineChange(NSString *source, NSRange selection, 
         while(selected.length && [whitespace characterIsMember:[source characterAtIndex:NSMaxRange(selected)-1]]) selected.length--;
         if(selected.length) {
             NSDictionary *change=MPPreviewInlineSingleChange(source,selected,action,value,render,escape,@"auto");
-            if(!change) return nil;
+            if(!change) {
+                if (MPPIIsHeadingUnderline(source,line,render)) {cursor=NSMaxRange(line);continue;}
+                return nil;
+            }
             [items addObject:@{@"selected":[NSValue valueWithRange:selected],@"change":change}];
             [texts addObject:change[@"text"]];all=all && [change[@"active"] boolValue];
         } else [texts addObject:@""];

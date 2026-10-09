@@ -120,6 +120,11 @@ int main(void)
         NSString *mixedCode=@"`test` **`mot`** selection";
         NSDictionary *removedCode=MPPreviewInlineChange(mixedCode,[mixedCode rangeOfString:@"test` **`mot"],@"code",nil,^NSString *(NSString *s){return Render(s);},^NSString *(NSString *s){return Escape(s);});
         if(![removedCode[@"replacement"] isEqualToString:@"test **mot** selection"]) failures++;
+        for (NSString *action in @[@"bold",@"italic",@"underline",@"strike",@"code",@"link"])
+            Check(@"first\n====\n\nsecond\n",@"first\n====\n\nsecond",action,@"first\n\nsecond",YES);
+        // A rule after an ATX heading is not Setext metadata and must not be
+        // silently swallowed by a selection spanning the two blocks.
+        Check(@"# first\n---\n\nsecond\n",@"first\n---\n\nsecond",@"bold",nil,NO);
         return failures?1:0;
     }
 }
