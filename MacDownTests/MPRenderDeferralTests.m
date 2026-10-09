@@ -10,6 +10,28 @@
 
 #import <XCTest/XCTest.h>
 #import "MPDocument.h"
+#import <objc/runtime.h>
+
+// Substitute only panel presentation: real export cancellation must run without
+// leaving an application-modal save panel that blocks later AppKit actions.
+@interface MPDeferralCancelledSavePanel : NSObject
+@property (copy) NSArray *allowedFileTypes;
+@property (copy) NSString *nameFieldStringValue;
+@property (strong) NSView *accessoryView;
+@property NSUInteger presentations;
+@end
+@implementation MPDeferralCancelledSavePanel
+- (void)beginSheetModalForWindow:(NSWindow *)window completionHandler:(void (^)(NSInteger))completion
+{
+    self.presentations++;
+    completion(NSModalResponseCancel);
+}
+@end
+static MPDeferralCancelledSavePanel *MPDeferralCurrentPanel;
+static id MPDeferralSavePanelFactory(id receiver, SEL selector)
+{
+    return MPDeferralCurrentPanel;
+}
 
 #pragma mark - Test Category to Expose Private Methods
 
@@ -429,10 +451,20 @@
     XCTAssertFalse(self.document.needsHtml,
                    @"needsHtml should be NO without window controller");
 
-    // exportHtml: opens a save panel, so just verify it doesn't crash
-    // Full testing requires mocking NSSavePanel
-    XCTAssertNoThrow([self.document exportHtml:nil],
-                     @"exportHtml: should not crash");
+    MPDeferralCancelledSavePanel *panel = [MPDeferralCancelledSavePanel new];
+    MPDeferralCurrentPanel = panel;
+    Method factory = class_getClassMethod(NSSavePanel.class, @selector(savePanel));
+    IMP original = method_setImplementation(factory, (IMP)MPDeferralSavePanelFactory);
+    @try {
+        [self.document exportHtml:nil];
+        XCTAssertEqual(panel.presentations, 1u);
+        XCTAssertEqualObjects(panel.allowedFileTypes, (@[@"html"]));
+        XCTAssertEqual(self.document.renderCompletionHandlers.count, 0u,
+                       @"Cancelling export must not queue a render or write");
+    } @finally {
+        method_setImplementation(factory, original);
+        MPDeferralCurrentPanel = nil;
+    }
 }
 
 /**
@@ -444,9 +476,21 @@
     XCTAssertFalse(self.document.needsHtml,
                    @"needsHtml should be NO without window controller");
 
-    // exportPdf: opens a save panel, so just verify it doesn't crash
-    XCTAssertNoThrow([self.document exportPdf:nil],
-                     @"exportPdf: should not crash");
+    MPDeferralCancelledSavePanel *panel = [MPDeferralCancelledSavePanel new];
+    MPDeferralCurrentPanel = panel;
+    Method factory = class_getClassMethod(NSSavePanel.class, @selector(savePanel));
+    IMP original = method_setImplementation(factory, (IMP)MPDeferralSavePanelFactory);
+    @try {
+        [self.document exportPdf:nil];
+        XCTAssertEqualObjects(panel.allowedFileTypes, (@[@"pdf"]));
+        XCTAssertEqual(panel.presentations, 1u);
+        [self.document exportPdf:nil];
+        XCTAssertEqual(panel.presentations, 2u, @"Cancellation must release the PDF export slot");
+        XCTAssertEqual(self.document.renderCompletionHandlers.count, 0u);
+    } @finally {
+        method_setImplementation(factory, original);
+        MPDeferralCurrentPanel = nil;
+    }
 }
 
 - (void)testOldRenderCompletionCannotReleasePendingExport

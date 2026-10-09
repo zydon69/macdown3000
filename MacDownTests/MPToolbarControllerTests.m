@@ -63,6 +63,7 @@
 
 @interface MPToolbarControllerTests : XCTestCase
 @property (strong) MPToolbarController *controller;
+@property (strong) NSWindow *dispatchWindow;
 @end
 
 
@@ -76,8 +77,20 @@
 
 - (void)tearDown
 {
+    self.dispatchWindow.contentView = nil;
+    [self.dispatchWindow close];
+    self.dispatchWindow = nil;
     self.controller = nil;
     [super tearDown];
+}
+
+- (void)attachDispatchControlToWindow:(NSView *)control
+{
+    self.dispatchWindow = [[NSWindow alloc] initWithContentRect:NSMakeRect(0, 0, 300, 100)
+        styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+    self.dispatchWindow.releasedWhenClosed = NO;
+    [self.dispatchWindow.contentView addSubview:control];
+    [self.dispatchWindow makeKeyAndOrderFront:nil];
 }
 
 
@@ -811,6 +824,7 @@
 
 - (void)testActualListGroupControlDispatchesAllThreeListActions
 {
+    XCTAssertNil(NSApp.modalWindow, @"An earlier test must not leave a modal panel blocking toolbar actions");
     NSToolbarItemGroup *group = (NSToolbarItemGroup *)[self.controller toolbar:nil
                                                   itemForItemIdentifier:@"list-group"
                                               willBeInsertedIntoToolbar:YES];
@@ -823,6 +837,7 @@
     // Momentary controls expose the active segment only during a mouse event.
     // Retain that selection in this fixture to simulate dispatch during the click.
     control.trackingMode = NSSegmentSwitchTrackingSelectOne;
+    [self attachDispatchControlToWindow:control];
 
     MPToolbarDispatchRecorder *recorder = [[MPToolbarDispatchRecorder alloc] init];
     self.controller.document = (MPDocument *)recorder;
@@ -844,6 +859,7 @@
     if (group.subitems.count != 3) return;
 
     NSButton *button = (NSButton *)group.subitems[2].view;
+    [self attachDispatchControlToWindow:button];
     MPToolbarDispatchRecorder *recorder = [[MPToolbarDispatchRecorder alloc] init];
     self.controller.document = (MPDocument *)recorder;
     [button performClick:nil];
