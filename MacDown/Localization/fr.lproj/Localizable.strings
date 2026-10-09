@@ -64,6 +64,8 @@
 
 /* Inline code toolbar button */
 "Inline Code" = "Code en ligne";
+"Code" = "Code";
+"Code Block" = "Bloc de code";
 
 /* Install shell utility button */
 "Install" = "Installer";

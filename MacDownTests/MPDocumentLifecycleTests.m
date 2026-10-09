@@ -1812,7 +1812,7 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
     }
 }
 
-- (void)testPreviewListToolbarUsesTheSameConversionAsBlockMenu
+- (void)testPreviewBlockToolbarUsesTheSameConversionAsBlockMenu
 {
     MPDocument *document=[MPDocument new];
     document.fileURL=self.testFileURL;
@@ -1831,8 +1831,8 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
     @try {
         document.preferences.htmlMathJax=NO; document.preferences.extensionSmartyPants=NO; document.preferences.htmlTaskList=YES;
         renderer.rendererFlags=document.preferences.rendererFlags;
-        for (NSUInteger index=0;index<3;index++) {
-            NSString *value=@[@"unordered",@"ordered",@"tasks"][index];
+        for (NSUInteger index=0;index<4;index++) {
+            NSString *value=@[@"unordered",@"ordered",@"tasks",@"code-block"][index];
             NSString *menuSource=nil;
             for (NSUInteger mode=0;mode<2;mode++) {
                 editor.string=source; [renderer parseMarkdown:source]; [renderer render];
@@ -1848,14 +1848,14 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
                     XCTAssertTrue([document applyPreviewEditPayload:payload]);
                     menuSource=editor.string.copy;
                 } else {
-                    NSToolbarItemGroup *group=(id)[toolbar toolbar:nil itemForItemIdentifier:@"list-group" willBeInsertedIntoToolbar:YES];
-                    NSButton *button=(id)group.subitems[index].view;
+                    NSToolbarItemGroup *group=(id)[toolbar toolbar:nil itemForItemIdentifier:(index==3 ? @"code" : @"list-group") willBeInsertedIntoToolbar:YES];
+                    NSButton *button=(id)group.subitems[index==3 ? 1 : index].view;
                     [button performClick:nil];
                     XCTAssertEqualObjects(editor.string,menuSource,@"%@",value);
                 }
                 [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:
                     [NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return !web.isLoading && !document.alreadyRenderingInWeb && [document.previewEditSource isEqualToString:editor.string];}] object:web]] timeout:10];
-                NSString *expected=[NSString stringWithFormat:@"%@**Selected**\n\nNeighbor.\n",@[@"- ",@"1. ",@"- [ ] "][index]];
+                NSString *expected=index==3 ? @"\n```\nSelected\n```\n\n\nNeighbor.\n" : [NSString stringWithFormat:@"%@**Selected**\n\nNeighbor.\n",@[@"- ",@"1. ",@"- [ ] "][index]];
                 XCTAssertEqualObjects(editor.string,expected);
                 XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"getSelection().toString()"],@"Selected");
             }
@@ -1929,6 +1929,34 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
             XCTAssertEqualObjects(editor.string,scenario[2],@"%@",scenario[1]);
         } @finally { [document close]; }
     }
+}
+
+- (void)testSourceCodeBlockButtonUsesRenderedTextAndHonorsDisabledSyntax
+{
+    MPDocument *document=[MPDocument new];
+    MPEditorView *editor=[[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+    MPRenderer *renderer=[MPRenderer new];
+    document.editor=editor; document.renderer=renderer;
+    renderer.delegate=(id<MPRendererDelegate>)document; renderer.dataSource=(id<MPRendererDataSource>)document;
+    BOOL fenced=document.preferences.extensionFencedCode;
+    @try {
+        document.preferences.extensionFencedCode=YES;
+        NSArray *cases=@[
+            @[@"> **word**\n",@"\n```\nword\n```\n\n"],
+            @[@"# word\n",@"\n```\nword\n```\n\n"],
+            @[@"first\nsecond\n",@"\n```\nfirst\nsecond\n```\n\n"]
+        ];
+        for (NSArray *scenario in cases) {
+            editor.string=scenario[0]; editor.selectedRange=NSMakeRange(0,editor.string.length);
+            XCTAssertTrue([NSApp sendAction:NSSelectorFromString(@"convertToCodeBlock:") to:document from:nil]);
+            XCTAssertEqualObjects(editor.string,scenario[1]);
+            XCTAssertTrue(NSMaxRange(editor.selectedRange)<=editor.string.length);
+        }
+        document.preferences.extensionFencedCode=NO;
+        editor.string=@"word\n"; editor.selectedRange=NSMakeRange(0,4);
+        [NSApp sendAction:NSSelectorFromString(@"convertToCodeBlock:") to:document from:nil];
+        XCTAssertEqualObjects(editor.string,@"word\n");
+    } @finally { [document close]; document.preferences.extensionFencedCode=fenced; }
 }
 
 - (void)testOrderedListConversionWritesSequentialNumbersAndPreservesSelection

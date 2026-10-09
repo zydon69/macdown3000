@@ -10,6 +10,8 @@
 
 /* Task list toolbar button */
 "Task List" = "Task List";
+"Code" = "Code";
+"Code Block" = "Code Block";
 
 "WORDS_PLURAL_STRING" = "%@ word;%@ words";
 

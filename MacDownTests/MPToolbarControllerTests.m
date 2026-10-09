@@ -676,7 +676,8 @@
         @"indent-group",
         @"text-formatting-group",
         @"heading-group",
-        @"list-group"
+        @"list-group",
+        @"code"
     ];
 
     for (NSString *identifier in groupIdentifiers) {
@@ -693,7 +694,6 @@
 {
     NSArray *standaloneIdentifiers = @[
         @"blockquote",
-        @"code",
         @"link",
         @"image",
         @"copy-html",
@@ -794,6 +794,27 @@
 
 #pragma mark - Grouped Toolbar Item Dispatch Tests (Issue #566)
 
+- (void)testCodeGroupKeepsSavedIdentifierAndAddsAdjacentBlockButton
+{
+    NSToolbarItemGroup *group=(id)[self.controller toolbar:nil itemForItemIdentifier:@"code" willBeInsertedIntoToolbar:YES];
+    XCTAssertTrue([group isKindOfClass:NSToolbarItemGroup.class]);
+    XCTAssertEqual(group.subitems.count,2u);
+    if (group.subitems.count!=2) return;
+    XCTAssertEqualObjects(group.subitems[0].itemIdentifier,@"inline-code");
+    XCTAssertEqualObjects(group.subitems[1].itemIdentifier,@"code-block");
+    NSImage *image=[NSImage imageNamed:@"ToolbarIconCodeBlock"];
+    XCTAssertNotNil(image);
+    XCTAssertTrue(image.isTemplate);
+    NSSegmentedControl *segments=(id)group.view;
+    XCTAssertEqualObjects([segments toolTipForSegment:1],NSLocalizedString(@"Code Block",@""));
+    NSButton *button=(id)group.subitems[1].view;
+    [self attachDispatchControlToWindow:button];
+    MPToolbarDispatchRecorder *recorder=[MPToolbarDispatchRecorder new];
+    self.controller.document=(id)recorder;
+    [button performClick:nil];
+    XCTAssertEqualObjects(recorder.invokedSelectors,(@[@"convertToCodeBlock:"]));
+}
+
 - (void)testListGroupIncludesTaskListAfterExistingListButtons
 {
     NSToolbarItemGroup *group = (NSToolbarItemGroup *)[self.controller toolbar:nil
@@ -889,6 +910,8 @@
         @[@"list-group", @0, @3, @"toggleUnorderedList:"],
         @[@"list-group", @1, @3, @"toggleOrderedList:"],
         @[@"list-group", @2, @3, @"toggleTaskList:"],
+        @[@"code", @0, @2, @"toggleInlineCode:"],
+        @[@"code", @1, @2, @"convertToCodeBlock:"],
     ];
 
     for (NSArray *mapping in expectedMappings) {
@@ -934,7 +957,7 @@
     // lookup keys on. Guards against a future refactor silently breaking
     // this again.
     NSArray *groupIdentifiers = @[@"indent-group", @"text-formatting-group",
-                                   @"heading-group", @"list-group"];
+                                   @"heading-group", @"list-group", @"code"];
 
     for (NSString *identifier in groupIdentifiers) {
         NSToolbarItem *item = [self.controller toolbar:nil
@@ -964,7 +987,7 @@
     // Standalone buttons must target the toolbar controller so actions
     // dispatch correctly regardless of which pane has focus.
     NSArray *standaloneIdentifiers = @[
-        @"blockquote", @"code", @"link", @"image", @"table",
+        @"blockquote", @"link", @"image", @"table",
         @"copy-html", @"comment", @"highlight", @"strikethrough"
     ];
 
@@ -985,7 +1008,7 @@
     // Standalone buttons must use the dispatch selector, not the
     // document action directly.
     NSArray *standaloneIdentifiers = @[
-        @"blockquote", @"code", @"link", @"image", @"table",
+        @"blockquote", @"link", @"image", @"table",
         @"copy-html", @"comment", @"highlight", @"strikethrough"
     ];
 
@@ -1006,7 +1029,7 @@
     // Each standalone button needs an identifier so the dispatch method
     // can look up the intended action.
     NSArray *standaloneIdentifiers = @[
-        @"blockquote", @"code", @"link", @"image", @"table",
+        @"blockquote", @"link", @"image", @"table",
         @"copy-html", @"comment", @"highlight", @"strikethrough"
     ];
 
@@ -1027,7 +1050,8 @@
     // Verify every standalone identifier dispatches the correct action.
     NSDictionary *expectedMappings = @{
         @"blockquote":     @"toggleBlockquote:",
-        @"code":           @"toggleInlineCode:",
+        @"inline-code":    @"toggleInlineCode:",
+        @"code-block":     @"convertToCodeBlock:",
         @"link":           @"toggleLink:",
         @"image":          @"toggleImage:",
         @"table":          @"insertTable:",

@@ -139,7 +139,13 @@ static NSArray<NSNumber *> *MPToolbarDocumentZoomLevels(void)
             ]
          ],
         [self toolbarItemWithIdentifier:@"blockquote" label:NSLocalizedString(@"Blockquote", @"Blockquote toolbar button") icon:@"ToolbarIconBlockquote" action:@selector(toggleBlockquote:)],
-        [self toolbarItemWithIdentifier:@"code" label:NSLocalizedString(@"Inline Code", @"Inline code toolbar button") icon:@"ToolbarIconInlineCode" action:@selector(toggleInlineCode:)],
+        // Preserve the saved toolbar identifier and position while adding the
+        // adjacent block action to existing customized configurations.
+        [self toolbarItemGroupWithIdentifier:@"code" separated:NO label:NSLocalizedString(@"Code", @"Code toolbar group") items:@[
+            [self toolbarItemWithIdentifier:@"inline-code" label:NSLocalizedString(@"Inline Code", @"Inline code toolbar button") icon:@"ToolbarIconInlineCode" action:@selector(toggleInlineCode:)],
+            [self toolbarItemWithIdentifier:@"code-block" label:NSLocalizedString(@"Code Block", @"Code block toolbar button") icon:@"ToolbarIconCodeBlock" action:@selector(convertToCodeBlock:)]
+            ]
+        ],
         [self toolbarItemWithIdentifier:@"link" label:NSLocalizedString(@"Link", @"Link toolbar button") icon:@"ToolbarIconLink" action:@selector(toggleLink:)],
         [self toolbarItemWithIdentifier:@"image" label:NSLocalizedString(@"Image", @"Image toolbar button") icon:@"ToolbarIconImage" action:@selector(toggleImage:)],
         [self toolbarItemWithIdentifier:@"table" label:NSLocalizedString(@"Table", @"Table toolbar button") icon:NSImageNameListViewTemplate action:@selector(insertTable:)],

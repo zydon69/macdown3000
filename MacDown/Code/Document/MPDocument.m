@@ -3840,7 +3840,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     [self.editor scrollRangeToVisible:self.editor.selectedRange];
 }
 
-- (void)convertSelectionToList:(NSString *)value
+- (void)convertSelectionToBlock:(NSString *)value
 {
     if ([self performPreviewFormattingAction:@"block" value:value]) return;
     if (self.documentClosed || self.printing || [self previewDraft]) { NSBeep(); return; }
@@ -3873,17 +3873,22 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 
 - (IBAction)toggleOrderedList:(id)sender
 {
-    [self convertSelectionToList:@"ordered"];
+    [self convertSelectionToBlock:@"ordered"];
 }
 
 - (IBAction)toggleUnorderedList:(id)sender
 {
-    [self convertSelectionToList:@"unordered"];
+    [self convertSelectionToBlock:@"unordered"];
 }
 
 - (IBAction)toggleTaskList:(id)sender
 {
-    [self convertSelectionToList:@"tasks"];
+    [self convertSelectionToBlock:@"tasks"];
+}
+
+- (IBAction)convertToCodeBlock:(id)sender
+{
+    [self convertSelectionToBlock:@"code-block"];
 }
 
 - (IBAction)toggleBlockquote:(id)sender
