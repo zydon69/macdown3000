@@ -15,5 +15,10 @@ NS_INLINE NSString *MPTaskListStyleTag(void)
 {
     return @"<style id=\"macdown-task-list-markers\">"
         "li.task-list-item{list-style-type:none!important;}"
+        "li.task-list-item{position:relative;}"
+        "li.task-list-item>input[type=checkbox],"
+        "li.task-list-item>p:first-child>input[type=checkbox]{"
+        "position:absolute!important;left:-1.25em!important;top:.3em;"
+        "width:1em!important;height:1em!important;margin:0!important;}"
         "</style>";
 }
