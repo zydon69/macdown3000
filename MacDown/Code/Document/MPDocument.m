@@ -6235,6 +6235,7 @@ to link outside that scope.", \
         };
         NSMutableString *processed = [NSMutableString string];
         NSUInteger restoredStart = NSNotFound, restoredEnd = NSNotFound;
+        NSUInteger orderedItemNumber = 0;
         BOOL codeSelectionProven=YES;
         for (NSDictionary *line in sourceLines) {
             if ([line[@"setext"] boolValue]) continue;
@@ -6246,7 +6247,9 @@ to link outside that scope.", \
             // comments and images that have no selected text. Convert only
             // source lines touched by an independently proven text run.
             if ([line[@"selected"] boolValue] && [text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet].length) {
-                addedPrefix=prefix.length;
+                NSString *linePrefix = [value isEqualToString:@"ordered"]
+                    ? [NSString stringWithFormat:@"%lu. ",(unsigned long)++orderedItemNumber] : prefix;
+                addedPrefix=linePrefix.length;
                 NSString *plain = text;
                 NSString *originalHTML = [renderer HTMLForMarkdownSnapshot:text];
                 NSXMLDocument *originalDOM = MPPIParseHTML(originalHTML);
@@ -6309,7 +6312,7 @@ to link outside that scope.", \
                 }
                 BOOL proved=codeTarget;
                 for (NSUInteger attempt=0;!proved && attempt<2;attempt++) {
-                    NSString *candidate=[prefix stringByAppendingString:plain];
+                    NSString *candidate=[linePrefix stringByAppendingString:plain];
                     NSXMLDocument *DOM=MPPIParseHTML([renderer HTMLForMarkdownSnapshot:candidate]);
                     normalizeTaskSpacing(DOM);
                     NSArray<NSXMLNode *> *elements=[DOM nodesForXPath:@"//body/*" error:NULL];
@@ -6327,7 +6330,7 @@ to link outside that scope.", \
                     plain=[plain stringByReplacingCharactersInRange:NSMakeRange(punctuation.location,0) withString:@"\\"];
                 }
                 if (!proved) return NO;
-                outputText = [prefix stringByAppendingString:plain];
+                outputText = [linePrefix stringByAppendingString:plain];
                 [processed appendString:outputText];
                 // Look past consumed Setext metadata: the first remaining
                 // neighbor must not turn the requested paragraph into a heading.

@@ -1631,7 +1631,7 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
         @[@"# **word**\n",@"toggleUnorderedList:",@"- **word**\n"],
         @[@"> word\n",@"toggleOrderedList:",@"1. word\n"],
         @[@"1. first\n2. second\n",@"toggleUnorderedList:",@"- first\n- second\n"],
-        @[@"- first\n- second\n",@"toggleOrderedList:",@"1. first\n1. second\n"],
+        @[@"- first\n- second\n",@"toggleOrderedList:",@"1. first\n2. second\n"],
         @[@"- first\n",@"toggleUnorderedList:",@"- first\n"]
     ];
     for (NSArray *scenario in cases) {
@@ -1649,6 +1649,26 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
             XCTAssertEqualObjects(editor.string,scenario[2],@"%@",scenario[1]);
         } @finally { [document close]; }
     }
+}
+
+- (void)testOrderedListConversionWritesSequentialNumbersAndPreservesSelection
+{
+    MPDocument *document=[MPDocument new];
+    MPEditorView *editor=[[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+    document.editor=editor;
+    NSMutableString *source=[NSMutableString new],*expected=[NSMutableString new];
+    for (NSUInteger i=1;i<=12;i++) {
+        [source appendFormat:@"- word%lu\r\n",(unsigned long)i];
+        [expected appendFormat:@"%lu. word%lu\r\n",(unsigned long)i,(unsigned long)i];
+    }
+    @try {
+        editor.string=source; editor.selectedRange=NSMakeRange(0,source.length);
+        [document toggleOrderedList:nil];
+        XCTAssertEqualObjects(editor.string,expected);
+        XCTAssertTrue(NSEqualRanges(editor.selectedRange,NSMakeRange(3,expected.length-3)));
+        [document toggleOrderedList:nil];
+        XCTAssertEqualObjects(editor.string,expected,@"Repeated conversion must be idempotent");
+    } @finally { [document close]; }
 }
 
 - (void)testSourceListConversionPreservesCaretAtBoundariesAndInsideCallout
