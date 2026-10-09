@@ -1693,7 +1693,10 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
                     NSString *headingPath=[NSString stringWithFormat:@"//details/summary/h%@",[target substringFromIndex:8]];
                     XCTAssertEqual([DOM nodesForXPath:headingPath error:NULL].count,1u,@"%@ — disclosure heading",context);
                 }
-                if (![target hasPrefix:@"callout-"] && ![target hasPrefix:@"toggle"] && ![target isEqualToString:@"code-block"]) XCTAssertFalse([editor.string containsString:@":::"],@"%@ — old wrappers removed",context);
+                if (![target hasPrefix:@"callout-"] && ![target hasPrefix:@"toggle"]) {
+                    BOOL contained=[fixture[@"type"] hasPrefix:@"callout-"] || [fixture[@"type"] hasPrefix:@"toggle"];
+                    XCTAssertEqual([editor.string containsString:@":::"],contained,@"%@ — content scope preserves its container",context);
+                }
                 XCTAssertEqual([body.stringValue componentsSeparatedByString:text].count,2u,@"%@ — content appears once",context);
                 [results addObject:@{@"source":fixture[@"type"],@"selection":fixture[@"role"],@"target":target}];
             } @finally { [document close]; }
@@ -1887,8 +1890,8 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
         [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:
             [NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return !web.isLoading && !document.alreadyRenderingInWeb && document.previewEditRanges.count>0;}] object:web]] timeout:10];
         NSMutableArray *expectedOptions=[[[self blockConversionTypes] arrayByAddingObject:@"math-block"] mutableCopy];
-        [expectedOptions removeObjectsInArray:@[@"h5",@"h6"]];
-        NSArray *actualOptions=[[web.mainFrame.javaScriptContext evaluateScript:@"Array.from(document.querySelector('#macdown-preview-format select').options).map(function(o){return o.value;}).filter(Boolean)"] toArray];
+        [expectedOptions addObject:@"no-container"];
+        NSArray *actualOptions=[[web.mainFrame.javaScriptContext evaluateScript:@"Array.from(document.querySelectorAll('#macdown-preview-format select option')).map(function(o){return o.value;}).filter(Boolean)"] toArray];
         XCTAssertEqualObjects([NSSet setWithArray:actualOptions ?: @[]],[NSSet setWithArray:expectedOptions],@"Every menu option must belong to the conversion matrix");
         [web stringByEvaluatingJavaScriptFromString:@"(function(){var r=document.createRange();r.selectNodeContents(document.querySelector('p'));getSelection().removeAllRanges();getSelection().addRange(r);})()"];
         NSDictionary *payload=[[web.mainFrame.javaScriptContext evaluateScript:@"macdownPreviewEditor.selectionPayload('block','ordered')"] toDictionary];
@@ -1985,7 +1988,7 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
     NSArray *cases=@[
         @[@"word\n",@0,@"- word\n",@2],
         @[@"word",@4,@"- word",@6],
-        @[callout,@([callout rangeOfString:@"word"].location+2),@"- word\n",@4]
+        @[callout,@([callout rangeOfString:@"word"].location+2),@"::: {.callout-note}\n- word\n:::\n",@([callout rangeOfString:@"word"].location+4)]
     ];
     for (NSArray *scenario in cases) {
         MPDocument *document=[MPDocument new];
@@ -2017,7 +2020,7 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
             @[@"\nNeighbor.\n",@"",@"- [ ] \nNeighbor.\n"],
             @[@"# **word**\n",@"word",@"- [ ] **word**\n"],
             @[@"1. word\r\n",@"word",@"- [ ] word\r\n"],
-            @[@"::: {.callout-note}\n## Title\nword\n:::\n",@"word",@"## Title\n- [ ] word\n"]
+            @[@"::: {.callout-note}\n## Title\nword\n:::\n",@"word",@"::: {.callout-note}\n## Title\n- [ ] word\n:::\n"]
         ];
         for (NSArray *scenario in cases) {
             editor.string=scenario[0]; editor.selectedRange=[scenario[1] length] ? [editor.string rangeOfString:scenario[1]] : NSMakeRange(0,0);
@@ -2092,22 +2095,22 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
 - (void)testPreviewCalloutCreatesLocalizedDefaultTitleForEveryType
 {
     for (NSString *type in @[@"note",@"tip",@"warning",@"important",@"caution"]) {
-        NSString *expected=[NSString stringWithFormat:@"\n::: {.callout-%@}\n## %@\nTest\n:::\n\n\nNeighbor.\n",type,MPPreviewDefaultCalloutTitle(type,NO)];
+        NSString *expected=[NSString stringWithFormat:@"\n::: {.callout-%@}\n## %@\nTest\n:::\n\nNeighbor.\n",type,MPPreviewDefaultCalloutTitle(type,NO)];
         [self assertPreviewBlockSource:@"Test\n\nNeighbor.\n" texts:@[@"Test"] value:[@"callout-" stringByAppendingString:type]
             expected:expected HTML:[@"callout-" stringByAppendingString:type]];
     }
     [self assertPreviewBlockSource:@"Test\n\nNeighbor.\n" texts:@[@"Test"] value:@"toggle"
-        expected:[NSString stringWithFormat:@"\n::: {.callout-note collapse=\"true\"}\n## %@\nTest\n:::\n\n\nNeighbor.\n",MPPreviewDefaultCalloutTitle(@"note",YES)] HTML:@"<details"];
+        expected:[NSString stringWithFormat:@"\n::: {.callout-note collapse=\"true\"}\n## %@\nTest\n:::\n\nNeighbor.\n",MPPreviewDefaultCalloutTitle(@"note",YES)] HTML:@"<details"];
 }
 
 - (void)testPreviewCalloutTitleAndBodyConvertWithoutLosingOtherContent
 {
     [self assertPreviewBlockSource:@"::: {.callout-caution}\n## Attention\nTest\n:::\n\nNeighbor.\n"
-        texts:@[@"Attention"] value:@"paragraph" expected:@"Attention\nTest\n\nNeighbor.\n" HTML:@"Attention"];
+        texts:@[@"Attention"] value:@"paragraph" expected:@"::: {.callout-caution}\nAttention\nTest\n:::\n\nNeighbor.\n" HTML:@"Attention"];
     [self assertPreviewBlockSource:@"::: {.callout-note collapse=\"true\"}\n## Prerequisites\nTest\n:::\n\nNeighbor.\n"
-        texts:@[@"Test"] value:@"h1" expected:@"## Prerequisites\n# Test\n\nNeighbor.\n" HTML:@"Test</h1>"];
+        texts:@[@"Test"] value:@"h1" expected:@"::: {.callout-note collapse=\"true\"}\n## Prerequisites\n# Test\n:::\n\nNeighbor.\n" HTML:@"Test</h1>"];
     [self assertPreviewBlockSource:@"::: {.callout-note}\n## Outer\n::: {.callout-tip}\n## Inner\nContent\n:::\nTail\n:::\n"
-        texts:@[@"Content"] value:@"h1" expected:@"::: {.callout-note}\n## Outer\n## Inner\n# Content\nTail\n:::\n" HTML:@"Content</h1>"];
+        texts:@[@"Content"] value:@"h1" expected:@"::: {.callout-note}\n## Outer\n::: {.callout-tip}\n## Inner\n# Content\n:::\nTail\n:::\n" HTML:@"Content</h1>"];
 }
 
 - (void)testPreviewBlockConversionPreservesBlankSeparators
@@ -3061,7 +3064,7 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
             XCTAssertTrue([document applyPreviewEditPayload:payload]);
             [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:
                 [NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){return !web.isLoading&&![document.previewEditToken isEqualToString:token];}] object:web]] timeout:10];
-            XCTAssertFalse([editor.string containsString:@"===="]);
+            XCTAssertTrue([editor.string containsString:@"===="],@"Container conversion preserves content syntax");
             XCTAssertTrue([editor.string hasSuffix:@"\nUntouched neighbor.\n"]);
             // A collapsed body is intentionally hidden. Open it without
             // selecting again before checking the persisted range and command.

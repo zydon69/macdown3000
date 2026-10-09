@@ -115,8 +115,9 @@
     listen(b, 'click', action); panel.appendChild(b);
     return b;
   }
-  function select(label, options, action) {
+  function select(label, options, action, scope) {
     var s = document.createElement('select'); s.setAttribute('aria-label', label);
+    s.setAttribute('data-mp-scope',scope);
     var first = document.createElement('option'); first.textContent = label; first.value = '';
     s.appendChild(first);
     options.forEach(function (item) {
@@ -141,14 +142,16 @@
       return ['Encadré — '+(typeof title==='string' && title.length ? title : defaultCalloutTitles[type]),'callout-'+type];
     });
     select('Texte normal / Bloc',[
-      ['Texte normal','paragraph'],['Titre 1','h1'],['Titre 2','h2'],['Titre 3','h3'],['Titre 4','h4'],
+      ['Texte normal','paragraph'],['Titre 1','h1'],['Titre 2','h2'],['Titre 3','h3'],['Titre 4','h4'],['Titre 5','h5'],['Titre 6','h6'],
       ['Liste à puces','unordered'],['Liste numérotée','ordered'],['Liste de tâches','tasks'],
-      ['Citation','quote'],['Code — bloc','code-block']
+      ['Citation','quote'],['Code — bloc','code-block'],['Équation — bloc','math-block']
+    ],function(value){command('block',value);},'block');
+    select('Encadré / Menu dépliant',[
+      ['Aucun encadré','no-container']
     ].concat(calloutOptions,[
       ['Menu dépliant','toggle'],
-      ['Titre dépliant 1','toggle-h1'],['Titre dépliant 2','toggle-h2'],['Titre dépliant 3','toggle-h3'],['Titre dépliant 4','toggle-h4'],
-      ['Équation — bloc','math-block']
-    ]),function(value){command('block',value);});
+      ['Titre dépliant 1','toggle-h1'],['Titre dépliant 2','toggle-h2'],['Titre dépliant 3','toggle-h3'],['Titre dépliant 4','toggle-h4']
+    ]),function(value){command('block',value);},'container');
     button('Gras',function(){command('bold');},'bold');
     button('Italique',function(){command('italic');},'italic');
     button('Souligné',function(){command('underline');},'underline');
@@ -202,8 +205,9 @@
   function updateStyles(selected) {
     var runs=selected ? (selected.runs || [selected]) : [];
     var spans=runs.map(function(run){return mappedSpan(run.id);});
-    // A fenced block contains literal text. Keep its block selector available
-    // so users can return to prose, but never offer inline Markdown inside it.
+    // Fenced code is literal block content; its structure remains editable via
+    // both selectors. Inline code can itself be wrapped by emphasis or a link,
+    // with those markers outside the backticks rather than inside the literal.
     var containsCodeBlock=spans.some(function(span){return !!(span && span.closest('pre'));});
     panel.querySelectorAll('button').forEach(function(control){control.disabled=containsCodeBlock;});
     var selectors={bold:'strong,b',italic:'em,i',underline:'u',strike:'del,s,strike',code:'code',link:'a[href]',math:'.MathJax,.MathJax_Display'};
@@ -216,30 +220,50 @@
     });
     function blockType(span) {
       if(!span) return '';
-      var heading=span.closest('h1,h2,h3,h4,h5,h6'), details=span.closest('details');
       if(span.closest('pre')) return 'code-block';
-      if(details) return heading?'toggle-'+heading.tagName.toLowerCase():'toggle';
-      var callout=span.closest('.mp-callout');
-      if(callout) {
-        var type=calloutTypes.find(function(name){return callout.classList.contains('mp-callout-'+name);});
-        return type?'callout-'+type:'';
+      if(span.closest('.MathJax_Display')) return 'math-block';
+      // A heading inside a container is still a heading. Inspect its nearest
+      // content element instead of allowing the outer callout to mask it.
+      var block=span.closest('h1,h2,h3,h4,h5,h6,li,blockquote,p');
+      if(!block) return '';
+      if(/^H[1-6]$/.test(block.tagName)) return block.tagName.toLowerCase();
+      if(block.tagName==='LI' || block.tagName==='P') {
+        var item=span.closest('li'), list=item && item.closest('ol,ul');
+        if(item && list) {
+          var task=Array.from(item.querySelectorAll('input[type="checkbox"]')).some(function(input){return input.closest('li')===item;});
+          return task?'tasks':list.tagName==='OL'?'ordered':'unordered';
+        }
       }
-      if(span.closest('li') && span.closest('ol,ul')) return span.closest('li').querySelector('input[type="checkbox"]')?'tasks':span.closest('ol,ul').tagName==='OL'?'ordered':'unordered';
       if(span.closest('blockquote')) return 'quote';
-      if(heading) return heading.tagName.toLowerCase();
-      return span.closest('p')?'paragraph':'';
+      return block.tagName==='P'?'paragraph':'';
     }
-    var block=spans.length?blockType(spans[0]):'';
-    if(!spans.every(function(span){return blockType(span)===block;})) block='';
+    function containerType(span) {
+      if(!span) return '';
+      var container=span.closest('.mp-callout,details');
+      if(!container) return 'no-container';
+      if(container.tagName==='DETAILS') {
+        var summary=Array.from(container.children).find(function(child){return child.tagName==='SUMMARY';});
+        var heading=summary && summary.querySelector('h1,h2,h3,h4');
+        return heading?'toggle-'+heading.tagName.toLowerCase():'toggle';
+      }
+      var type=calloutTypes.find(function(name){return container.classList.contains('mp-callout-'+name);});
+      return type?'callout-'+type:'';
+    }
+    function updateMenu(scope, typeForSpan) {
+      var common=spans.length?typeForSpan(spans[0]):'';
+      if(!spans.every(function(span){return typeForSpan(span)===common;})) common='';
+      var menu=panel.querySelector('select[data-mp-scope="'+scope+'"]');
+      menu.querySelectorAll('option').forEach(function(option){
+        if(option.value && option.value===common) option.setAttribute('data-mp-active','');
+        else option.removeAttribute('data-mp-active');
+      });
+      var matching=common ? Array.from(menu.options).find(function(option){return option.value===common;}) : null;
+      menu.selectedIndex=matching?matching.index:0;
+      if(matching) menu.setAttribute('data-mp-active',''); else menu.removeAttribute('data-mp-active');
+    }
     panel.querySelector('[data-mp-edit-text]').disabled=containsCodeBlock || runs.length!==1 || !!(spans[0] && spans[0].closest('code'));
-    var menu=panel.querySelector('select');
-    menu.querySelectorAll('option').forEach(function(option){
-      if(option.value && option.value===block) option.setAttribute('data-mp-active','');
-      else option.removeAttribute('data-mp-active');
-    });
-    var matching=Array.from(menu.options).find(function(option){return option.value===block;});
-    menu.selectedIndex=matching?matching.index:0;
-    if(matching) menu.setAttribute('data-mp-active',''); else menu.removeAttribute('data-mp-active');
+    updateMenu('block',blockType);
+    updateMenu('container',containerType);
   }
   function updatePanel() {
     if(active || rendering || selectingWithMouse) return;

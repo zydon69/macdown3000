@@ -21,6 +21,8 @@
 /* End PBXAggregateTarget section */
 
 /* Begin PBXBuildFile section */
+		A17D20261009000100000003 /* MPFormattingScopeMenuTests.m in Sources */ = {isa = PBXBuildFile; fileRef = A17D20261009000100000004 /* MPFormattingScopeMenuTests.m */; };
+		A17D20261009000100000001 /* MPFormattingScopeMatrixTests.m in Sources */ = {isa = PBXBuildFile; fileRef = A17D20261009000100000002 /* MPFormattingScopeMatrixTests.m */; };
 		00F6EAD22CA0765C131AA4EC /* MPFileNodeTests.m in Sources */ = {isa = PBXBuildFile; fileRef = A0A5A0E543A6B3CE9E17EE7B /* MPFileNodeTests.m */; };
 		0319BD8F4A64D9E406448C13 /* MPSyntaxHighlightingTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 9C64395EB126274BB2E01E01 /* MPSyntaxHighlightingTests.m */; };
 		03224E1B02E36783D5307F4A /* MPDocumentIOTests.m in Sources */ = {isa = PBXBuildFile; fileRef = 35FB5AC5D9A67BFB58A9430F /* MPDocumentIOTests.m */; };
@@ -296,6 +298,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		A17D20261009000100000004 /* MPFormattingScopeMenuTests.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = MPFormattingScopeMenuTests.m; sourceTree = "<group>"; };
+		A17D20261009000100000002 /* MPFormattingScopeMatrixTests.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = MPFormattingScopeMatrixTests.m; sourceTree = "<group>"; };
 		0925B76B06FC62100372111F /* MPFolderSidebarViewController.h */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.h; name = MPFolderSidebarViewController.h; path = MacDown/Code/Sidebar/MPFolderSidebarViewController.h; sourceTree = "<group>"; };
 		0AA947C490F49EE01830E163 /* MPDocumentWorkspaceTests.m */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.c.objc; path = MPDocumentWorkspaceTests.m; sourceTree = "<group>"; };
 		0D0EC0DE9FEA22F962083921 /* Pods-MacDownTests.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-MacDownTests.release.xcconfig"; path = "Pods/Target Support Files/Pods-MacDownTests/Pods-MacDownTests.release.xcconfig"; sourceTree = "<group>"; };
@@ -1185,6 +1189,8 @@
 				PHASE1B00000001NOTIFTEST /* MPNotificationTests.m */,
 				AB47A87B03D655D2F2285141 /* MPUpdaterTests.m */,
 				PHASE1B00000002LIFECYCLT /* MPDocumentLifecycleTests.m */,
+				A17D20261009000100000004 /* MPFormattingScopeMenuTests.m */,
+				A17D20261009000100000002 /* MPFormattingScopeMatrixTests.m */,
 				PHASE1B00000003EDGECASET /* MPRendererEdgeCaseTests.m */,
 				PHASE1B00000004HIGHLIGHT /* HGMarkdownHighlighterTests.m */,
 				PHASE1B00000005IMGEXPORT /* MPImageExportTests.m */,
@@ -1981,6 +1987,8 @@
 				PHASE1BBLD0001NOTIFTEST /* MPNotificationTests.m in Sources */,
 				3A741C120087C1EEF6862627 /* MPUpdaterTests.m in Sources */,
 				PHASE1BBLD0002LIFECYCLT /* MPDocumentLifecycleTests.m in Sources */,
+				A17D20261009000100000003 /* MPFormattingScopeMenuTests.m in Sources */,
+				A17D20261009000100000001 /* MPFormattingScopeMatrixTests.m in Sources */,
 				PHASE1BBLD0003EDGECASET /* MPRendererEdgeCaseTests.m in Sources */,
 				PHASE1BBLD0004HIGHLIGHT /* HGMarkdownHighlighterTests.m in Sources */,
 				PHASE1BBLD0005IMGEXPORT /* MPImageExportTests.m in Sources */,

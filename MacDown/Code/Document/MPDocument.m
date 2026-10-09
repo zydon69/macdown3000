@@ -3592,84 +3592,106 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 
 - (IBAction)convertToH1:(id)sender
 {
-    if ([self performPreviewFormattingAction:@"block" value:@"h1"]) return;
-    [self.editor makeHeaderForSelectedLinesWithLevel:1
-        renderMarkdown:^NSString *(NSString *source) { return [self.renderer HTMLForMarkdownSnapshot:source]; }];
+    [self convertSelectionToBlock:@"h1"];
 }
 
 - (IBAction)convertToH2:(id)sender
 {
-    if ([self performPreviewFormattingAction:@"block" value:@"h2"]) return;
-    [self.editor makeHeaderForSelectedLinesWithLevel:2
-        renderMarkdown:^NSString *(NSString *source) { return [self.renderer HTMLForMarkdownSnapshot:source]; }];
+    [self convertSelectionToBlock:@"h2"];
 }
 
 - (IBAction)convertToH3:(id)sender
 {
-    if ([self performPreviewFormattingAction:@"block" value:@"h3"]) return;
-    [self.editor makeHeaderForSelectedLinesWithLevel:3
-        renderMarkdown:^NSString *(NSString *source) { return [self.renderer HTMLForMarkdownSnapshot:source]; }];
+    [self convertSelectionToBlock:@"h3"];
 }
 
 - (IBAction)convertToH4:(id)sender
 {
-    if ([self performPreviewFormattingAction:@"block" value:@"h4"]) return;
-    [self.editor makeHeaderForSelectedLinesWithLevel:4
-        renderMarkdown:^NSString *(NSString *source) { return [self.renderer HTMLForMarkdownSnapshot:source]; }];
+    [self convertSelectionToBlock:@"h4"];
 }
 
 - (IBAction)convertToH5:(id)sender
 {
-    if ([self performPreviewFormattingAction:@"block" value:@"h5"]) return;
-    [self.editor makeHeaderForSelectedLinesWithLevel:5
-        renderMarkdown:^NSString *(NSString *source) { return [self.renderer HTMLForMarkdownSnapshot:source]; }];
+    [self convertSelectionToBlock:@"h5"];
 }
 
 - (IBAction)convertToH6:(id)sender
 {
-    if ([self performPreviewFormattingAction:@"block" value:@"h6"]) return;
-    [self.editor makeHeaderForSelectedLinesWithLevel:6
-        renderMarkdown:^NSString *(NSString *source) { return [self.renderer HTMLForMarkdownSnapshot:source]; }];
+    [self convertSelectionToBlock:@"h6"];
 }
 
 - (IBAction)convertToParagraph:(id)sender
 {
-    if ([self performPreviewFormattingAction:@"block" value:@"paragraph"]) return;
-    [self.editor makeHeaderForSelectedLinesWithLevel:0
-        renderMarkdown:^NSString *(NSString *source) { return [self.renderer HTMLForMarkdownSnapshot:source]; }];
+    [self convertSelectionToBlock:@"paragraph"];
+}
+
+// Native source selections and rendered selections share the same proven
+// inline transaction. An empty source caret is an explicit syntax insertion,
+// never a fallback when a selected passage cannot be represented safely.
+- (BOOL)formatSourceInlineAction:(NSString *)action value:(NSString *)value
+{
+    if (self.documentClosed || self.printing || [self previewDraft]) return NO;
+    NSString *source=self.editor.string ?: @"";
+    NSRange selection=self.editor.selectedRange;
+    if (selection.location>source.length || selection.length>source.length-selection.location) return NO;
+    if ([action isEqualToString:@"strike"] && !self.preferences.extensionStrikethough) return NO;
+    if (!selection.length) {
+        NSDictionary *markers=@{@"bold":@"**",@"italic":@"*",@"underline":@"_",@"strike":@"~~",@"code":@"`"};
+        NSString *marker=markers[action];
+        if (!marker) return NO;
+        if ([action isEqualToString:@"underline"]) self.preferences.extensionUnderline=YES;
+        [self.editor toggleForMarkupPrefix:marker suffix:marker];
+        return YES;
+    }
+    BOOL oldIntra=self.preferences.extensionIntraEmphasis, oldUnderline=self.preferences.extensionUnderline;
+    self.preferences.extensionIntraEmphasis=YES;
+    if ([action isEqualToString:@"underline"]) self.preferences.extensionUnderline=YES;
+    MPRenderer *snapshot=[MPRenderer new]; snapshot.delegate=(id<MPRendererDelegate>)self;
+    snapshot.rendererFlags=self.preferences.rendererFlags;
+    NSString *(^render)(NSString *)=^NSString *(NSString *markdown){return [snapshot HTMLForMarkdownSnapshot:markdown];};
+    NSString *(^escape)(NSString *)=^NSString *(NSString *text){return [self escapePreviewPlainText:text];};
+    NSDictionary *change=MPPreviewInlineChange(source,selection,action,value,render,escape);
+    if (!change) change=MPPreviewInlineSingleChange(source,selection,action,value,render,escape,@"auto");
+    if (change && [self replacePreviewRange:[change[@"range"] rangeValue] withString:change[@"replacement"]
+        preservingSelection:selection restoringRange:[change[@"selection"] rangeValue]]) {
+        NSDictionary *restored=self.previewSelectionToRestore;
+        if (restored) self.editor.selectedRange=NSMakeRange([restored[@"location"] unsignedIntegerValue],[restored[@"length"] unsignedIntegerValue]);
+        self.previewSelectionToRestore=nil;
+        return YES;
+    }
+    self.preferences.extensionIntraEmphasis=oldIntra; self.preferences.extensionUnderline=oldUnderline;
+    return NO;
 }
 
 - (IBAction)toggleStrong:(id)sender
 {
     if ([self performPreviewFormattingAction:@"bold" value:nil]) return;
-    [self.editor toggleForMarkupPrefix:@"**" suffix:@"**"];
+    if (![self formatSourceInlineAction:@"bold" value:nil]) NSBeep();
 }
 
 - (IBAction)toggleEmphasis:(id)sender
 {
     if ([self performPreviewFormattingAction:@"italic" value:nil]) return;
-    [self.editor toggleForMarkupPrefix:@"*" suffix:@"*"];
+    if (![self formatSourceInlineAction:@"italic" value:nil]) NSBeep();
 }
 
 - (IBAction)toggleInlineCode:(id)sender
 {
     if ([self performPreviewFormattingAction:@"code" value:nil]) return;
-    [self.editor toggleForMarkupPrefix:@"`" suffix:@"`"];
+    if (![self formatSourceInlineAction:@"code" value:nil]) NSBeep();
 }
 
 - (IBAction)toggleStrikethrough:(id)sender
 {
     if ([self performPreviewFormattingAction:@"strike" value:nil]) return;
-    [self.editor toggleForMarkupPrefix:@"~~" suffix:@"~~"];
+    if (![self formatSourceInlineAction:@"strike" value:nil]) NSBeep();
 }
 
 - (IBAction)toggleUnderline:(id)sender
 {
     if ([self performPreviewFormattingAction:@"underline" value:nil]) return;
     // The explicit underline action opts into the renderer's Markdown syntax.
-    // Never insert HTML into the Markdown document.
-    self.preferences.extensionUnderline = YES;
-    [self.editor toggleForMarkupPrefix:@"_" suffix:@"_"];
+    if (![self formatSourceInlineAction:@"underline" value:nil]) NSBeep();
 }
 
 - (IBAction)toggleHighlight:(id)sender
@@ -3840,6 +3862,67 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     [self.editor scrollRangeToVisible:self.editor.selectedRange];
 }
 
+// The native source adapter must prove code context in the complete document,
+// rather than interpreting a literal code line as an isolated Markdown title.
+// Empty metadata means prose; nil means an opaque/unrepresentable code edit.
+- (NSDictionary *)sourceCodeMetadataForSelection:(NSRange)selection source:(NSString *)source renderer:(MPRenderer *)renderer
+{
+    NSString *begin=[NSString stringWithFormat:@"\uE000%@\uE001",NSUUID.UUID.UUIDString];
+    NSString *finish=[NSString stringWithFormat:@"\uE002%@\uE003",NSUUID.UUID.UUIDString];
+    NSMutableString *probe=[source mutableCopy];
+    [probe insertString:finish atIndex:NSMaxRange(selection)];
+    [probe insertString:begin atIndex:selection.location];
+    NSString *HTML=[renderer HTMLForMarkdownSnapshot:probe];
+    NSXMLDocument *DOM=MPPIParseHTML(HTML);
+    if (!DOM) return nil;
+    NSString *either=[NSString stringWithFormat:@"//pre[contains(string(.),'%@') or contains(string(.),'%@')]",begin,finish];
+    NSArray *marked=[DOM nodesForXPath:either error:NULL];
+    if (!marked.count) return @{};
+    NSString *both=[NSString stringWithFormat:@"//pre/code[contains(string(.),'%@') and contains(string(.),'%@')]",begin,finish];
+    NSArray *codes=[DOM nodesForXPath:both error:NULL];
+    if (marked.count!=1 || codes.count!=1 || !self.preferences.extensionFencedCode ||
+        [[codes.firstObject nodesForXPath:@"ancestor::blockquote|ancestor::li" error:NULL] count]) return nil;
+    NSString *withoutMarkers=[[HTML stringByReplacingOccurrencesOfString:begin withString:@""]
+        stringByReplacingOccurrencesOfString:finish withString:@""];
+    NSArray *original=MPPIFingerprint([renderer HTMLForMarkdownSnapshot:source]);
+    if (!original || ![MPPIFingerprint(withoutMarkers) isEqual:original]) return nil;
+    NSUInteger opening=NSNotFound,contentStart=0,fenceWidth=0;
+    unichar fenceCharacter=0;
+    BOOL linear=NO;
+    for (NSUInteger offset=0;offset<source.length;) {
+        NSUInteger start,end,contentsEnd;
+        [source getLineStart:&start end:&end contentsEnd:&contentsEnd forRange:NSMakeRange(offset,0)];
+        NSString *line=[source substringWithRange:NSMakeRange(start,contentsEnd-start)];
+        unichar marker=0; NSUInteger width=0; BOOL trailing=NO;
+        BOOL fence=MPScanFenceMarker(line,&marker,&width,&trailing);
+        offset=end;
+        if (opening==NSNotFound) {
+            if (fence) {
+                opening=start;contentStart=end;fenceWidth=width;fenceCharacter=marker;
+                linear=line.length && [line characterAtIndex:0]==marker;
+            }
+            continue;
+        }
+        if (!fence || marker!=fenceCharacter || width<fenceWidth || trailing) continue;
+        NSRange block=NSMakeRange(opening,end-opening),content=NSMakeRange(contentStart,start-contentStart);
+        opening=NSNotFound;
+        if (selection.location<content.location || NSMaxRange(selection)>NSMaxRange(content)) continue;
+        if (!linear) return nil;
+        // Prove this physical fence pair owns the selected CODE, including
+        // all unselected literal body text, before exposing its source ranges.
+        NSString *literal=[source substringWithRange:content];
+        NSString *normalized=[[literal stringByReplacingOccurrencesOfString:@"\r\n" withString:@"\n"]
+            stringByReplacingOccurrencesOfString:@"\r" withString:@"\n"];
+        if (![normalized hasSuffix:@"\n"]) return nil;
+        normalized=[normalized substringToIndex:normalized.length-1];
+        NSString *rendered=[[codes.firstObject stringValue] stringByReplacingOccurrencesOfString:begin withString:@""];
+        rendered=[rendered stringByReplacingOccurrencesOfString:finish withString:@""];
+        if (![rendered isEqualToString:normalized]) return nil;
+        return @{@"codeBlockRange":[NSValue valueWithRange:block],@"codeContentRange":[NSValue valueWithRange:content]};
+    }
+    return nil;
+}
+
 - (void)convertSelectionToBlock:(NSString *)value
 {
     if ([self performPreviewFormattingAction:@"block" value:value]) return;
@@ -3858,12 +3941,15 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
         offset=end;
     }
     if (!runs.count) [runs addObject:[NSValue valueWithRange:selection]];
-    NSDictionary *verified=@{@"range":[NSValue valueWithRange:selection],@"runs":runs,@"text":[source substringWithRange:selection]};
+    NSMutableDictionary *verified=[@{@"range":[NSValue valueWithRange:selection],@"runs":runs,@"text":[source substringWithRange:selection]} mutableCopy];
     // Parse a separate snapshot; source edits must not invalidate the identities
     // and mappings still published in the visible preview.
     MPRenderer *snapshot=[MPRenderer new];
     snapshot.delegate=(id<MPRendererDelegate>)self;
     snapshot.rendererFlags=self.preferences.rendererFlags;
+    NSDictionary *codeMetadata=[self sourceCodeMetadataForSelection:selection source:source renderer:snapshot];
+    if (!codeMetadata) { NSBeep(); return; }
+    [verified addEntriesFromDictionary:codeMetadata];
     NSArray *callouts=[snapshot calloutSourceEntriesForMarkdownSnapshot:source];
     if (![self applyBlockFormattingValue:value selection:verified callouts:callouts renderer:snapshot]) { NSBeep(); return; }
     NSDictionary *restored=self.previewSelectionToRestore;
@@ -3893,7 +3979,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 
 - (IBAction)toggleBlockquote:(id)sender
 {
-    [self.editor toggleBlockWithPattern:@"^>[ \t]?" prefix:@"> "];
+    [self convertSelectionToBlock:@"quote"];
 }
 
 - (IBAction)indent:(id)sender
@@ -6072,17 +6158,236 @@ to link outside that scope.", \
 
 // One block conversion engine serves verified preview selections and native
 // source selections. Adapters supply ranges and parser-owned callout metadata.
+// Container scope is independent of content-block scope. A parser-owned
+// envelope is replaced as a whole, while its title/body remain source bytes.
+- (NSArray<NSDictionary *> *)previewHeadingEditsInRange:(NSRange)content level:(NSUInteger)level source:(NSString *)source renderer:(MPRenderer *)renderer
+{
+    NSString *body=[source substringWithRange:content];
+    NSXMLDocument *bodyDOM=MPPIParseHTML([renderer HTMLForMarkdownSnapshot:body]);
+    NSXMLNode *firstRoot=[[bodyDOM nodesForXPath:@"//body/*" error:NULL] firstObject];
+    if (![@[@"h1",@"h2",@"h3",@"h4",@"h5",@"h6"] containsObject:firstRoot.name.lowercaseString]) return @[];
+    NSRegularExpression *ATX=[NSRegularExpression regularExpressionWithPattern:@"\\A(?:[ \t]*\r?\n)* {0,3}(#{1,6})(?!#)" options:0 error:NULL];
+    NSTextCheckingResult *match=[ATX firstMatchInString:body options:0 range:NSMakeRange(0,body.length)];
+    NSString *marks=[@"######" substringToIndex:level];
+    if (match) {
+        NSRange range=[match rangeAtIndex:1]; range.location+=content.location;
+        return @[@{@"range":[NSValue valueWithRange:range],@"replacement":marks}];
+    }
+    NSUInteger start=content.location;
+    while (start<NSMaxRange(content)) {
+        NSUInteger end,contentsEnd;
+        [source getLineStart:NULL end:&end contentsEnd:&contentsEnd forRange:NSMakeRange(start,0)];
+        NSString *line=[source substringWithRange:NSMakeRange(start,contentsEnd-start)];
+        if ([line stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet].length) break;
+        start=end;
+    }
+    if (start>=NSMaxRange(content)) return @[];
+    NSRange first=[source lineRangeForRange:NSMakeRange(start,0)];
+    if (NSMaxRange(first)>=NSMaxRange(content)) return @[];
+    NSRange next=[source lineRangeForRange:NSMakeRange(NSMaxRange(first),0)];
+    if (NSMaxRange(next)>NSMaxRange(content)) return @[];
+    NSRange pair=NSMakeRange(start,NSMaxRange(next)-start);
+    NSXMLDocument *DOM=MPPIParseHTML([renderer HTMLForMarkdownSnapshot:[source substringWithRange:pair]]);
+    NSArray *roots=[DOM nodesForXPath:@"//body/*" error:NULL];
+    NSXMLNode *root=roots.firstObject;
+    if (roots.count!=1 || ![@[@"h1",@"h2"] containsObject:root.name.lowercaseString]) return @[];
+    return @[@{@"range":[NSValue valueWithRange:NSMakeRange(start,0)],@"replacement":[marks stringByAppendingString:@" "]},
+        @{@"range":[NSValue valueWithRange:next],@"replacement":@""}];
+}
+
+- (BOOL)commitPreviewStructuralEdits:(NSArray<NSDictionary *> *)edits selection:(NSRange)selection
+{
+    NSString *original=self.editor.string ?: @"", *result=original;
+    NSRange restored=selection;
+    NSArray *ordered=[edits sortedArrayUsingComparator:^NSComparisonResult(NSDictionary *a,NSDictionary *b) {
+        return [@([b[@"range"] rangeValue].location) compare:@([a[@"range"] rangeValue].location)];
+    }];
+    NSUInteger previous=original.length;
+    for (NSDictionary *edit in ordered) {
+        NSRange range=[edit[@"range"] rangeValue]; NSString *replacement=edit[@"replacement"];
+        if (range.location>previous || range.length>previous-range.location || !replacement) return NO;
+        previous=range.location;
+        NSUInteger (^translate)(NSUInteger)=^NSUInteger(NSUInteger offset) {
+            if (offset<range.location) return offset;
+            if (offset>=NSMaxRange(range)) return offset-range.length+replacement.length;
+            return range.location+MIN(offset-range.location,replacement.length);
+        };
+        NSUInteger start=translate(restored.location), end=translate(NSMaxRange(restored));
+        restored=NSMakeRange(start,end-start);
+        result=[result stringByReplacingCharactersInRange:range withString:replacement];
+    }
+    if ([result isEqualToString:original]) return YES;
+    NSUInteger start=0, common=MIN(original.length,result.length);
+    while (start<common && [original characterAtIndex:start]==[result characterAtIndex:start]) start++;
+    start=MIN(start,MIN(selection.location,restored.location));
+    NSUInteger oldEnd=original.length, newEnd=result.length;
+    while (oldEnd>MAX(start,NSMaxRange(selection)) && newEnd>MAX(start,NSMaxRange(restored)) &&
+        [original characterAtIndex:oldEnd-1]==[result characterAtIndex:newEnd-1]) {oldEnd--;newEnd--;}
+    return [self replacePreviewRange:NSMakeRange(start,oldEnd-start)
+        withString:[result substringWithRange:NSMakeRange(start,newEnd-start)]
+        preservingSelection:selection restoringRange:NSMakeRange(restored.location-start,restored.length)];
+}
+
+// Extend only when the complete renderer proves both boundaries belong to
+// the same paragraph and removing the provenance markers restores its exact
+// semantic fingerprint. Blank lines/other blocks/opaque Markdown stay outside.
+- (NSRange)previewParagraphRange:(NSRange)selection source:(NSString *)source renderer:(MPRenderer *)renderer
+{
+    NSRange region=[source lineRangeForRange:selection];
+    NSString *begin=[NSString stringWithFormat:@"\uE000%@\uE001",NSUUID.UUID.UUIDString];
+    NSString *finish=[NSString stringWithFormat:@"\uE002%@\uE003",NSUUID.UUID.UUIDString];
+    NSArray *original=MPPIFingerprint([renderer HTMLForMarkdownSnapshot:source]);
+    BOOL (^sameParagraph)(NSRange)=^BOOL(NSRange candidate) {
+        NSUInteger contentsEnd;
+        if (!candidate.length) return NO;
+        [source getLineStart:NULL end:NULL contentsEnd:&contentsEnd forRange:NSMakeRange(NSMaxRange(candidate)-1,1)];
+        if (contentsEnd<candidate.location) return NO;
+        NSString *probe=[source stringByReplacingCharactersInRange:NSMakeRange(contentsEnd,0) withString:finish];
+        probe=[probe stringByReplacingCharactersInRange:NSMakeRange(candidate.location,0) withString:begin];
+        NSString *HTML=[renderer HTMLForMarkdownSnapshot:probe];
+        NSXMLDocument *DOM=MPPIParseHTML(HTML);
+        NSString *path=[NSString stringWithFormat:@"//p[contains(string(.),'%@') and contains(string(.),'%@')]",begin,finish];
+        if ([DOM nodesForXPath:path error:NULL].count!=1) return NO;
+        HTML=[[HTML stringByReplacingOccurrencesOfString:begin withString:@""] stringByReplacingOccurrencesOfString:finish withString:@""];
+        return original && [MPPIFingerprint(HTML) isEqual:original];
+    };
+    if (!sameParagraph(region)) return region;
+    // Collect physical boundaries once, then prove the farthest boundary with
+    // binary search. A boundary beyond the current paragraph cannot contain
+    // both provenance atoms in that same P. This avoids a silent line cap and
+    // hundreds of complete-document parses for a long soft-wrapped paragraph.
+    NSMutableArray<NSValue *> *candidates=[NSMutableArray array];
+    NSRange expanded=region;
+    while (expanded.location) {
+        NSRange previous=[source lineRangeForRange:NSMakeRange(expanded.location-1,0)];
+        if (![[source substringWithRange:previous] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet].length) break;
+        expanded=NSMakeRange(previous.location,NSMaxRange(region)-previous.location);
+        [candidates addObject:[NSValue valueWithRange:expanded]];
+    }
+    NSUInteger lower=0,upper=candidates.count;
+    while (lower<upper) {
+        NSUInteger middle=lower+(upper-lower)/2;
+        if (sameParagraph(candidates[middle].rangeValue)) lower=middle+1;
+        else upper=middle;
+    }
+    if (lower) region=candidates[lower-1].rangeValue;
+    [candidates removeAllObjects]; expanded=region;
+    while (NSMaxRange(expanded)<source.length) {
+        NSRange next=[source lineRangeForRange:NSMakeRange(NSMaxRange(expanded),0)];
+        if (!next.length || ![[source substringWithRange:next] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet].length) break;
+        expanded=NSMakeRange(region.location,NSMaxRange(next)-region.location);
+        [candidates addObject:[NSValue valueWithRange:expanded]];
+    }
+    lower=0; upper=candidates.count;
+    while (lower<upper) {
+        NSUInteger middle=lower+(upper-lower)/2;
+        if (sameParagraph(candidates[middle].rangeValue)) lower=middle+1;
+        else upper=middle;
+    }
+    if (lower) region=candidates[lower-1].rangeValue;
+    return region;
+}
+
+- (BOOL)applyContainerFormattingValue:(NSString *)value selection:(NSDictionary *)verified callouts:(NSArray<NSDictionary *> *)callouts renderer:(MPRenderer *)renderer
+{
+    BOOL removing=[value isEqualToString:@"no-container"];
+    BOOL toggle=[value isEqualToString:@"toggle"] || [@[@"toggle-h1",@"toggle-h2",@"toggle-h3",@"toggle-h4"] containsObject:value];
+    NSString *type=[value isEqualToString:@"callout"] || toggle ? @"note" : [value hasPrefix:@"callout-"] ? [value substringFromIndex:8] : nil;
+    if (!removing && !MPPreviewDefaultCalloutTitle(type,toggle)) return NO;
+    NSString *source=self.editor.string ?: @"";
+    NSRange selection=[verified[@"range"] rangeValue];
+    if (selection.location>source.length || selection.length>source.length-selection.location) return NO;
+    NSDictionary *container=nil;
+    for (NSDictionary *candidate in callouts) {
+        NSRange content=[candidate[@"sourceContentRange"] rangeValue];
+        if (selection.location>=content.location && NSMaxRange(selection)<=NSMaxRange(content) &&
+            (!container || content.length<[container[@"sourceContentRange"] rangeValue].length)) container=candidate;
+    }
+    NSMutableArray *edits=[NSMutableArray array];
+    if (container) {
+        NSRange opening=[container[@"sourceOpenRange"] rangeValue],closing=[container[@"sourceCloseRange"] rangeValue];
+        if (NSMaxRange(closing)>source.length || NSMaxRange(opening)>closing.location) return NO;
+        if (removing) {
+            NSString *newline=[source containsString:@"\r\n"] ? @"\r\n" : @"\n";
+            // The preprocessor makes callout delimiters block boundaries even
+            // without authored blank lines. Retain those boundaries on unwrap.
+            NSString *before=@"", *after=@"";
+            if (opening.location) {
+                NSRange previous=[source lineRangeForRange:NSMakeRange(opening.location-1,0)];
+                if ([[source substringWithRange:previous] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet].length) before=newline;
+            }
+            if (NSMaxRange(closing)<source.length) {
+                NSRange next=[source lineRangeForRange:NSMakeRange(NSMaxRange(closing),0)];
+                if ([[source substringWithRange:next] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet].length) after=newline;
+            }
+            [edits addObject:@{@"range":[NSValue valueWithRange:opening],@"replacement":before}];
+            [edits addObject:@{@"range":[NSValue valueWithRange:closing],@"replacement":after}];
+        } else {
+            NSUInteger contentsEnd;
+            [source getLineStart:NULL end:NULL contentsEnd:&contentsEnd forRange:opening];
+            NSString *ending=[source substringWithRange:NSMakeRange(contentsEnd,NSMaxRange(opening)-contentsEnd)];
+            NSString *old=[source substringWithRange:NSMakeRange(opening.location,contentsEnd-opening.location)];
+            NSUInteger colon=[old rangeOfString:@":"].location, count=0;
+            if (colon==NSNotFound) return NO;
+            while (colon+count<old.length && [old characterAtIndex:colon+count]==':') count++;
+            NSString *prefix=[old substringToIndex:colon+count];
+            NSString *collapse=toggle ? ([container[@"collapse"] isEqualToString:@"false"] ? @" collapse=\"false\"" : @" collapse=\"true\"") : @"";
+            NSString *newOpen=[NSString stringWithFormat:@"%@ {.callout-%@%@}%@",prefix,type,collapse,ending];
+            [edits addObject:@{@"range":[NSValue valueWithRange:opening],@"replacement":newOpen}];
+            if ([value hasPrefix:@"toggle-h"]) {
+                NSUInteger level=[[value substringFromIndex:8] integerValue];
+                NSRange content=[container[@"sourceContentRange"] rangeValue];
+                NSArray *titleEdits=[self previewHeadingEditsInRange:content level:level source:source renderer:renderer];
+                if (titleEdits.count) [edits addObjectsFromArray:titleEdits];
+                else {
+                    NSString *heading=[[@"######" substringToIndex:level] stringByAppendingString:@" "];
+                    NSString *newline=ending.length ? ending : @"\n";
+                    NSString *title=[NSString stringWithFormat:@"%@%@%@",heading,MPPreviewDefaultCalloutTitle(type,YES),newline];
+                    [edits addObject:@{@"range":[NSValue valueWithRange:NSMakeRange(content.location,0)],@"replacement":title}];
+                }
+            }
+        }
+        return [self commitPreviewStructuralEdits:edits selection:selection];
+    }
+    if (removing) return YES;
+    NSRange region=verified[@"codeBlockRange"] ? [verified[@"codeBlockRange"] rangeValue] : [self previewParagraphRange:selection source:source renderer:renderer];
+    for (NSDictionary *candidate in callouts) {
+        NSRange opening=[candidate[@"sourceOpenRange"] rangeValue],closing=[candidate[@"sourceCloseRange"] rangeValue];
+        NSRange envelope=NSMakeRange(opening.location,NSMaxRange(closing)-opening.location);
+        // A mixed selection straddling an existing envelope is ambiguous:
+        // refuse atomically instead of adding another container category.
+        if (NSIntersectionRange(region,envelope).length) return NO;
+    }
+    NSString *body=[source substringWithRange:region];
+    if ([body containsString:@":::"]) return NO;
+    NSString *newline=[body containsString:@"\r\n"] ? @"\r\n" : @"\n";
+    // The envelope owns its generated title. An authored heading in the
+    // selected body remains a content heading, even when the new disclosure
+    // requests another title level; the two scopes must never overwrite it.
+    NSUInteger level=[value hasPrefix:@"toggle-h"] ? [[value substringFromIndex:8] integerValue] : 2;
+    NSString *title=[NSString stringWithFormat:@"%@ %@%@",[@"######" substringToIndex:level],MPPreviewDefaultCalloutTitle(type,toggle),newline];
+    NSString *opening=[NSString stringWithFormat:@"%@::: {.callout-%@%@}%@%@",newline,type,toggle ? @" collapse=\"true\"" : @"",newline,title];
+    NSString *closing=[NSString stringWithFormat:@"%@:::%@",[body hasSuffix:newline] ? @"" : newline,newline];
+    NSRange relativeSelection=NSMakeRange(selection.location-region.location,selection.length);
+    NSRange relative=NSMakeRange(opening.length+relativeSelection.location,relativeSelection.length);
+    NSString *replacement=[NSString stringWithFormat:@"%@%@%@",opening,body,closing];
+    return [self replacePreviewRange:region withString:replacement preservingSelection:[verified[@"range"] rangeValue] restoringRange:relative];
+}
+
 - (BOOL)applyBlockFormattingValue:(NSString *)value selection:(NSDictionary *)verified callouts:(NSArray<NSDictionary *> *)callouts renderer:(MPRenderer *)renderer
 {
+    if ([value isEqualToString:@"no-container"] || [value hasPrefix:@"callout-"] ||
+        [value isEqualToString:@"callout"] || [value hasPrefix:@"toggle"])
+        return [self applyContainerFormattingValue:value selection:verified callouts:callouts renderer:renderer];
     NSString *source=self.editor.string ?: @"";
     NSRange range=[verified[@"range"] rangeValue],selectedRange=range;
     if (!value.length || ([value isEqualToString:@"tasks"] && !self.preferences.htmlTaskList) ||
         ([value isEqualToString:@"code-block"] && !self.preferences.extensionFencedCode)) return NO;
-    if (range.length==0 && [@[@"unordered",@"ordered",@"tasks"] containsObject:value]) {
+    if (range.length==0 && [@[@"unordered",@"ordered",@"tasks",@"quote",@"h1",@"h2",@"h3",@"h4",@"h5",@"h6"] containsObject:value]) {
         NSUInteger start,end;
         [source getLineStart:&start end:NULL contentsEnd:&end forRange:range];
         if (![[source substringWithRange:NSMakeRange(start,end-start)] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet].length) {
-            NSString *prefix=[value isEqualToString:@"ordered"] ? @"1. " : [value isEqualToString:@"tasks"] ? @"- [ ] " : @"- ";
+            NSString *prefix=[value isEqualToString:@"ordered"] ? @"1. " : [value isEqualToString:@"tasks"] ? @"- [ ] " : [value isEqualToString:@"quote"] ? @"> " : [value hasPrefix:@"h"] ? [[@"######" substringToIndex:[[value substringFromIndex:1] integerValue]] stringByAppendingString:@" "] : @"- ";
             return [self replacePreviewRange:NSMakeRange(start,end-start) withString:prefix
                 preservingSelection:range restoringRange:NSMakeRange(prefix.length,0)];
         }
@@ -6126,18 +6431,6 @@ to link outside that scope.", \
         }
         [structuralEdits addObject:@{@"range":codeBlock,@"replacement":escaped,
             @"content":codeContent,@"positions":positions}];
-    }
-    // Only paired, parser-owned containers can be removed. Choose the
-    // innermost callout containing the complete proven visual selection.
-    NSDictionary *container = nil;
-    for (NSDictionary *candidate in callouts) {
-        NSRange content = [candidate[@"sourceContentRange"] rangeValue];
-        if (range.location<content.location || NSMaxRange(range)>NSMaxRange(content)) continue;
-        if (!container || content.length<[container[@"sourceContentRange"] rangeValue].length) container=candidate;
-    }
-    if (container) {
-        for (NSString *key in @[@"sourceOpenRange",@"sourceCloseRange"])
-            [structuralEdits addObject:@{@"range":container[key],@"replacement":@""}];
     }
     [structuralEdits sortUsingComparator:^NSComparisonResult(NSDictionary *a,NSDictionary *b) {
         return [@([b[@"range"] rangeValue].location) compare:@([a[@"range"] rangeValue].location)];
@@ -6440,21 +6733,6 @@ to link outside that scope.", \
         NSString *fence = [@"" stringByPaddingToLength:MAX((NSUInteger)3,longest+1) withString:@"`" startingAtIndex:0];
         if (restoredSelection.location!=NSNotFound) restoredSelection.location+=fence.length+2;
         body = [NSString stringWithFormat:@"\n%@\n%@\n%@\n",fence,body,fence];
-    } else if ([value isEqualToString:@"callout"] || [value hasPrefix:@"callout-"] || [value isEqualToString:@"toggle"] || [value hasPrefix:@"toggle-h"]) {
-        BOOL collapsible=[value isEqualToString:@"toggle"] || [value hasPrefix:@"toggle-h"];
-        NSString *type=[value hasPrefix:@"callout-"] ? [value substringFromIndex:8] : @"note";
-        NSString *title=MPPreviewDefaultCalloutTitle(type,collapsible);
-        if (!title || [body containsString:@":::"]) return NO;
-        NSUInteger level=2;
-        if ([value hasPrefix:@"toggle-h"]) {
-            if (![@[@"toggle-h1",@"toggle-h2",@"toggle-h3",@"toggle-h4"] containsObject:value]) return NO;
-            level=[[value substringFromIndex:8] integerValue];
-        }
-        NSString *heading=[[@"####" substringToIndex:level] stringByAppendingString:@" "];
-        NSString *opening=[NSString stringWithFormat:@"\n::: {.callout-%@%@}\n%@%@\n",type,
-            collapsible ? @" collapse=\"true\"" : @"",heading,title];
-        if (restoredSelection.location!=NSNotFound) restoredSelection.location+=opening.length;
-        body=[NSString stringWithFormat:@"%@%@\n:::\n",opening,body];
     } else if ([value isEqualToString:@"math-block"]) {
         restoredSelection=NSMakeRange(NSNotFound,0); // Generated math is not mapped for editing.
         if (!self.preferences.htmlMathJax || [body containsString:@"$$"]) return NO;

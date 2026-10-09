@@ -339,6 +339,14 @@ static NSString *MPPIMaskOpaque(NSString *body, NSRange selection, NSUInteger ba
     return result;
 }
 
+static NSURL *MPPIValidatedLinkURL(NSString *value)
+{
+    if (![value isKindOfClass:NSString.class] ||
+        [value rangeOfCharacterFromSet:[NSCharacterSet characterSetWithCharactersInString:@"<>\\\"\r\n"]].location!=NSNotFound) return nil;
+    NSURL *url=[NSURL URLWithString:value];
+    return [@[@"http",@"https",@"mailto"] containsObject:url.scheme.lowercaseString] ? url : nil;
+}
+
 static NSDictionary *MPPreviewInlineSingleChange(NSString *source, NSRange selection, NSString *action,
                                           NSString *value, NSString *(^render)(NSString *),
                                           NSString *(^escape)(NSString *), NSString *mode)
@@ -347,8 +355,8 @@ static NSDictionary *MPPreviewInlineSingleChange(NSString *source, NSRange selec
     BOOL clear=[action isEqualToString:@"clear"]; BOOL linkAction=[action isEqualToString:@"link"];
     NSNumber *requested=bits[action];
     if((!clear && !requested && !linkAction) || !selection.length || selection.location>source.length || selection.length>source.length-selection.location || !render || !escape) return nil;
-    NSURL *newURL=linkAction?[NSURL URLWithString:value ?: @""]:nil;
-    if(linkAction && (![@[@"http",@"https",@"mailto"] containsObject:newURL.scheme.lowercaseString] || [value rangeOfCharacterFromSet:[NSCharacterSet characterSetWithCharactersInString:@"<>\\\"\r\n"]].location!=NSNotFound)) return nil;
+    NSURL *newURL=linkAction ? MPPIValidatedLinkURL(value) : nil;
+    if(linkAction && !newURL) return nil;
     NSRange line=[source lineRangeForRange:selection];
     NSString *raw=[source substringWithRange:line];
     NSString *ending=@"";
