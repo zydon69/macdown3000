@@ -11,10 +11,11 @@
 
 // Matches src="..." or src='...' on resource elements (img, video, audio, source, iframe)
 // and href="..." or href='...' on <link> elements.
-// Group 1: the element name, Group 2: the URL value
+// Capture the delimiter separately: an apostrophe is valid in a double-quoted
+// URL (and vice versa). URL values are groups 3 (src) and 6 (href).
 static NSString * const kResourcePattern =
-    @"<(img|video|audio|source|iframe)\\b[^>]*\\ssrc\\s*=\\s*[\"']([^\"']+)[\"']"
-    @"|<(link)\\b[^>]*\\shref\\s*=\\s*[\"']([^\"']+)[\"']";
+    @"<(img|video|audio|source|iframe)\\b[^>]*\\ssrc\\s*=\\s*([\"'])(.*?)\\2"
+    @"|<(link)\\b[^>]*\\shref\\s*=\\s*([\"'])(.*?)\\5";
 
 static NSString *MPDecodeHTMLURL(NSString *url)
 {
@@ -27,7 +28,7 @@ static NSString *MPDecodeHTMLURL(NSString *url)
 static NSString *MPResolveLocalPath(NSString *url, NSURL *baseURL)
 {
     url = MPDecodeHTMLURL(url);
-    if ([url hasPrefix:@"#"] || [url hasPrefix:@"//"] || !baseURL.isFileURL)
+    if (!url.length || [url hasPrefix:@"#"] || [url hasPrefix:@"//"] || !baseURL.isFileURL)
         return nil;
     NSURL *baseDir = baseURL.hasDirectoryPath ? baseURL : baseURL.URLByDeletingLastPathComponent;
     NSURL *resolved = [NSURL URLWithString:url relativeToURL:baseDir];
@@ -48,7 +49,7 @@ NSSet<NSString *> *MPLocalFilePathsInHTML(NSString *html, NSURL *baseURL)
     NSError *error = nil;
     NSRegularExpression *regex = [NSRegularExpression
         regularExpressionWithPattern:kResourcePattern
-                             options:NSRegularExpressionCaseInsensitive
+                             options:NSRegularExpressionCaseInsensitive | NSRegularExpressionDotMatchesLineSeparators
                                error:&error];
     if (error)
         return [NSSet set];
@@ -59,12 +60,12 @@ NSSet<NSString *> *MPLocalFilePathsInHTML(NSString *html, NSURL *baseURL)
 
     for (NSTextCheckingResult *match in matches)
     {
-        // Group 2 is src= URL, Group 4 is href= URL
+        // Group 3 is src= URL, Group 6 is href= URL.
         NSString *url = nil;
-        if ([match rangeAtIndex:2].location != NSNotFound)
-            url = [html substringWithRange:[match rangeAtIndex:2]];
-        else if ([match rangeAtIndex:4].location != NSNotFound)
-            url = [html substringWithRange:[match rangeAtIndex:4]];
+        if ([match rangeAtIndex:3].location != NSNotFound)
+            url = [html substringWithRange:[match rangeAtIndex:3]];
+        else if ([match rangeAtIndex:6].location != NSNotFound)
+            url = [html substringWithRange:[match rangeAtIndex:6]];
 
         if (!url)
             continue;
@@ -87,7 +88,7 @@ NSString *MPApplyCacheBusting(NSString *html, NSDictionary<NSString *, NSNumber 
     NSError *error = nil;
     NSRegularExpression *regex = [NSRegularExpression
         regularExpressionWithPattern:kResourcePattern
-                             options:NSRegularExpressionCaseInsensitive
+                             options:NSRegularExpressionCaseInsensitive | NSRegularExpressionDotMatchesLineSeparators
                                error:&error];
     if (error)
         return html;
@@ -100,10 +101,10 @@ NSString *MPApplyCacheBusting(NSString *html, NSDictionary<NSString *, NSNumber 
     for (NSTextCheckingResult *match in [matches reverseObjectEnumerator])
     {
         NSRange urlRange;
-        if ([match rangeAtIndex:2].location != NSNotFound)
-            urlRange = [match rangeAtIndex:2];
-        else if ([match rangeAtIndex:4].location != NSNotFound)
-            urlRange = [match rangeAtIndex:4];
+        if ([match rangeAtIndex:3].location != NSNotFound)
+            urlRange = [match rangeAtIndex:3];
+        else if ([match rangeAtIndex:6].location != NSNotFound)
+            urlRange = [match rangeAtIndex:6];
         else
             continue;
 
