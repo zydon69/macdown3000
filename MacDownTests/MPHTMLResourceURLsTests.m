@@ -289,4 +289,26 @@
     XCTAssertTrue([result containsString:@"variant=dark&amp;t=1234#logo"]);
 }
 
+- (void)testCacheBustingPreservesEncodedQuotesAndAttributeBoundaries {
+    for (NSString *quote in @[@"'", @"\""]) {
+        for (NSString *tag in @[@"img", @"link"]) {
+            NSString *attribute = [tag isEqualToString:@"img"] ? @"src" : @"href";
+            NSString *html = [NSString stringWithFormat:
+                @"<%@ %@=%@image.png?name=a&#39;b&amp;keep=c&amp;t=old#logo%@ alt='preserved'/>",
+                tag, attribute, quote, quote];
+            NSString *result = MPApplyCacheBusting(html,
+                @{@"/Users/test/docs/image.png": @1234}, self.baseURL);
+            NSError *error = nil;
+            NSXMLDocument *document = [[NSXMLDocument alloc] initWithXMLString:result
+                options:NSXMLNodeLoadExternalEntitiesNever error:&error];
+            XCTAssertNotNil(document, @"%@", error);
+            NSXMLElement *element = document.rootElement;
+            XCTAssertEqualObjects([element attributeForName:attribute].stringValue,
+                @"image.png?name=a'b&keep=c&t=1234#logo");
+            XCTAssertEqualObjects([element attributeForName:@"alt"].stringValue, @"preserved");
+            XCTAssertEqual(element.attributes.count, 2u);
+        }
+    }
+}
+
 @end

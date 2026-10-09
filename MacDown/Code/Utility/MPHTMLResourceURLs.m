@@ -127,7 +127,13 @@ NSString *MPApplyCacheBusting(NSString *html, NSDictionary<NSString *, NSNumber 
         [items addObject:[NSURLQueryItem queryItemWithName:@"t"
             value:[NSString stringWithFormat:@"%ld", (long)timestamp.doubleValue]]];
         components.queryItems = items;
+        // NSURLComponents preserves apostrophes in URLs. Escape for the HTML
+        // attribute as well as for the URL, regardless of its quote delimiter.
         NSString *busted = [components.string stringByReplacingOccurrencesOfString:@"&" withString:@"&amp;"];
+        busted = [busted stringByReplacingOccurrencesOfString:@"\"" withString:@"&quot;"];
+        busted = [busted stringByReplacingOccurrencesOfString:@"'" withString:@"&#39;"];
+        busted = [busted stringByReplacingOccurrencesOfString:@"<" withString:@"&lt;"];
+        busted = [busted stringByReplacingOccurrencesOfString:@">" withString:@"&gt;"];
         [result replaceCharactersInRange:urlRange withString:busted];
     }
 
