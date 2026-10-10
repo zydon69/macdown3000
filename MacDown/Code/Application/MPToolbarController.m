@@ -451,6 +451,7 @@ static NSArray<NSNumber *> *MPToolbarDocumentZoomLevels(void)
     [itemImage setSize:CGSizeMake(19, 19)];
     NSButton *itemButton = [[NSButton alloc] initWithFrame:NSMakeRect(0, 0, itemWidth, 27)];
     itemButton.image = itemImage;
+    itemButton.toolTip=label;
     if (!itemImage) itemButton.title=label;
     itemButton.imageScaling = NSImageScaleProportionallyDown;
     itemButton.bezelStyle = NSBezelStyleTexturedRounded;
