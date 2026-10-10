@@ -270,6 +270,46 @@
     XCTAssertEqualObjects([self JS:@"document.querySelector('[data-mp-format-menu]').getAttribute('aria-expanded')"],@"false");
 }
 
+- (void)testHoverMenuKeepsCompactGeometrySelectionAndExistingOptions
+{
+    [self loadSource:@"# **Heading**\n\nBody\n"];
+    [self selectFromText:@"Heading" throughText:@"Heading"];
+    NSString *options=[self JS:@"JSON.stringify(Array.from(document.querySelectorAll('[data-mp-option]')).map(function(b){return b.getAttribute('data-mp-option');}))"];
+    for (NSNumber *width in @[@900,@600,@300]) {
+        [self.web setFrameSize:NSMakeSize(width.doubleValue,450)];
+        [self selectFromText:@"Heading" throughText:@"Heading"];
+        [self JS:@"window.dispatchEvent(new Event('resize'));window.__compactLeft=document.querySelector('#macdown-preview-format').getBoundingClientRect().left;window.__compactHeight=document.querySelector('#macdown-preview-format').offsetHeight;document.querySelector('[data-mp-format-menu]').dispatchEvent(new MouseEvent('mouseenter'));"];
+        XCTAssertFalse([[self JS:@"document.querySelector('[role=menu]').hidden"] boolValue]);
+        XCTAssertTrue([[self JS:@"document.querySelector('#macdown-preview-format').offsetHeight===window.__compactHeight"] boolValue]);
+        XCTAssertTrue([[self JS:@"document.querySelector('#macdown-preview-format').getBoundingClientRect().left===window.__compactLeft"] boolValue]);
+        XCTAssertTrue([[self JS:@"(function(){var m=document.querySelector('[role=menu]').getBoundingClientRect();return m.left>=12 && m.right<=innerWidth-12 && m.top>=8 && m.bottom<=innerHeight-8;})()"] boolValue],@"%@",[self JS:@"JSON.stringify({menu:document.querySelector(\'[role=menu]\').getBoundingClientRect().toJSON(),width:innerWidth,height:innerHeight})"]);
+        if(width.intValue>=600) {
+            XCTAssertTrue([[self JS:@"(function(){var p=document.querySelector('#macdown-preview-format').getBoundingClientRect(),m=document.querySelector('[role=menu]').getBoundingClientRect();return Math.abs(p.right-m.left)<1;})()"] boolValue]);
+        }
+        if(width.intValue==300) {
+            XCTAssertTrue([[self JS:@"(function(){var p=document.querySelector('#macdown-preview-format').getBoundingClientRect(),m=document.querySelector('[role=menu]').getBoundingClientRect();return m.top>=p.bottom || m.bottom<=p.top;})()"] boolValue]);
+        }
+        XCTAssertEqualObjects([self JS:@"getSelection().toString()"],@"Heading");
+        XCTAssertEqualObjects([self JS:@"JSON.stringify(Array.from(document.querySelectorAll('[data-mp-option]')).map(function(b){return b.getAttribute('data-mp-option');}))"],options);
+        [self JS:@"(function(){var o=document.querySelector('[data-mp-format-menu]'),m=document.querySelector('[role=menu]');o.dispatchEvent(new MouseEvent('mouseleave',{relatedTarget:m}));m.dispatchEvent(new MouseEvent('mouseenter',{relatedTarget:o}));m.dispatchEvent(new KeyboardEvent('keydown',{key:'End',bubbles:true}));})()"];
+        [self JS:@"window.__menuCrossed=false;setTimeout(function(){window.__menuCrossed=true;},220)"];
+        [self waitUntil:^BOOL{return [[self JS:@"window.__menuCrossed"] boolValue];} description:@"Crossing into menu must not trigger delayed closure"];
+        XCTAssertFalse([[self JS:@"document.querySelector('[role=menu]').hidden"] boolValue]);
+        XCTAssertEqualObjects([self JS:@"document.activeElement.getAttribute('data-mp-option')"],@"toggle-h4");
+        [self JS:@"document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))"];
+        XCTAssertTrue([[self JS:@"document.querySelector('[role=menu]').hidden"] boolValue]);
+    }
+    [self selectFromText:@"Heading" throughText:@"Heading"];
+    [self JS:@"document.querySelector('[data-mp-format-menu]').dispatchEvent(new MouseEvent('mouseenter'));document.querySelector('[role=menu]').dispatchEvent(new MouseEvent('mouseleave',{relatedTarget:document.body}))"];
+    [self waitUntil:^BOOL{return [[self JS:@"document.querySelector('[role=menu]').hidden"] boolValue];} description:@"Menu closes after leaving both surfaces"];
+    XCTAssertEqualObjects([self JS:@"getSelection().toString()"],@"Heading");
+    [self JS:@"document.querySelector('[data-mp-format-menu]').dispatchEvent(new MouseEvent('mouseenter'));document.querySelector('[data-mp-option=h2] span').dispatchEvent(new MouseEvent('mousedown',{bubbles:true,cancelable:true}));document.querySelector('[data-mp-option=h2]').click()"];
+    [self waitForFormatting];
+    XCTAssertEqualObjects(self.editor.string,@"## **Heading**\n\nBody\n");
+    XCTAssertEqualObjects([self JS:@"getSelection().toString()"],@"Heading");
+    XCTAssertTrue([[self JS:@"document.querySelector('[role=menu]').hidden"] boolValue]);
+}
+
 - (void)testTextDropdownHasSeparatedScopesAndInlineIconsKeepTooltips
 {
     [self loadSource:@"# **Heading**\n\nBody\n"];

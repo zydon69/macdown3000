@@ -10586,20 +10586,21 @@
     },
     {
       "path": "MacDown/Resources/Extensions/preview-edit.js",
-      "observed_sha256": "16b41b77c6a23da171c54bbe30aad0edc75276268c2c8c1d1766ddece6940f0f",
+      "observed_sha256": "fbf277dfcf3053ae16e2f827e532149e489732b40b2f224e70d094f123992170",
       "sha256": "16b41b77c6a23da171c54bbe30aad0edc75276268c2c8c1d1766ddece6940f0f",
       "read": false,
       "analyzed": false,
       "validation_tested": false,
       "validation_without_test": false,
       "state": "modifié après campagne04 — correction ciblée testée, relecture intégrale à renouveler",
-      "evidence": "../../features/preview-blank-click.md",
+      "evidence": "../../features/preview-hover-menu.md",
       "open_findings": [],
       "read_ranges": [
         "diff de la correction des citations ; contrats et consommateurs concernés",
         "diff du parcours mousedown ; protection des modificateurs, liens, édition et contrôles",
         "correction ciblée : chaîne verticale des contrôles Compilation et parcours Force Touch, selon le fichier",
-        "diff de la désélection par clic hors segments mappés et protections des gestes"
+        "diff de la désélection par clic hors segments mappés et protections des gestes",
+        "diff ciblé : état compact, survol et positionnement du menu, maintien de la sélection"
       ],
       "review_flow": "styles",
       "review_decision": "Correction ciblée ; certification intégrale de la version précédente conservée séparément. Nouvelle validation exhaustive non déclarée.",
@@ -10618,7 +10619,10 @@
         "../../features/preview-blank-click.md",
         "preuves/clic-vide-native.log",
         "preuves/clic-vide-ui-first.log",
-        "preuves/clic-vide-ui-final.log"
+        "preuves/clic-vide-ui-final.log",
+        "../../features/preview-hover-menu.md",
+        "preuves/menu-survol-final.log",
+        "preuves/menu-survol-positionnement.log"
       ],
       "historical_campaign04_validation": {
         "path": "MacDown/Resources/Extensions/preview-edit.js",

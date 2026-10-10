@@ -739,3 +739,7 @@ Revue complète terminée dans le périmètre local vérifié. Les versions sour
 ## Suivi ciblé — styles multilignes et listes, 10 octobre 2026
 
 Le [rapport](../../features/multiline-list-formatting.md) décrit la perte des styles traversant une fin de ligne et la correction connexe de sélection dans les listes à cocher. Reproduction rouge conservée ; validation finale : 43 tests, zéro échec, avec les matrices existantes et le vrai WebView. Les empreintes de `MPDocument.m` et du helper inline sont actualisées ; leurs cases de lecture/analyse/validation intégrale restent décochées. Cette intervention ne renouvelle pas la campagne d’audit exhaustive.
+
+### Suivi ciblé — menu au survol (10 octobre 2026)
+
+Le menu est réinitialisé à chaque nouvelle sélection et placé sur une surface séparée au survol. Les commandes existantes sont conservées. Rapport : `../../features/preview-hover-menu.md`. Cette correction ne renouvelle pas la certification exhaustive de la campagne 04.
