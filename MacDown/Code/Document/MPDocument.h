@@ -54,5 +54,6 @@
 - (BOOL)validateDocumentFindAction:(NSMenuItem *)item;
 
 - (IBAction)resetToNormalText:(id)sender;
+- (void)insertTableWithColumns:(NSUInteger)columns rows:(NSUInteger)rows;
 
 @end

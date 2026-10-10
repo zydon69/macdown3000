@@ -10,6 +10,7 @@
 
 #import <XCTest/XCTest.h>
 #import "MPToolbarController.h"
+#import <QuartzCore/QuartzCore.h>
 
 // Expose internal action methods to the test target; they are not part of
 // the public header but are callable via dynamic dispatch.
@@ -59,6 +60,15 @@
     return YES;
 }
 
+@end
+
+@interface MPTableSelectionRecorder : MPDocument
+@property NSUInteger chosenColumns;
+@property NSUInteger chosenRows;
+@end
+@implementation MPTableSelectionRecorder
+- (void)insertTableWithColumns:(NSUInteger)columns rows:(NSUInteger)rows
+{self.chosenColumns=columns;self.chosenRows=rows;}
 @end
 
 @interface MPToolbarControllerTests : XCTestCase
@@ -983,6 +993,45 @@
 
 #pragma mark - Standalone Toolbar Item Dispatch Tests (Issue #278)
 
+- (void)testTableButtonOpensGridAndDispatchesChosenDimensions
+{
+    MPTableSelectionRecorder *document=[MPTableSelectionRecorder new];self.controller.document=document;
+    NSToolbarItem *item=[self.controller toolbar:nil itemForItemIdentifier:@"table" willBeInsertedIntoToolbar:YES];
+    NSButton *button=(id)item.view;[self attachDispatchControlToWindow:button];
+    [button performClick:nil];
+    NSPopover *popover=[self.controller valueForKey:@"tablePopover"];
+    XCTAssertNotNil(popover);
+    NSView *grid=popover.contentViewController.view;
+    XCTAssertEqual(grid.subviews.count,65u);
+    NSButton *choice=(id)[grid viewWithTag:27]; // 3 columns, 4 rows.
+    [choice performClick:nil];
+    XCTAssertEqual(document.chosenColumns,3u);XCTAssertEqual(document.chosenRows,4u);
+    [popover close];[document close];
+}
+
+- (void)testTableGridHighlightsAndChoosesAll64Dimensions
+{
+    NSView *grid=[[NSClassFromString(@"MPTableSizePicker") alloc] initWithFrame:NSZeroRect];
+    XCTAssertNotNil(grid);
+    for (NSUInteger row=1;row<=8;row++) for (NSUInteger column=1;column<=8;column++) {
+        __block NSUInteger chosenColumns=0,chosenRows=0;
+        [grid setValue:[^(NSUInteger c,NSUInteger r){chosenColumns=c;chosenRows=r;} copy] forKey:@"chooseSize"];
+        NSButton *cell=(id)[grid viewWithTag:(row-1)*8+column];
+        XCTAssertTrue([cell isKindOfClass:NSButton.class]);
+        [cell mouseEntered:nil];
+        NSUInteger highlighted=0;
+        for (NSView *view in grid.subviews) if ([view isKindOfClass:NSButton.class]) {
+            NSColor *color=[NSColor colorWithCGColor:view.layer.backgroundColor];
+            if (color.alphaComponent<0.9) highlighted++;
+        }
+        XCTAssertEqual(highlighted,row*column);
+        [cell performClick:nil];
+        XCTAssertEqual(chosenColumns,column);XCTAssertEqual(chosenRows,row);
+    }
+    NSToolbarItem *code=[self.controller toolbar:nil itemForItemIdentifier:@"code" willBeInsertedIntoToolbar:YES];
+    XCTAssertEqualObjects([((NSToolbarItemGroup *)code).subitems valueForKey:@"itemIdentifier"],(@[@"inline-code",@"code-block",@"normal-text"]));
+}
+
 - (void)testStandaloneButtonsTargetToolbarController
 {
     // Standalone buttons must target the toolbar controller so actions
@@ -1019,7 +1068,8 @@
                                  itemForItemIdentifier:identifier
                              willBeInsertedIntoToolbar:YES];
         NSButton *button = (NSButton *)item.view;
-        XCTAssertEqual(button.action, expectedAction,
+        SEL action=[identifier isEqualToString:@"table"] ? NSSelectorFromString(@"showTablePicker:") : expectedAction;
+        XCTAssertEqual(button.action, action,
                        @"Standalone button '%@' must use standaloneToolbarItemClicked: action",
                        identifier);
     }

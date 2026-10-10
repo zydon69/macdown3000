@@ -16,6 +16,7 @@
 
 // Expose the pure class helper for testing.
 @interface MPDocument (InsertTableTesting)
++ (NSString *)tableInsertionForContent:(NSString *)content selectedRange:(NSRange)selectedRange columns:(NSUInteger)columns rows:(NSUInteger)rows replacementRange:(NSRange *)replacement caretLocation:(NSUInteger *)caret;
 + (NSString *)tableInsertionForContent:(NSString *)content
                          selectedRange:(NSRange)selectedRange
                       replacementRange:(NSRange *)outReplacementRange
@@ -30,6 +31,22 @@ static NSString *const kBodyRow = @"|  |  |  |";
 @end
 
 @implementation MPInsertTableTests
+- (void)testAll64TableDimensionsAndInvalidSizes
+{
+    for(NSUInteger rows=1;rows<=8;rows++) for(NSUInteger columns=1;columns<=8;columns++) {
+        NSRange replacement;NSUInteger caret;
+        NSString *text=[MPDocument tableInsertionForContent:@"Before\nAfter" selectedRange:NSMakeRange(6,0) columns:columns rows:rows replacementRange:&replacement caretLocation:&caret];
+        NSArray *lines=[[text stringByTrimmingCharactersInSet:NSCharacterSet.newlineCharacterSet] componentsSeparatedByString:@"\n"];
+        XCTAssertEqual(lines.count,rows+1);
+        for(NSString *line in lines) XCTAssertEqual([line componentsSeparatedByString:@"|"].count,columns+2);
+        XCTAssertLessThanOrEqual(caret,12+text.length);
+        XCTAssertEqual(replacement.location,6u);
+    }
+    for(NSArray *size in @[@[@0,@1],@[@1,@0],@[@9,@1],@[@1,@9],@[@(NSUIntegerMax),@1]]) {
+        XCTAssertNil([MPDocument tableInsertionForContent:@"" selectedRange:NSMakeRange(0,0) columns:[size[0] unsignedIntegerValue] rows:[size[1] unsignedIntegerValue] replacementRange:NULL caretLocation:NULL]);
+    }
+}
+
 
 #pragma mark - Helpers
 

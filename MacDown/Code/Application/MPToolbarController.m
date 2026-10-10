@@ -8,6 +8,7 @@
 
 #import "MPToolbarController.h"
 #import "MPPreferences.h"
+#import <QuartzCore/QuartzCore.h>
 
 // Because we're creating selectors for methods which aren't in this class
 #pragma GCC diagnostic ignored "-Wundeclared-selector"
@@ -26,6 +27,70 @@ static NSArray<NSNumber *> *MPToolbarDocumentZoomLevels(void)
     return levels;
 }
 
+
+@class MPTableSizePicker;
+@interface MPTableGridCell : NSButton
+@property (weak) MPTableSizePicker *picker;
+@property (strong) NSTrackingArea *hoverArea;
+@end
+
+@interface MPTableSizePicker : NSView
+@property (copy) void (^chooseSize)(NSUInteger columns, NSUInteger rows);
+@property (strong) NSTextField *sizeLabel;
+- (void)highlightCell:(MPTableGridCell *)cell;
+@end
+
+@implementation MPTableGridCell
+- (void)updateTrackingAreas
+{
+    [super updateTrackingAreas];
+    if (self.hoverArea) [self removeTrackingArea:self.hoverArea];
+    self.hoverArea=[[NSTrackingArea alloc] initWithRect:NSZeroRect
+        options:NSTrackingMouseEnteredAndExited|NSTrackingActiveAlways|NSTrackingInVisibleRect owner:self userInfo:nil];
+    [self addTrackingArea:self.hoverArea];
+}
+- (void)mouseEntered:(NSEvent *)event { [self.picker highlightCell:self]; }
+- (BOOL)becomeFirstResponder
+{
+    BOOL accepted=[super becomeFirstResponder];
+    if (accepted) [self.picker highlightCell:self];
+    return accepted;
+}
+@end
+
+@implementation MPTableSizePicker
+- (BOOL)isFlipped {return YES;}
+- (instancetype)initWithFrame:(NSRect)frame
+{
+    self=[super initWithFrame:NSMakeRect(0,0,272,300)];
+    if (!self) return nil;
+    for (NSUInteger row=0;row<8;row++) for (NSUInteger column=0;column<8;column++) {
+        MPTableGridCell *cell=[[MPTableGridCell alloc] initWithFrame:NSMakeRect(8+column*32,8+row*32,28,28)];
+        cell.picker=self;cell.tag=row*8+column+1;cell.title=@"";cell.bordered=NO;cell.wantsLayer=YES;
+        cell.layer.cornerRadius=3;cell.layer.borderWidth=1;cell.layer.borderColor=NSColor.gridColor.CGColor;
+        cell.toolTip=[NSString stringWithFormat:@"%lu × %lu",(unsigned long)column+1,(unsigned long)row+1];
+        cell.accessibilityLabel=cell.toolTip;cell.target=self;cell.action=@selector(chooseCell:);
+        [self addSubview:cell];
+    }
+    self.sizeLabel=[NSTextField labelWithString:NSLocalizedString(@"Table",nil)];
+    self.sizeLabel.frame=NSMakeRect(8,272,256,20);[self addSubview:self.sizeLabel];
+    return self;
+}
+- (void)highlightCell:(MPTableGridCell *)cell
+{
+    NSUInteger columns=(cell.tag-1)%8+1,rows=(cell.tag-1)/8+1;
+    self.sizeLabel.stringValue=[NSString stringWithFormat:@"%@ — %lu × %lu",NSLocalizedString(@"Table",nil),(unsigned long)columns,(unsigned long)rows];
+    for (NSView *view in self.subviews) if ([view isKindOfClass:MPTableGridCell.class]) {
+        MPTableGridCell *item=(id)view;
+        BOOL highlighted=(NSUInteger)(item.tag-1)%8<columns && (NSUInteger)(item.tag-1)/8<rows;
+        item.layer.backgroundColor=(highlighted ? [NSColor.selectedControlColor colorWithAlphaComponent:0.65] : NSColor.controlBackgroundColor).CGColor;
+    }
+}
+- (void)chooseCell:(MPTableGridCell *)cell
+{
+    if (self.chooseSize) self.chooseSize((cell.tag-1)%8+1,(cell.tag-1)/8+1);
+}
+@end
 
 @implementation MPToolbarController
 {
@@ -55,6 +120,7 @@ static NSArray<NSNumber *> *MPToolbarDocumentZoomLevels(void)
      * when the preference changes from elsewhere (menu, keyboard shortcut).
      */
     __weak NSPopUpButton *_zoomPopUp;
+    NSPopover *_tablePopover;
 }
 
 - (id)init
@@ -258,6 +324,25 @@ static NSArray<NSNumber *> *MPToolbarDocumentZoomLevels(void)
 }
 
 
+- (void)showTablePicker:(NSButton *)sender
+{
+    if (!sender.window || !self.document) return;
+    if (_tablePopover.shown) {[_tablePopover close];return;}
+    MPTableSizePicker *grid=[[MPTableSizePicker alloc] initWithFrame:NSZeroRect];
+    __weak MPToolbarController *weakSelf=self;
+    __weak MPDocument *document=self.document;
+    grid.chooseSize=^(NSUInteger columns,NSUInteger rows){
+        MPToolbarController *controller=weakSelf;
+        if (!controller) return;
+        [controller->_tablePopover close];
+        [document insertTableWithColumns:columns rows:rows];
+    };
+    NSViewController *content=[NSViewController new];content.view=grid;
+    _tablePopover=[NSPopover new];_tablePopover.behavior=NSPopoverBehaviorTransient;
+    _tablePopover.contentViewController=content;_tablePopover.contentSize=grid.frame.size;
+    [_tablePopover showRelativeToRect:sender.bounds ofView:sender preferredEdge:NSMinYEdge];
+}
+
 - (void)standaloneToolbarItemClicked:(NSButton *)sender
 {
     NSString *actionName = self->itemActionsByIdentifier[sender.identifier];
@@ -451,8 +536,8 @@ static NSArray<NSNumber *> *MPToolbarDocumentZoomLevels(void)
     [itemImage setSize:CGSizeMake(19, 19)];
     NSButton *itemButton = [[NSButton alloc] initWithFrame:NSMakeRect(0, 0, itemWidth, 27)];
     itemButton.image = itemImage;
-    itemButton.toolTip=label;
     if (!itemImage) itemButton.title=label;
+    itemButton.toolTip=label;
     itemButton.imageScaling = NSImageScaleProportionallyDown;
     itemButton.bezelStyle = NSBezelStyleTexturedRounded;
     itemButton.focusRingType = NSFocusRingTypeDefault;
@@ -463,6 +548,7 @@ static NSArray<NSNumber *> *MPToolbarDocumentZoomLevels(void)
     itemButton.action = @selector(standaloneToolbarItemClicked:);
 
     if (!itemImage) [itemButton sizeToFit];
+    if ([itemIdentifier isEqualToString:@"table"]) itemButton.action=@selector(showTablePicker:);
     toolbarItem.view = itemButton;
 
     [self->toolbarItemIdentifierObjectDictionary setObject:toolbarItem forKey:itemIdentifier];

@@ -530,6 +530,7 @@ static NSString *MPPreviewResourceHTML(NSString *html)
 #endif
      MPAutosaving, MPRendererDataSource, MPRendererDelegate, MPResourceWatcherSetDelegate,
      MPFolderSidebarDelegate>
++ (NSString *)tableInsertionForContent:(NSString *)content selectedRange:(NSRange)selectedRange columns:(NSUInteger)columns rows:(NSUInteger)rows replacementRange:(NSRange *)replacement caretLocation:(NSUInteger *)caret;
 
 typedef NS_ENUM(NSUInteger, MPWordCountType) {
     MPWordCountTypeWord,
@@ -3875,10 +3876,25 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
                       replacementRange:(NSRange *)outReplacementRange
                          caretLocation:(NSUInteger *)outCaretLocation
 {
-    static NSString *const core = @"| Column 1 | Column 2 | Column 3 |\n"
-                                  @"| --- | --- | --- |\n"
-                                  @"|  |  |  |";
-    NSUInteger caretOffsetInCore = [core rangeOfString:@"|  |"].location + 2;
+    return [self tableInsertionForContent:content selectedRange:selectedRange columns:3 rows:2
+                        replacementRange:outReplacementRange caretLocation:outCaretLocation];
+}
+
++ (NSString *)tableInsertionForContent:(NSString *)content selectedRange:(NSRange)selectedRange
+                               columns:(NSUInteger)columns rows:(NSUInteger)rows
+                      replacementRange:(NSRange *)outReplacementRange caretLocation:(NSUInteger *)outCaretLocation
+{
+    if (columns<1 || columns>8 || rows<1 || rows>8) return nil;
+    NSMutableString *core=[NSMutableString stringWithString:@"|"];
+    for (NSUInteger column=1;column<=columns;column++) [core appendFormat:@" Column %lu |",(unsigned long)column];
+    [core appendString:@"\n|"];
+    for (NSUInteger column=0;column<columns;column++) [core appendString:@" --- |"];
+    NSUInteger caretOffsetInCore=2;
+    for (NSUInteger row=1;row<rows;row++) {
+        [core appendString:@"\n|"];
+        if (row==1) caretOffsetInCore=core.length+1;
+        for (NSUInteger column=0;column<columns;column++) [core appendString:@"  |"];
+    }
 
     if (content == nil)
         content = @"";
@@ -3940,12 +3956,18 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 
 - (IBAction)insertTable:(id)sender
 {
+    [self insertTableWithColumns:3 rows:2];
+}
+
+- (void)insertTableWithColumns:(NSUInteger)columns rows:(NSUInteger)rows
+{
+    if (self.documentClosed || self.printing || [self previewDraft]) return;
     NSString *content = self.editor.string ?: @"";
     NSRange replacementRange = NSMakeRange(0, 0);
     NSUInteger caretLocation = 0;
     NSString *inserted =
         [MPDocument tableInsertionForContent:content
-                               selectedRange:self.editor.selectedRange
+                               selectedRange:self.editor.selectedRange columns:columns rows:rows
                             replacementRange:&replacementRange
                                caretLocation:&caretLocation];
 
@@ -3957,7 +3979,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     // mutates the text storage directly regardless of first responder, registers
     // a single undo step, and fires NSTextDidChangeNotification so the
     // highlighter re-parses.
-    if (![self.editor shouldChangeTextInRange:replacementRange
+    if (!inserted || ![self.editor shouldChangeTextInRange:replacementRange
                             replacementString:inserted])
         return;
     [self.editor.textStorage replaceCharactersInRange:replacementRange

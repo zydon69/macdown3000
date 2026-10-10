@@ -1093,18 +1093,19 @@
     },
     {
       "path": "MacDown/Code/Application/MPToolbarController.m",
-      "observed_sha256": "9bd7f6e6721c4b22d8b6cdc05673769dc16f61df564847e48ff519bf66ec9284",
+      "observed_sha256": "0119dd2581c11883b40ba93b8125b25d14709df7540216cc55d9ae3a15e49258",
       "sha256": "807570669c3644b1e65c9e19f1f0750758572957900f9404a1ff8a54a009ac6a",
       "read": false,
       "analyzed": false,
       "validation_tested": false,
       "validation_without_test": false,
-      "state": "modifié après campagne04 — ajout ciblé testé, relecture intégrale à renouveler",
-      "evidence": "../../features/toolbar-strikethrough.md",
+      "state": "modifié après campagne04 — modification ciblée testée, relecture intégrale à renouveler",
+      "evidence": "../../features/normal-text-table-picker.md",
       "open_findings": [],
       "read_ranges": [
         "entier",
-        "diff ciblé : ajout du segment Barré après Souligné, dispatch existant et icône traduite"
+        "diff ciblé : ajout du segment Barré après Souligné, dispatch existant et icône traduite",
+        "diff ciblé : bouton Texte normal, dimensions du tableau, grille de sélection et traduction française"
       ],
       "review_flow": "editor",
       "review_decision": "Éditeur/toolbar/extension : marqueurs, IME, délégué/undo, listes/indentation et notifications recoupés.",
@@ -1112,7 +1113,9 @@
         "preuves/campagne04-native-final.log",
         "preuves/campagne04-ui-delivery-verified.log",
         "preuves/campagne04-indent_selection.log",
-        "preuves/campagne04-list-overflow-green.log"
+        "preuves/campagne04-list-overflow-green.log",
+        "../../features/normal-text-table-picker.md",
+        "preuves/texte-normal-grille-tableau-final.log"
       ],
       "historical_toolbar_validation_before_strike": {
         "sha256": "807570669c3644b1e65c9e19f1f0750758572957900f9404a1ff8a54a009ac6a",
@@ -1177,17 +1180,18 @@
     },
     {
       "path": "MacDown/Code/Document/MPDocument.h",
-      "observed_sha256": "bb4a26c1ff81e79a0e5a40df9d049653feaf1c3fe2c59f4a54764152e77edaf7",
+      "observed_sha256": "a5a8385253a8cd0083ef5c4b4033b293b1835c5890f7616ce6fdb9974d93f4bf",
       "sha256": "bb4a26c1ff81e79a0e5a40df9d049653feaf1c3fe2c59f4a54764152e77edaf7",
-      "read": true,
-      "analyzed": true,
-      "validation_tested": true,
+      "read": false,
+      "analyzed": false,
+      "validation_tested": false,
       "validation_without_test": false,
-      "state": "validé avec tests",
-      "evidence": "preuves/campagne04-lecture.md",
+      "state": "modifié après campagne04 — modification ciblée testée, relecture intégrale à renouveler",
+      "evidence": "../../features/normal-text-table-picker.md",
       "open_findings": [],
       "read_ranges": [
-        "entier"
+        "entier",
+        "diff ciblé : bouton Texte normal, dimensions du tableau, grille de sélection et traduction française"
       ],
       "review_flow": "document",
       "review_decision": "Document/rendu/transactions/PDF et catégories de transformation ; branches/consommateurs et seconde passe décrits dans le registre.",
@@ -1197,25 +1201,38 @@
         "preuves/campagne04-inline.log",
         "preuves/campagne04-callout-green.log",
         "preuves/campagne04-print-native-green.log",
-        "preuves/campagne04-preserved-file-final.log"
-      ]
+        "preuves/campagne04-preserved-file-final.log",
+        "../../features/normal-text-table-picker.md",
+        "preuves/texte-normal-grille-tableau-final.log"
+      ],
+      "historical_validation_before_table_picker": {
+        "sha256": "bb4a26c1ff81e79a0e5a40df9d049653feaf1c3fe2c59f4a54764152e77edaf7",
+        "observed_sha256": "bb4a26c1ff81e79a0e5a40df9d049653feaf1c3fe2c59f4a54764152e77edaf7",
+        "read": true,
+        "analyzed": true,
+        "validation_tested": true,
+        "validation_without_test": false,
+        "state": "validé avec tests",
+        "evidence": "preuves/campagne04-lecture.md"
+      }
     },
     {
       "path": "MacDown/Code/Document/MPDocument.m",
-      "observed_sha256": "002e3eed3c162688376e807391f537fc9d2c4180d8cf05f1248087f83ed7c5d4",
+      "observed_sha256": "8ac17758b1ee737832052fccc3b06736ee17825663a3339899b7e2c66ca3da4b",
       "sha256": "93479bf016b912ee7b3b518e550190fd34b50f2e64b06a91d2b86eacbb528cea",
       "read": false,
       "analyzed": false,
       "validation_tested": false,
       "validation_without_test": false,
-      "state": "modifié après campagne04 — correction ciblée testée, relecture intégrale à renouveler",
-      "evidence": "../../features/preview-popover-zoom.md",
+      "state": "modifié après campagne04 — modification ciblée testée, relecture intégrale à renouveler",
+      "evidence": "../../features/normal-text-table-picker.md",
       "open_findings": [],
       "read_ranges": [
         "diff de la correction des citations ; contrats et consommateurs concernés",
         "diff de la restauration de sélection source en ligne ; notifications de focus, transaction Markdown et contrats concernés",
         "diff des sondages de correspondance aperçu/source ; transactions, restauration, espaces et consommateurs concernés",
-        "diff ciblé : plafond de taille des contrôles de sélection et propagation du facteur réel de zoom"
+        "diff ciblé : plafond de taille des contrôles de sélection et propagation du facteur réel de zoom",
+        "diff ciblé : bouton Texte normal, dimensions du tableau, grille de sélection et traduction française"
       ],
       "review_flow": "document",
       "review_decision": "Correction ciblée après audit ; la validation intégrale de la version précédente est conservée séparément. Aucun nouvel audit intégral du fichier déclaré.",
@@ -1237,7 +1254,9 @@
         "preuves/selection-mixte-ui.log",
         "preuves/selection-mixte-matrices.json",
         "../../features/preview-popover-zoom.md",
-        "preuves/modale-zoom-final.log"
+        "preuves/modale-zoom-final.log",
+        "../../features/normal-text-table-picker.md",
+        "preuves/texte-normal-grille-tableau-final.log"
       ],
       "historical_campaign04_validation": {
         "path": "MacDown/Code/Document/MPDocument.m",
@@ -5961,17 +5980,18 @@
     },
     {
       "path": "MacDown/Localization/fr.lproj/Localizable.strings",
-      "observed_sha256": "89e38f5042c5baa7d5bed52c4eee47e5c5a4e39efb5723ad8d19e526c8d46bf4",
+      "observed_sha256": "737886c25de79bb7af6359a4d24b59ae04219887371c30439fe979d99aa0d1b4",
       "sha256": "89e38f5042c5baa7d5bed52c4eee47e5c5a4e39efb5723ad8d19e526c8d46bf4",
-      "read": true,
-      "analyzed": true,
-      "validation_tested": true,
+      "read": false,
+      "analyzed": false,
+      "validation_tested": false,
       "validation_without_test": false,
-      "state": "validé avec tests",
-      "evidence": "preuves/campagne04-lecture.md",
+      "state": "modifié après campagne04 — modification ciblée testée, relecture intégrale à renouveler",
+      "evidence": "../../features/normal-text-table-picker.md",
       "open_findings": [],
       "read_ranges": [
-        "entier"
+        "entier",
+        "diff ciblé : bouton Texte normal, dimensions du tableau, grille de sélection et traduction française"
       ],
       "review_flow": "localization",
       "review_decision": "Toutes entrées de localisation, placeholders/forms/fallback et bindings de contrôleurs examinés ; qualité linguistique hors certification.",
@@ -5979,8 +5999,20 @@
         "preuves/campagne04-build-for-testing.log",
         "preuves/campagne04-native-final.log",
         "preuves/campagne04-plural.log",
-        "preuves/campagne04-ui-delivery-verified.log"
-      ]
+        "preuves/campagne04-ui-delivery-verified.log",
+        "../../features/normal-text-table-picker.md",
+        "preuves/texte-normal-grille-tableau-final.log"
+      ],
+      "historical_validation_before_table_picker": {
+        "sha256": "89e38f5042c5baa7d5bed52c4eee47e5c5a4e39efb5723ad8d19e526c8d46bf4",
+        "observed_sha256": "89e38f5042c5baa7d5bed52c4eee47e5c5a4e39efb5723ad8d19e526c8d46bf4",
+        "read": true,
+        "analyzed": true,
+        "validation_tested": true,
+        "validation_without_test": false,
+        "state": "validé avec tests",
+        "evidence": "preuves/campagne04-lecture.md"
+      }
     },
     {
       "path": "MacDown/Localization/fr.lproj/MPDocument.strings",
