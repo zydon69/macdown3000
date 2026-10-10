@@ -23,3 +23,5 @@ Le texte du sélecteur de la barre courte utilise maintenant 16 px au lieu de 13
 Validation de cet ajustement : les 3 tests existants du positionnement, du plafond de zoom et des commandes du menu réussissent. Journal local : `/tmp/macdown-selector-font-tests.log`.
 
 Le sélecteur affiche maintenant un chevron orienté à droite, aligné au bord droit du bouton. Le libellé et le chevron sont indépendants : un libellé long est abrégé sans masquer la flèche. Les dimensions du bouton et la taille du texte restent inchangées.
+
+Le bord droit du sélecteur est désormais aligné sur le bord droit des boutons d’action visibles. La largeur est adaptée à leur géométrie réelle, au zoom et aux retours à la ligne dans un visualiseur étroit, sans agrandir les boutons. Le test existant de géométrie vérifie cet alignement aux largeurs 900/600/300 pixels.

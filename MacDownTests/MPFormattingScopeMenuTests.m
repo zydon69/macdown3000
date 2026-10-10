@@ -349,6 +349,7 @@
         XCTAssertFalse([[self JS:@"document.querySelector('[role=menu]').hidden"] boolValue]);
         XCTAssertTrue([[self JS:@"document.querySelector('#macdown-preview-format').offsetHeight===window.__compactHeight"] boolValue]);
         XCTAssertTrue([[self JS:@"document.querySelector('#macdown-preview-format').getBoundingClientRect().left===window.__compactLeft"] boolValue]);
+        XCTAssertTrue([[self JS:@"(function(){var p=document.querySelector('#macdown-preview-format'),o=p.querySelector('[data-mp-format-menu]'),buttons=Array.from(p.children).filter(function(b){return b.tagName==='BUTTON' && b!==o;});return Math.abs(o.getBoundingClientRect().right-Math.max.apply(null,buttons.map(function(b){return b.getBoundingClientRect().right;})))<1;})()"] boolValue]);
         XCTAssertTrue([[self JS:@"(function(){var m=document.querySelector('[role=menu]').getBoundingClientRect();return m.left>=12 && m.right<=innerWidth-12 && m.top>=8 && m.bottom<=innerHeight-8;})()"] boolValue],@"%@",[self JS:@"JSON.stringify({menu:document.querySelector(\'[role=menu]\').getBoundingClientRect().toJSON(),width:innerWidth,height:innerHeight})"]);
         if(width.intValue>=600) {
             XCTAssertTrue([[self JS:@"(function(){var p=document.querySelector('#macdown-preview-format').getBoundingClientRect(),m=document.querySelector('[role=menu]').getBoundingClientRect();return Math.abs(p.right-m.left)<1;})()"] boolValue]);

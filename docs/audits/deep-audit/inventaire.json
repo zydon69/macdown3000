@@ -10600,7 +10600,7 @@
     },
     {
       "path": "MacDown/Resources/Extensions/preview-edit.js",
-      "observed_sha256": "f2951493d021b3fa08c9e724c21e416784f9e44fb3445c3641ae98effabe68ef",
+      "observed_sha256": "0c1c500b98cf83171876f1bf004506cbd614bb47cf0f4e6e261b28cda840c2b1",
       "sha256": "16b41b77c6a23da171c54bbe30aad0edc75276268c2c8c1d1766ddece6940f0f",
       "read": false,
       "analyzed": false,
@@ -10617,7 +10617,8 @@
         "diff ciblé : état compact, survol et positionnement du menu, maintien de la sélection",
         "diff ciblé : plafond de taille des contrôles de sélection et propagation du facteur réel de zoom",
         "diff ciblé : texte du sélecteur à 16 px, bouton de dimensions inchangées",
-        "diff ciblé : libellé du sélecteur séparé du chevron décoratif aligné à droite"
+        "diff ciblé : libellé du sélecteur séparé du chevron décoratif aligné à droite",
+        "diff ciblé : bord droit du sélecteur aligné sur les boutons visibles, après prise en compte du zoom"
       ],
       "review_flow": "styles",
       "review_decision": "Correction ciblée ; certification intégrale de la version précédente conservée séparément. Nouvelle validation exhaustive non déclarée.",
