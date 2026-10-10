@@ -178,6 +178,92 @@
     [self waitForExpectations:@[drained] timeout:30];
     [super tearDown];
 }
+- (void)testMultilineBoldSurvivesEveryListConversion
+{
+    NSString *body=@"**sdxerfe\nezrfvzer\ntrzevzer**\nzvzre\nrzev ze\nvzzrefvd";
+    for (NSString *target in @[@"unordered",@"ordered",@"tasks"]) {
+        NSString *source=[NSString stringWithFormat:@"Before neighbour.\n\n%@\n\nAfter neighbour.\n",body];
+        MPScopeFixture *f=[[MPScopeFixture alloc] initWithSource:source];
+        f.editor.selectedRange=[source rangeOfString:body];
+        [f.document convertSelectionToBlock:target];
+        NSXMLDocument *DOM=[self DOM:f context:target];
+        NSArray *items=[DOM nodesForXPath:@"//li" error:NULL];
+        XCTAssertEqual(items.count,6u,@"%@",target);
+        for (NSUInteger i=0;i<items.count;i++) {
+            NSArray *strong=[items[i] nodesForXPath:@".//strong" error:NULL];
+            XCTAssertEqual(strong.count,i<3?1u:0u,@"%@ item %lu",target,(unsigned long)i);
+            XCTAssertFalse([((NSXMLNode *)items[i]).stringValue containsString:@"**"],@"%@",target);
+        }
+        NSArray *labels=@[@"**sdxerfe**",@"**ezrfvzer**",@"**trzevzer**",@"zvzre",@"rzev ze",@"vzzrefvd"];
+        NSMutableArray *expected=[NSMutableArray array];
+        for(NSUInteger i=0;i<labels.count;i++) {
+            NSString *prefix=[target isEqual:@"ordered"]?[NSString stringWithFormat:@"%lu. ",(unsigned long)i+1]:[target isEqual:@"tasks"]?@"- [ ] ":@"- ";
+            [expected addObject:[prefix stringByAppendingString:labels[i]]];
+        }
+        XCTAssertTrue([f.editor.string containsString:[expected componentsJoinedByString:@"\n"]],@"%@",target);
+        NSString *converted=f.editor.string;
+        [f.document.undoManager undo]; XCTAssertEqualObjects(f.editor.string,source);
+        [f.document.undoManager redo]; XCTAssertEqualObjects(f.editor.string,converted);
+    }
+}
+
+- (void)testMultilineStylesListMatrixPreservesAllCharactersAndUndo
+{
+    NSArray *markers=@[@"**",@"*",@"_",@"~~"];
+    NSArray *tags=@[@"strong",@"em",@"u",@"del"];
+    for(NSNumber *intra in @[@NO,@YES]) for(NSUInteger mask=1;mask<16;mask++) {
+        [MPPreferences sharedInstance].extensionIntraEmphasis=intra.boolValue;
+        NSMutableString *opening=[NSMutableString string],*closing=[NSMutableString string];
+        for(NSUInteger bit=0;bit<4;bit++) if(mask&(1u<<bit)) [opening appendString:markers[bit]];
+        for(NSUInteger bit=4;bit;bit--) if(mask&(1u<<(bit-1))) [closing appendString:markers[bit-1]];
+        for(NSString *ending in @[@"\n",@"\r\n",@"\r"]) for(NSString *target in @[@"unordered",@"ordered",@"tasks"])
+        for(NSNumber *preview in @[@NO,@YES]) {
+            NSString *body=[NSString stringWithFormat:@"%@first%@second%@third%@%@plain",opening,ending,ending,closing,ending];
+            NSString *source=[NSString stringWithFormat:@"Before neighbour.%@%@%@%@%@After neighbour.%@",ending,ending,body,ending,ending,ending];
+            MPScopeFixture *f=[[MPScopeFixture alloc] initWithSource:source];
+            NSString *context=[NSString stringWithFormat:@"mask=%lu intra=%@ target=%@ preview=%@ ending=%@",(unsigned long)mask,intra,target,preview,[ending debugDescription]];
+            NSXMLDocument *before=[self DOM:f context:context];
+            if(preview.boolValue) XCTAssertTrue(([f applyContainer:target texts:@[@"first",@"second",@"third",@"plain"]]),@"%@",context);
+            else {f.editor.selectedRange=[source rangeOfString:body];[f.document convertSelectionToBlock:target];}
+            NSXMLDocument *DOM=[self DOM:f context:context];
+            XCTAssertEqual([DOM nodesForXPath:@"//li" error:NULL].count,4u,@"%@",context);
+            for(NSUInteger bit=0;bit<4;bit++) for(NSString *word in @[@"first",@"second",@"third",@"plain"]) {
+                NSString *path=[NSString stringWithFormat:@"//%@[contains(.,'%@')]",tags[bit],word];
+                XCTAssertEqual([DOM nodesForXPath:path error:NULL].count,[before nodesForXPath:path error:NULL].count,@"%@ %@",context,word);
+            }
+            XCTAssertEqual([DOM.rootElement.stringValue componentsSeparatedByString:@"**"].count,[before.rootElement.stringValue componentsSeparatedByString:@"**"].count,@"%@ — literal markers remain literal",context);
+            [self assertMarkdownSource:f.editor.string context:context];
+            NSString *result=f.editor.string;
+            [f.document.undoManager undo];XCTAssertEqualObjects(f.editor.string,source,@"%@",context);
+            [f.document.undoManager redo];XCTAssertEqualObjects(f.editor.string,result,@"%@",context);
+        }
+    }
+}
+
+- (void)testPartialMultilineListConversionPreservesNeighboursLinksAndContainers
+{
+    for(NSString *container in @[@"none",@"callout-note",@"toggle"]) for(NSString *target in @[@"unordered",@"ordered",@"tasks"])
+    for(NSString *selected in @[@"second",@"first\nsecond\nthird"]) {
+        NSString *body=@"**first\nsecond\nthird**\nplain [link](https://example.org) `literal` \\*stars\\*\n";
+        NSString *source=[self sourceForContainer:container body:body];
+        MPScopeFixture *f=[[MPScopeFixture alloc] initWithSource:source];
+        f.editor.selectedRange=[source rangeOfString:selected];
+        [f.document convertSelectionToBlock:target];
+        NSXMLDocument *DOM=[self DOM:f context:target];
+        XCTAssertEqual([DOM nodesForXPath:@"//li" error:NULL].count,[selected isEqual:@"second"]?1u:3u,@"%@ %@ %@ => %@",container,target,selected,f.editor.string);
+        for(NSString *word in @[@"first",@"second",@"third"]) {
+            NSString *path=[NSString stringWithFormat:@"//strong[contains(.,'%@')]",word];
+            XCTAssertEqual([DOM nodesForXPath:path error:NULL].count,1u,@"%@ %@ %@",container,target,word);
+        }
+        XCTAssertTrue([f.editor.string containsString:@"[link](https://example.org) `literal` \\*stars\\*"]);
+        XCTAssertTrue([f.editor.string hasPrefix:@"Before neighbour.\n\n"]);
+        XCTAssertTrue([f.editor.string hasSuffix:@"\nAfter neighbour.\n"]);
+        NSString *result=f.editor.string;
+        [f.document.undoManager undo];XCTAssertEqualObjects(f.editor.string,source);
+        [f.document.undoManager redo];XCTAssertEqualObjects(f.editor.string,result);
+    }
+}
+
 - (NSArray *)blocks { return @[@"paragraph",@"h1",@"h2",@"h3",@"h4",@"h5",@"h6",@"unordered",@"ordered",@"tasks",@"quote"]; }
 - (NSArray *)containers { return @[@"none",@"callout-note",@"callout-tip",@"callout-warning",@"callout-important",@"callout-caution",@"toggle",@"toggle-h1",@"toggle-h2",@"toggle-h3",@"toggle-h4"]; }
 - (NSArray *)styles { return @[@"bold",@"italic",@"underline",@"strike",@"link",@"code"]; }

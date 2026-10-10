@@ -339,6 +339,83 @@ static NSString *MPPIMaskOpaque(NSString *body, NSRange selection, NSUInteger ba
     return result;
 }
 
+// List items are independent inline parsing contexts. Close/reopen styles at
+// soft line breaks before introducing list prefixes. Keep authored bytes (and
+// opaque links/images/code) verbatim, and accept only an identical full DOM
+// fingerprint. The returned boundary map feeds the existing atomic transaction.
+static NSDictionary *MPPIBalanceSoftLines(NSString *raw, NSString *(^render)(NSString *))
+{
+    NSUInteger firstEnd;
+    [raw getLineStart:NULL end:&firstEnd contentsEnd:NULL forRange:NSMakeRange(0,0)];
+    if(firstEnd==raw.length || [raw rangeOfCharacterFromSet:[NSCharacterSet characterSetWithCharactersInString:@"*_~`"]].location==NSNotFound) return @{};
+    if (raw.length>20000) return nil;
+    NSMutableString *canonical=[NSMutableString string];
+    NSMutableArray *rawOffsets=[NSMutableArray array];
+    for (NSUInteger i=0;i<raw.length;i++) {
+        [rawOffsets addObject:@(i)];
+        unichar c=[raw characterAtIndex:i];
+        [canonical appendFormat:@"%C",c=='\r'?'\n':c];
+        if(c=='\r' && i+1<raw.length && [raw characterAtIndex:i+1]=='\n') i++;
+    }
+    while([canonical hasSuffix:@"\n"]) {[canonical deleteCharactersInRange:NSMakeRange(canonical.length-1,1)];[rawOffsets removeLastObject];}
+    NSMutableArray *proxyOffsets=[NSMutableArray array],*links=[NSMutableArray array];
+    NSMutableDictionary *opaque=[NSMutableDictionary dictionary];
+    NSString *proxy=MPPIMaskOpaque(canonical,NSMakeRange(0,0),0,@"preserve",proxyOffsets,opaque,links);
+    if(!proxy) return nil;
+    NSDictionary *oracle=MPPIInlineOracle(render(proxy));
+    if(!oracle) return @{};
+    NSString *text=oracle[@"text"]; NSArray *styles=oracle[@"styles"];
+    NSMutableArray *breaks=[NSMutableArray array];
+    for(NSUInteger i=0;i<text.length;i++) if([text characterAtIndex:i]=='\n' && [styles[i] unsignedIntegerValue]) {
+        NSUInteger left=i,right=i+1;
+        while(left && [NSCharacterSet.whitespaceCharacterSet characterIsMember:[text characterAtIndex:left-1]]) left--;
+        while(right<text.length && [NSCharacterSet.whitespaceCharacterSet characterIsMember:[text characterAtIndex:right]]) right++;
+        NSUInteger mask=[styles[i] unsignedIntegerValue];
+        if(!left || right>=text.length || (mask&MPPICode)) return nil;
+        [breaks addObject:@{@"newline":@(i),@"mask":@(mask)}];
+    }
+    if(!breaks.count) return @{};
+    NSArray *provenance=MPPIProvenance(proxy,text);
+    if(!provenance) return nil;
+    NSArray *original=MPPIFingerprint(render(raw));
+    if(!original) return nil;
+    NSArray *bits=@[@(MPPIBold),@(MPPIItalic),@(MPPIUnderline),@(MPPIStrike)];
+    // All nesting orders are tried; the actual parser, rather than a delimiter
+    // regex, proves which closure sequence preserves the original formatting.
+    for(NSNumber *a in bits) for(NSNumber *b in bits) for(NSNumber *c in bits) for(NSNumber *d in bits) {
+        NSArray *order=@[a,b,c,d]; if([NSSet setWithArray:order].count!=4) continue;
+        for(NSUInteger underscore=0;underscore<2;underscore++) {
+            NSMutableDictionary *insertions=[NSMutableDictionary dictionary];
+            BOOL valid=YES;
+            for(NSDictionary *lineBreak in breaks) {
+                NSUInteger newline=[lineBreak[@"newline"] unsignedIntegerValue];
+                NSUInteger proxyOffset=[provenance[newline] unsignedIntegerValue];
+                NSUInteger canonicalOffset=[proxyOffsets[proxyOffset] unsignedIntegerValue];
+                NSUInteger close=[rawOffsets[canonicalOffset] unsignedIntegerValue];
+                NSUInteger open=close+1;
+                if([raw characterAtIndex:close]=='\r' && open<raw.length && [raw characterAtIndex:open]=='\n') open++;
+                while(close && ([raw characterAtIndex:close-1]==' ' || [raw characterAtIndex:close-1]=='\t')) close--;
+                while(open<raw.length && ([raw characterAtIndex:open]==' ' || [raw characterAtIndex:open]=='\t')) open++;
+                NSMutableString *opening=[NSMutableString string],*closing=[NSMutableString string];
+                NSUInteger mask=[lineBreak[@"mask"] unsignedIntegerValue];
+                for(NSNumber *bit in order) if(mask&bit.unsignedIntegerValue) [opening appendString:MPPIMarker(bit.unsignedIntegerValue,underscore==1)];
+                for(NSNumber *bit in order.reverseObjectEnumerator) if(mask&bit.unsignedIntegerValue) [closing appendString:MPPIMarker(bit.unsignedIntegerValue,underscore==1)];
+                if(insertions[@(close)] || insertions[@(open)]) {valid=NO;break;}
+                insertions[@(close)]=closing;insertions[@(open)]=opening;
+            }
+            if(!valid) continue;
+            NSMutableString *candidate=[NSMutableString string];NSMutableArray *positions=[NSMutableArray array];
+            for(NSUInteger i=0;i<=raw.length;i++) {
+                [candidate appendString:insertions[@(i)] ?: @""];
+                [positions addObject:@(candidate.length)];
+                if(i<raw.length) [candidate appendFormat:@"%C",[raw characterAtIndex:i]];
+            }
+            if([MPPIFingerprint(render(candidate)) isEqual:original]) return @{@"replacement":candidate,@"positions":positions};
+        }
+    }
+    return nil;
+}
+
 static NSURL *MPPIValidatedLinkURL(NSString *value)
 {
     if (![value isKindOfClass:NSString.class] ||

@@ -6535,6 +6535,47 @@ to link outside that scope.", \
         [structuralEdits addObject:@{@"range":codeBlock,@"replacement":escaped,
             @"content":codeContent,@"positions":positions}];
     }
+    if (!codeBlock && [@[@"unordered",@"ordered",@"tasks"] containsObject:value]) {
+        NSMutableSet *paragraphs=[NSMutableSet set];
+        for (NSValue *run in verified[@"runs"]) {
+            NSRange lines=[source lineRangeForRange:run.rangeValue];
+            NSUInteger cursor=lines.location;
+            while(cursor<NSMaxRange(lines)) {
+                NSRange line=[source lineRangeForRange:NSMakeRange(cursor,0)];
+                NSRange paragraph=[self previewParagraphRange:line source:source renderer:renderer];
+                // Boundary probes can alter delimiter flanking when intra-word
+                // emphasis is disabled. Expand an ordinary inline paragraph
+                // through the unmodified parser instead; balancing below must
+                // still preserve the full document fingerprint before any edit.
+                if (MPPIInlineOracle([renderer HTMLForMarkdownSnapshot:[source substringWithRange:paragraph]])) {
+                    for(NSUInteger direction=0;direction<2;direction++) {
+                        while(direction==0 ? paragraph.location>0 : NSMaxRange(paragraph)<source.length) {
+                            NSUInteger neighbour=direction==0 ? paragraph.location-1 : NSMaxRange(paragraph);
+                            NSRange adjacent=[source lineRangeForRange:NSMakeRange(neighbour,0)];
+                            if(![[source substringWithRange:adjacent] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet].length) break;
+                            NSRange candidate=NSUnionRange(paragraph,adjacent);
+                            if(candidate.length>20000 || !MPPIInlineOracle([renderer HTMLForMarkdownSnapshot:[source substringWithRange:candidate]])) break;
+                            paragraph=candidate;
+                        }
+                    }
+                }
+                NSValue *key=[NSValue valueWithRange:paragraph];
+                if(![paragraphs containsObject:key]) {
+                    [paragraphs addObject:key];
+                    NSDictionary *balanced=MPPIBalanceSoftLines([source substringWithRange:paragraph],^NSString *(NSString *markdown) {
+                        return [renderer HTMLForMarkdownSnapshot:markdown];
+                    });
+                    if(!balanced) return NO;
+                    if(balanced[@"replacement"]) {
+                        NSString *candidate=[source stringByReplacingCharactersInRange:paragraph withString:balanced[@"replacement"]];
+                        if(![MPPIFingerprint([renderer HTMLForMarkdownSnapshot:candidate]) isEqual:MPPIFingerprint([renderer HTMLForMarkdownSnapshot:source])]) return NO;
+                        [structuralEdits addObject:@{@"range":key,@"content":key,@"replacement":balanced[@"replacement"],@"positions":balanced[@"positions"]}];
+                    }
+                }
+                cursor=MAX(NSMaxRange(line),NSMaxRange(paragraph));
+            }
+        }
+    }
     [structuralEdits sortUsingComparator:^NSComparisonResult(NSDictionary *a,NSDictionary *b) {
         return [@([b[@"range"] rangeValue].location) compare:@([a[@"range"] rangeValue].location)];
     }];
@@ -6646,23 +6687,23 @@ to link outside that scope.", \
     NSString *prefix = [value isEqualToString:@"code-block"] ? @"" : prefixes[value];
     NSRange restoredSelection = blockStart!=NSNotFound && blockEnd!=NSNotFound && blockEnd>=blockStart
         ? NSMakeRange(blockStart,blockEnd-blockStart) : NSMakeRange(NSNotFound,0);
+    void (^normalizeTaskSpacing)(NSXMLDocument *) = ^(NSXMLDocument *DOM) {
+        // The renderer leaves the Markdown separator after its generated
+        // checkbox. It is syntax spacing, not a character of the label.
+        for (NSXMLNode *input in [DOM nodesForXPath:@"//li[@class='task-list-item']/input[@type='checkbox']" error:NULL]) {
+            NSXMLNode *sibling=input.nextSibling;
+            if (sibling.kind!=NSXMLTextKind) continue;
+            NSString *text=sibling.stringValue;
+            NSUInteger offset=0;
+            while (offset<text.length && ([text characterAtIndex:offset]==' ' || [text characterAtIndex:offset]=='\t')) offset++;
+            if (offset) sibling.stringValue=[text substringFromIndex:offset];
+        }
+    };
     if (prefix != nil) {
         NSString *taskMarker = self.preferences.htmlTaskList ? @"(?:\\[[ xX]\\][ \\t]+)?" : @"";
         NSString *markerPattern = [NSString stringWithFormat:@"^ {0,3}(?:#{1,6}[ \\t]+|>[ \\t]?|[-+*][ \\t]+%@|[0-9]+\\.[ \\t]+)",taskMarker];
         NSRegularExpression *markers = [NSRegularExpression regularExpressionWithPattern:markerPattern options:0 error:NULL];
         NSRegularExpression *headingHTML = [NSRegularExpression regularExpressionWithPattern:@"^\\s*<h[1-6]\\b[^>]*>(.*?)</h[1-6]>\\s*$" options:NSRegularExpressionDotMatchesLineSeparators error:NULL];
-        void (^normalizeTaskSpacing)(NSXMLDocument *) = ^(NSXMLDocument *DOM) {
-            // The renderer leaves the Markdown separator after its generated
-            // checkbox. It is syntax spacing, not a character of the label.
-            for (NSXMLNode *input in [DOM nodesForXPath:@"//li[@class='task-list-item']/input[@type='checkbox']" error:NULL]) {
-                NSXMLNode *sibling=input.nextSibling;
-                if (sibling.kind!=NSXMLTextKind) continue;
-                NSString *text=sibling.stringValue;
-                NSUInteger offset=0;
-                while (offset<text.length && ([text characterAtIndex:offset]==' ' || [text characterAtIndex:offset]=='\t')) offset++;
-                if (offset) sibling.stringValue=[text substringFromIndex:offset];
-            }
-        };
         NSMutableString *processed = [NSMutableString string];
         NSUInteger restoredStart = NSNotFound, restoredEnd = NSNotFound;
         NSUInteger orderedItemNumber = 0;
@@ -6842,9 +6883,26 @@ to link outside that scope.", \
         body = [NSString stringWithFormat:@"\n$$\n%@\n$$\n",body];
     } else if (prefix == nil) return NO;
     if (newline.length) body = [body stringByAppendingString:newline];
+    NSString *result=[source stringByReplacingCharactersInRange:lineRange withString:body];
+    if (!codeBlock && [@[@"unordered",@"ordered",@"tasks"] containsObject:value]) {
+        NSArray *(^inlineFingerprint)(NSString *)=^NSArray *(NSString *markdown) {
+            NSString *HTML=[renderer HTMLForMarkdownSnapshot:markdown];
+            NSRegularExpression *inputs=[NSRegularExpression regularExpressionWithPattern:@"<input\\b([^>]*?)(?<!/)>" options:0 error:NULL];
+            HTML=[inputs stringByReplacingMatchesInString:HTML options:0 range:NSMakeRange(0,HTML.length) withTemplate:@"<input$1 />"];
+            NSXMLDocument *DOM=MPPIParseHTML(HTML);
+            normalizeTaskSpacing(DOM);
+            NSXMLNode *body=[[DOM nodesForXPath:@"//body" error:NULL] firstObject];
+            if(!body) return nil;
+            NSMutableArray *tokens=[NSMutableArray array],*characters=[NSMutableArray array];
+            MPPIFingerprintNode(body,0,tokens);
+            for(NSDictionary *token in tokens) if(token[@"text"]) [characters addObject:token];
+            return characters;
+        };
+        NSArray *before=inlineFingerprint(originalSource);
+        if(!before || ![before isEqual:inlineFingerprint(result)]) return NO;
+    }
     if (!structuralEdits.count)
         return [self replacePreviewRange:lineRange withString:body preservingSelection:selectedRange restoringRange:restoredSelection];
-    NSString *result=[source stringByReplacingCharactersInRange:lineRange withString:body];
     // Commit the structural unwrap and formatting as one native edit. A
     // minimal contiguous envelope retains all neighboring source bytes.
     NSUInteger start=0,common=MIN(originalSource.length,result.length);
