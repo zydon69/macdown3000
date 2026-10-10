@@ -2041,6 +2041,11 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
     NSArray *cases = @[
         @[@">ezrtgfvqds\n> erfvsgfe\n\nNeighbor.\n", @">ezrtgfvqds\n> **erfvsgfe**\n\nNeighbor.\n"],
         @[@">**ezrtgfvqds**\n> erfvsgfe\n\nNeighbor.\n", @">**ezrtgfvqds**\n> **erfvsgfe**\n\nNeighbor.\n"],
+        @[@"> > ezrtgfvqds\n> > erfvsgfe\n\nNeighbor.\n", @"> > ezrtgfvqds\n> > **erfvsgfe**\n\nNeighbor.\n"],
+        @[@"> > > ezrtgfvqds\n> > > erfvsgfe\n\nNeighbor.\n", @"> > > ezrtgfvqds\n> > > **erfvsgfe**\n\nNeighbor.\n"],
+        @[@"> > ezrtgfvqds\r\n> > erfvsgfe\r\n\r\nNeighbor.\r\n", @"> > ezrtgfvqds\r\n> > **erfvsgfe**\r\n\r\nNeighbor.\r\n"],
+        @[@"> # ezrtgfvqds\n> erfvsgfe\n\nNeighbor.\n", @"> # ezrtgfvqds\n> **erfvsgfe**\n\nNeighbor.\n"],
+        @[@"> - ezrtgfvqds\n> - erfvsgfe\n\nNeighbor.\n", @"> - ezrtgfvqds\n> - **erfvsgfe**\n\nNeighbor.\n"],
         @[@"> ezrtgfvqds\n> erfvsgfe\n\nNeighbor.\n", @"> ezrtgfvqds\n> **erfvsgfe**\n\nNeighbor.\n"],
         @[@"> ezrtgfvqds  \n> erfvsgfe\n\nNeighbor.\n", @"> ezrtgfvqds  \n> **erfvsgfe**\n\nNeighbor.\n"],
         @[@"> ezrtgfvqds\n> erfvsgfe\n\nerfvsgfe\n", @"> ezrtgfvqds\n> **erfvsgfe**\n\nerfvsgfe\n"],
@@ -2211,6 +2216,44 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
         } @finally {
             web.frameLoadDelegate=nil;web.policyDelegate=nil;[document close];[window close];document.preferences.htmlMathJax=math;
         }
+    }
+}
+
+- (void)testSourceQuotedInlineFormattingPreservesNestedHeadingAndListPrefixes
+{
+    NSArray *prefixes=@[@">", @"> ", @"> > ", @"> > > ", @" > ", @"  > ",
+        @"> # ", @"> ## ", @"> > ### ", @"> - ", @"> 1. ", @"> - [ ] ", @"> > - [x] "];
+    NSArray *selectors=@[NSStringFromSelector(@selector(toggleStrong:)),NSStringFromSelector(@selector(toggleEmphasis:)),
+        NSStringFromSelector(@selector(toggleUnderline:)),NSStringFromSelector(@selector(toggleStrikethrough:)),NSStringFromSelector(@selector(toggleInlineCode:))];
+    NSArray *tags=@[@"strong",@"em",@"u",@"del",@"code"];
+    MPDocument *document=[MPDocument new];
+    MPEditorView *editor=[[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+    MPRenderer *renderer=[MPRenderer new]; document.editor=editor; document.renderer=renderer;
+    renderer.delegate=(id<MPRendererDelegate>)document; renderer.dataSource=(id<MPRendererDataSource>)document;
+    MPPreferences *preferences=document.preferences;
+    BOOL underline=preferences.extensionUnderline,strike=preferences.extensionStrikethough,tasks=preferences.htmlTaskList,smart=preferences.extensionSmartyPants;
+    @try {
+        preferences.extensionUnderline=YES;preferences.extensionStrikethough=YES;preferences.htmlTaskList=YES;preferences.extensionSmartyPants=NO;
+        for(NSString *prefix in prefixes) for(NSString *ending in @[@"\n",@"\r\n"]) for(NSUInteger index=0;index<selectors.count;index++) {
+            NSString *suffix=[NSString stringWithFormat:@"%@%@Neighbor.%@",ending,ending,ending];
+            NSString *source=[NSString stringWithFormat:@"%@Target%@",prefix,suffix];
+            editor.string=source;editor.selectedRange=[source rangeOfString:@"Target"];
+            SEL selector=NSSelectorFromString(selectors[index]);
+            void (*action)(id,SEL,id)=(void (*)(id,SEL,id))[document methodForSelector:selector];action(document,selector,nil);
+            XCTAssertNotEqualObjects(editor.string,source,@"%@ / %@",prefix,selectors[index]);
+            XCTAssertTrue([editor.string hasPrefix:prefix]);XCTAssertTrue([editor.string hasSuffix:suffix]);
+            XCTAssertFalse([editor.string containsString:@"<"]);
+            NSString *html=[renderer HTMLForMarkdownSnapshot:editor.string];
+            NSXMLDocument *DOM=[[NSXMLDocument alloc] initWithXMLString:[NSString stringWithFormat:@"<body>%@</body>",html] options:NSXMLDocumentTidyHTML | NSXMLNodeLoadExternalEntitiesNever error:NULL];
+            NSArray *styled=[DOM nodesForXPath:[NSString stringWithFormat:@"//blockquote//%@",tags[index]] error:NULL];
+            XCTAssertTrue([styled indexOfObjectPassingTest:^BOOL(NSXMLNode *node,NSUInteger i,BOOL *stop){return [node.stringValue isEqualToString:@"Target"];} ]!=NSNotFound,@"%@ / %@: %@",prefix,selectors[index],html);
+            XCTAssertEqualObjects([editor.string substringWithRange:editor.selectedRange],@"Target");
+            action(document,selector,nil);
+            XCTAssertEqualObjects(editor.string,source,@"A second click must remove only the inline style");
+        }
+    } @finally {
+        [document close];preferences.extensionUnderline=underline;preferences.extensionStrikethough=strike;
+        preferences.htmlTaskList=tasks;preferences.extensionSmartyPants=smart;
     }
 }
 

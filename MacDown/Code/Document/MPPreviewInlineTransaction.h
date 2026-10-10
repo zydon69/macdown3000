@@ -362,7 +362,11 @@ static NSDictionary *MPPreviewInlineSingleChange(NSString *source, NSRange selec
     NSString *ending=@"";
     if([raw hasSuffix:@"\r\n"]) {ending=@"\r\n";raw=[raw substringToIndex:raw.length-2];}
     else if([raw hasSuffix:@"\n"] || [raw hasSuffix:@"\r"]) {ending=[raw substringFromIndex:raw.length-1];raw=[raw substringToIndex:raw.length-1];}
-    NSRegularExpression *prefixExpression=[NSRegularExpression regularExpressionWithPattern:@"^ {0,3}(?:(?:#{1,6}[ \\t]+)|(?:>[ \\t]?)|(?:[-+*][ \\t]+(?:\\[[ xX]\\][ \\t]+)?)|(?:[0-9]+[.)][ \\t]+))" options:0 error:NULL];
+    NSString *linePrefix=@"(?:(?:#{1,6}[ \\t]+)|(?:[-+*][ \\t]+(?:\\[[ xX]\\][ \\t]+)?)|(?:[0-9]+[.)][ \\t]+))";
+    // A quoted line can have several quote levels and then a heading/list
+    // prefix. Preserve all structural syntax outside the inline text oracle.
+    NSString *prefixPattern=[NSString stringWithFormat:@"^ {0,3}(?:(?:>[ \\t]?)+(?:%@)?|%@)",linePrefix,linePrefix];
+    NSRegularExpression *prefixExpression=[NSRegularExpression regularExpressionWithPattern:prefixPattern options:0 error:NULL];
     NSTextCheckingResult *prefixMatch=[prefixExpression firstMatchInString:raw options:0 range:NSMakeRange(0,raw.length)];
     NSUInteger prefixLength=prefixMatch?prefixMatch.range.length:0;
     NSString *prefix=[raw substringToIndex:prefixLength]; NSString *body=[raw substringFromIndex:prefixLength];
