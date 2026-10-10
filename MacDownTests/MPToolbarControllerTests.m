@@ -894,15 +894,16 @@
     // Verify every grouped/segmented toolbar item dispatches the correct
     // action. Keyed by (group identifier, segment index, segment count)
     // since that's what selectedToolbarItemGroupItem: actually receives
-    // from a segmented control's identifier and selectedSegment -- the 12
+    // from a segmented control's identifier and selectedSegment -- the
     // individual subitem identifiers (e.g. "bold") are not independently
     // reachable via toolbar:itemForItemIdentifier:willBeInsertedIntoToolbar:.
     NSArray<NSArray *> *expectedMappings = @[
         @[@"indent-group", @0, @2, @"unindent:"],
         @[@"indent-group", @1, @2, @"indent:"],
-        @[@"text-formatting-group", @0, @3, @"toggleStrong:"],
-        @[@"text-formatting-group", @1, @3, @"toggleEmphasis:"],
-        @[@"text-formatting-group", @2, @3, @"toggleUnderline:"],
+        @[@"text-formatting-group", @0, @4, @"toggleStrong:"],
+        @[@"text-formatting-group", @1, @4, @"toggleEmphasis:"],
+        @[@"text-formatting-group", @2, @4, @"toggleUnderline:"],
+        @[@"text-formatting-group", @3, @4, @"toggleStrikethrough:"],
         @[@"heading-group", @0, @4, @"convertToH1:"],
         @[@"heading-group", @1, @4, @"convertToH2:"],
         @[@"heading-group", @2, @4, @"convertToH3:"],

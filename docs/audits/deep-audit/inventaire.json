@@ -1093,17 +1093,18 @@
     },
     {
       "path": "MacDown/Code/Application/MPToolbarController.m",
-      "observed_sha256": "807570669c3644b1e65c9e19f1f0750758572957900f9404a1ff8a54a009ac6a",
+      "observed_sha256": "9bd7f6e6721c4b22d8b6cdc05673769dc16f61df564847e48ff519bf66ec9284",
       "sha256": "807570669c3644b1e65c9e19f1f0750758572957900f9404a1ff8a54a009ac6a",
-      "read": true,
-      "analyzed": true,
-      "validation_tested": true,
+      "read": false,
+      "analyzed": false,
+      "validation_tested": false,
       "validation_without_test": false,
-      "state": "validé avec tests",
-      "evidence": "preuves/campagne04-lecture.md",
+      "state": "modifié après campagne04 — ajout ciblé testé, relecture intégrale à renouveler",
+      "evidence": "../../features/toolbar-strikethrough.md",
       "open_findings": [],
       "read_ranges": [
-        "entier"
+        "entier",
+        "diff ciblé : ajout du segment Barré après Souligné, dispatch existant et icône traduite"
       ],
       "review_flow": "editor",
       "review_decision": "Éditeur/toolbar/extension : marqueurs, IME, délégué/undo, listes/indentation et notifications recoupés.",
@@ -1112,7 +1113,17 @@
         "preuves/campagne04-ui-delivery-verified.log",
         "preuves/campagne04-indent_selection.log",
         "preuves/campagne04-list-overflow-green.log"
-      ]
+      ],
+      "historical_toolbar_validation_before_strike": {
+        "sha256": "807570669c3644b1e65c9e19f1f0750758572957900f9404a1ff8a54a009ac6a",
+        "observed_sha256": "807570669c3644b1e65c9e19f1f0750758572957900f9404a1ff8a54a009ac6a",
+        "read": true,
+        "analyzed": true,
+        "validation_tested": true,
+        "validation_without_test": false,
+        "state": "validé avec tests",
+        "evidence": "preuves/campagne04-lecture.md"
+      }
     },
     {
       "path": "MacDown/Code/Document/MPAsset.h",
