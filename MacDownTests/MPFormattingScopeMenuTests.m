@@ -328,6 +328,29 @@
     }
 }
 
+- (void)testMultilineBoldBecomesIndependentStyledListItemsInRealPreview
+{
+    for(NSString *style in @[@"GitHub2",@"Github2 (dark)"]) for(NSString *target in @[@"unordered",@"ordered",@"tasks"]) for(NSNumber *intra in @[@NO,@YES]) {
+        self.document.preferences.htmlStyleName=style;
+        self.document.preferences.extensionIntraEmphasis=intra.boolValue;
+        self.renderer.rendererFlags=self.document.preferences.rendererFlags;
+        [self loadSource:@"**first\nsecond\nthird**\nplain\n"];
+        [self selectFromText:@"first" throughText:@"plain"];
+        [self JS:[NSString stringWithFormat:@"document.querySelector('[data-mp-format-menu]').click();document.querySelector('[data-mp-option=\"%@\"]').click()",target]];
+        [self waitForFormatting];
+        XCTAssertEqualObjects([self JS:@"String(document.querySelectorAll('li').length)"],@"4");
+        XCTAssertEqualObjects([self JS:@"String(document.querySelectorAll('li strong').length)"],@"3");
+        XCTAssertEqualObjects([self JS:@"Array.from(document.querySelectorAll('li strong')).map(function(n){return n.textContent;}).join('|')"],@"first|second|third");
+        XCTAssertFalse([[self JS:@"document.body.textContent.includes('**')"] boolValue]);
+        XCTAssertTrue([[self JS:@"getSelection().toString().includes('first') && getSelection().toString().includes('plain')"] boolValue],@"%@ %@ source=%@ selection=%@ mapped=%lu",style,target,self.editor.string,[self JS:@"getSelection().toString()"],(unsigned long)self.document.previewEditRanges.count);
+        XCTAssertEqualObjects([self JS:@"getComputedStyle(document.getElementById('macdown-preview-format')).display"],@"block");
+        [self JS:@"document.querySelector('[data-mp-style=bold]').click()"];
+        [self waitForFormatting];
+        XCTAssertEqualObjects([self JS:@"String(document.querySelectorAll('li strong').length)"],@"4");
+        XCTAssertTrue([[self JS:@"getSelection().toString().includes('first') && getSelection().toString().includes('plain')"] boolValue]);
+    }
+}
+
 - (void)testMixedPreviewSelectionWorksWithIntraWordEmphasisDisabledAndEnabled
 {
     NSArray *cases=@[

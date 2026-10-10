@@ -34,6 +34,15 @@ static BOOL MPPICollect(NSXMLNode *node, NSUInteger mask, NSMutableString *text,
 static NSXMLDocument *MPPIParseHTML(NSString *html)
 {
     if(!html) return nil;
+    // Generated task checkboxes are HTML void elements. Close them for XML
+    // parsing so adding an inline wrapper cannot change tidy's whitespace or
+    // move surrounding callout elements during fingerprint verification.
+    if([html rangeOfString:@"<input"].location!=NSNotFound) {
+        static NSRegularExpression *inputs;
+        static dispatch_once_t once;
+        dispatch_once(&once,^{inputs=[NSRegularExpression regularExpressionWithPattern:@"<input\\b([^>]*?)(?<!/)>" options:0 error:NULL];});
+        html=[inputs stringByReplacingMatchesInString:html options:0 range:NSMakeRange(0,html.length) withTemplate:@"<input$1 />"];
+    }
     NSString *wrapped=[NSString stringWithFormat:@"<html><body>%@</body></html>",html];
     // Hoedown's ordinary paragraphs are valid XML. Parse them without HTML
     // tidy first: libxml HTML recovery can collapse a literal soft newline

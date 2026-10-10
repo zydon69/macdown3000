@@ -93,6 +93,20 @@ static NSString *MPPreviewSourceSeparators(NSString *source,NSUInteger start,NSU
     return separators;
 }
 
+// One source grammar owns the separator after a Markdown task checkbox.
+static NSRange MPPreviewTaskSeparatorRange(NSString *source,NSUInteger position)
+{
+    if(position>source.length) return NSMakeRange(NSNotFound,0);
+    NSRange line=[source lineRangeForRange:NSMakeRange(position,0)];
+    NSString *raw=[source substringWithRange:line];
+    static NSRegularExpression *task;
+    static dispatch_once_t once;
+    dispatch_once(&once,^{task=[NSRegularExpression regularExpressionWithPattern:@"^ {0,3}(?:>[ \\t]?)*[-+*][ \\t]+\\[[ xX]\\]([ \\t]+)" options:0 error:NULL];});
+    NSTextCheckingResult *prefix=[task firstMatchInString:raw options:0 range:NSMakeRange(0,raw.length)];
+    if(!prefix) return NSMakeRange(NSNotFound,0);
+    NSRange separator=[prefix rangeAtIndex:1];separator.location+=line.location;return separator;
+}
+
 static NSString * const kMPDefaultAutosaveName = @"Untitled";
 
 // Issue #543: Window over which vnode write notifications for the document's
@@ -5917,6 +5931,8 @@ to link outside that scope.", \
         [mapping addObject:@{@"location":@(range.location), @"length":@(range.length), @"text":text, @"index":@(index)}];
         [nodes addObject:@{@"node":@(node), @"id":@(index), @"text":text, @"anchored":@(anchored)}];
     }];
+    NSString *taskSeparatorJSON=[[context evaluateScript:@"JSON.stringify(window.__macdownPreviewEditNodes.map(function(n){var p=n.previousSibling;return Boolean(n.parentElement.matches('li.task-list-item')&&p&&p.nodeType===1&&p.matches('input[type=checkbox]'));}))"] toString];
+    NSArray *taskSeparators=taskSeparatorJSON ? [NSJSONSerialization JSONObjectWithData:[taskSeparatorJSON dataUsingEncoding:NSUTF8StringEncoding] options:0 error:NULL] : nil;
     // Whitespace between styled runs is selectable too. Its source occurrence
     // is bounded by the two proven neighboring literals, never a global search.
     for (NSUInteger node=1;node+1<texts.count;node++) {
@@ -5929,7 +5945,23 @@ to link outside that scope.", \
             if ([item[@"node"] unsignedIntegerValue]==node-1) previous=mapping[[item[@"id"] unsignedIntegerValue]];
             if ([item[@"node"] unsignedIntegerValue]==node+1) next=mapping[[item[@"id"] unsignedIntegerValue]];
         }
-        if (alreadyMapped || !previous || !next) continue;
+        if (alreadyMapped || !next) continue;
+        // The separator after a generated checkbox has no preceding literal
+        // in its LI. Prove ownership through that checkbox, the source task
+        // prefix and the existing doubled-whitespace DOM probe.
+        if (node<taskSeparators.count && [taskSeparators[node] boolValue]) {
+            NSUInteger nextStart=[next[@"location"] unsignedIntegerValue];
+            NSRange separator=MPPreviewTaskSeparatorRange(source,nextStart);
+            if(separator.location!=NSNotFound) {
+                if(NSMaxRange(separator)<=nextStart && [[source substringWithRange:separator] isEqualToString:text]) {
+                    NSUInteger index=mapping.count;
+                    [mapping addObject:@{@"location":@(separator.location),@"length":@(separator.length),@"text":text,@"index":@(index)}];
+                    [nodes addObject:@{@"node":@(node),@"id":@(index),@"text":text,@"anchored":@NO,@"bounded":@YES,@"before":next[@"index"],@"after":next[@"index"]}];
+                    continue;
+                }
+            }
+        }
+        if (!previous) continue;
         NSUInteger start=[previous[@"location"] unsignedIntegerValue]+[previous[@"length"] unsignedIntegerValue],end=[next[@"location"] unsignedIntegerValue];
         if (start>end || end>source.length) continue;
         NSRange found=[source rangeOfString:text options:NSLiteralSearch range:NSMakeRange(start,end-start)];
@@ -6255,6 +6287,22 @@ to link outside that scope.", \
     NSMutableDictionary *verified=[@{@"range":[NSValue valueWithRange:total],@"text":visible,@"runs":ranges} mutableCopy];
     if (codeBlockRange) {
         verified[@"codeBlockRange"]=codeBlockRange;verified[@"codeContentRange"]=codeContentRange;
+    } else if(self.preferences.htmlTaskList) {
+        // DOM/source verification above includes checkbox separator spaces.
+        // The inline transaction styles label characters, not list syntax.
+        // Exclude only the proven source task-prefix overlap for that comparison.
+        NSMutableString *inlineText=[NSMutableString string];NSUInteger previous=0;
+        for(NSValue *item in ranges) {
+            NSRange selected=item.rangeValue;
+            if(previous) [inlineText appendString:MPPreviewSourceSeparators(source,previous,selected.location)];
+            previous=NSMaxRange(selected);
+            NSRange separator=MPPreviewTaskSeparatorRange(source,selected.location);
+            NSRange syntax=separator.location==NSNotFound ? NSMakeRange(0,0) : NSIntersectionRange(selected,separator);
+            NSString *literal=[source substringWithRange:selected];
+            if(syntax.length) literal=[literal stringByReplacingCharactersInRange:NSMakeRange(syntax.location-selected.location,syntax.length) withString:@""];
+            [inlineText appendString:literal];
+        }
+        verified[@"inlineText"]=inlineText;
     }
     return verified;
 }
@@ -6886,10 +6934,7 @@ to link outside that scope.", \
     NSString *result=[source stringByReplacingCharactersInRange:lineRange withString:body];
     if (!codeBlock && [@[@"unordered",@"ordered",@"tasks"] containsObject:value]) {
         NSArray *(^inlineFingerprint)(NSString *)=^NSArray *(NSString *markdown) {
-            NSString *HTML=[renderer HTMLForMarkdownSnapshot:markdown];
-            NSRegularExpression *inputs=[NSRegularExpression regularExpressionWithPattern:@"<input\\b([^>]*?)(?<!/)>" options:0 error:NULL];
-            HTML=[inputs stringByReplacingMatchesInString:HTML options:0 range:NSMakeRange(0,HTML.length) withTemplate:@"<input$1 />"];
-            NSXMLDocument *DOM=MPPIParseHTML(HTML);
+            NSXMLDocument *DOM=MPPIParseHTML([renderer HTMLForMarkdownSnapshot:markdown]);
             normalizeTaskSpacing(DOM);
             NSXMLNode *body=[[DOM nodesForXPath:@"//body" error:NULL] firstObject];
             if(!body) return nil;
@@ -6975,7 +7020,7 @@ to link outside that scope.", \
         NSDictionary *change = MPPreviewInlineChange(source,range,action,value,
             ^NSString *(NSString *markdown){return [self.renderer HTMLForMarkdownSnapshot:markdown];},
             ^NSString *(NSString *text){return [self escapePreviewPlainText:text];});
-        BOOL valid = change && [MPNormalizePreviewSelectionText(change[@"text"]) isEqualToString:MPNormalizePreviewSelectionText([verified[@"text"] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet])];
+        BOOL valid = change && [MPNormalizePreviewSelectionText(change[@"text"]) isEqualToString:MPNormalizePreviewSelectionText([(verified[@"inlineText"] ?: verified[@"text"]) stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet])];
         if (valid && [self replacePreviewRange:[change[@"range"] rangeValue] withString:change[@"replacement"] preservingSelection:selectedRange restoringRange:[change[@"selection"] rangeValue]]) return YES;
         self.preferences.extensionIntraEmphasis = oldIntra;
         self.preferences.extensionUnderline = oldUnderline;

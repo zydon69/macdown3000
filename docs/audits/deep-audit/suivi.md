@@ -735,3 +735,7 @@ L’exécution est locale arm64 sous macOS 26.6.2 / Xcode 26.2, build arm64+x86_
 **636 sources actives ; 636 entièrement lues ; 636 entièrement analysées ; 603 validées avec tests ; 33 validées uniquement par revue statique ; 0 à revalider.** Les deux modalités sont disjointes dans cette campagne : 636 fichiers validés au total. Défauts confirmés ouverts : 0 ; hypothèses déterminantes ouvertes : 0 ; contrôles locaux requis manquants : 0.
 
 Revue complète terminée dans le périmètre local vérifié. Les versions source finales sont reliées aux empreintes de chaque ligne ; révision `9bf9d54`. Les preuves historiques ne remplacent aucune lecture de cette campagne. Toute modification ultérieure doit rouvrir les validations affectées.
+
+## Suivi ciblé — styles multilignes et listes, 10 octobre 2026
+
+Le [rapport](../../features/multiline-list-formatting.md) décrit la perte des styles traversant une fin de ligne et la correction connexe de sélection dans les listes à cocher. Reproduction rouge conservée ; validation finale : 43 tests, zéro échec, avec les matrices existantes et le vrai WebView. Les empreintes de `MPDocument.m` et du helper inline sont actualisées ; leurs cases de lecture/analyse/validation intégrale restent décochées. Cette intervention ne renouvelle pas la campagne d’audit exhaustive.

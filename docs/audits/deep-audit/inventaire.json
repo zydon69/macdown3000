@@ -1191,14 +1191,14 @@
     },
     {
       "path": "MacDown/Code/Document/MPDocument.m",
-      "observed_sha256": "c33a128abcbf739b75a0b00d185a505ba5da085b7ae3c7a5ee43fd62fd701a10",
-      "sha256": "c33a128abcbf739b75a0b00d185a505ba5da085b7ae3c7a5ee43fd62fd701a10",
+      "observed_sha256": "93479bf016b912ee7b3b518e550190fd34b50f2e64b06a91d2b86eacbb528cea",
+      "sha256": "93479bf016b912ee7b3b518e550190fd34b50f2e64b06a91d2b86eacbb528cea",
       "read": false,
       "analyzed": false,
       "validation_tested": false,
       "validation_without_test": false,
       "state": "modifié après campagne04 — correction ciblée testée, relecture intégrale à renouveler",
-      "evidence": "../../features/preview-mixed-mapping.md",
+      "evidence": "../../features/multiline-list-formatting.md",
       "open_findings": [],
       "read_ranges": [
         "diff de la correction des citations ; contrats et consommateurs concernés",
@@ -1299,7 +1299,19 @@
       },
       "resolved_controls": [
         "Sélection mixte dans l’aperçu : sondages corrigés, reproduction avant correction conservée ; test UI réussi avec emphase intra-mot activée et désactivée."
-      ]
+      ],
+      "multiline_lists_targeted_validation": {
+        "read": "diff et contrats concernés ; aucune certification de lecture intégrale",
+        "native_and_webview_tests": 43,
+        "failures": 0,
+        "new_conversion_scenarios": 573,
+        "consecutive_preview_actions": 12,
+        "source_sha256": "93479bf016b912ee7b3b518e550190fd34b50f2e64b06a91d2b86eacbb528cea",
+        "test_evidence": [
+          "preuves/listes-multilignes-red.log",
+          "preuves/listes-multilignes-final.log"
+        ]
+      }
     },
     {
       "path": "MacDown/Code/Document/MPPDFAnchorInjector.h",
@@ -1353,14 +1365,14 @@
     },
     {
       "path": "MacDown/Code/Document/MPPreviewInlineTransaction.h",
-      "observed_sha256": "710f225034d476c309c84f6960e52992c8714a7bd04f96a2bbc1abdc0bf55e66",
-      "sha256": "710f225034d476c309c84f6960e52992c8714a7bd04f96a2bbc1abdc0bf55e66",
+      "observed_sha256": "9168dc212eaab1c4a5ebc099aa697a8045115d9ae43ded34f6eb7463364b5a42",
+      "sha256": "9168dc212eaab1c4a5ebc099aa697a8045115d9ae43ded34f6eb7463364b5a42",
       "read": false,
       "analyzed": false,
       "validation_tested": false,
       "validation_without_test": false,
       "state": "modifié après campagne04 — correction ciblée testée, relecture intégrale à renouveler",
-      "evidence": "../../features/quote-selection.md",
+      "evidence": "../../features/multiline-list-formatting.md",
       "open_findings": [],
       "read_ranges": [
         "diff de la correction des citations ; contrats et consommateurs concernés"
@@ -1410,6 +1422,18 @@
         "zoom_isolated_tests": 26,
         "zoom_repeated_tests": 520,
         "zoom_recheck_failures": 0
+      },
+      "multiline_lists_targeted_validation": {
+        "read": "diff et contrats concernés ; aucune certification de lecture intégrale",
+        "native_and_webview_tests": 43,
+        "failures": 0,
+        "new_conversion_scenarios": 573,
+        "consecutive_preview_actions": 12,
+        "source_sha256": "9168dc212eaab1c4a5ebc099aa697a8045115d9ae43ded34f6eb7463364b5a42",
+        "test_evidence": [
+          "preuves/listes-multilignes-red.log",
+          "preuves/listes-multilignes-final.log"
+        ]
       }
     },
     {
