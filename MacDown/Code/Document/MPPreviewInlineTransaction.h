@@ -562,6 +562,17 @@ static NSDictionary *MPPreviewInlineChange(NSString *source, NSRange selection, 
             NSDictionary *change=MPPreviewInlineSingleChange(source,selected,action,value,render,escape,@"auto");
             if(!change) {
                 if (MPPIIsHeadingUnderline(source,line,render)) {cursor=NSMaxRange(line);continue;}
+                // A blank quoted separator belongs to the selected region but
+                // has no inline characters to style. Prove that it renders no
+                // text; the final fingerprint still preserves its block shape.
+                NSString *rawLine=[source substringWithRange:line];
+                BOOL quoteOnly=[rawLine rangeOfString:@"\\A {0,3}(?:>[ \\t]?)+[ \\t\\r\\n]*\\z" options:NSRegularExpressionSearch].location!=NSNotFound;
+                if(quoteOnly) {
+                    NSArray *tokens=MPPIFingerprint(render(rawLine));
+                    BOOL noText=tokens!=nil;
+                    for(NSDictionary *token in tokens) if(token[@"text"]) {noText=NO;break;}
+                    if(noText) {[texts addObject:@""];cursor=NSMaxRange(line);continue;}
+                }
                 return nil;
             }
             [items addObject:@{@"selected":[NSValue valueWithRange:selected],@"change":change}];

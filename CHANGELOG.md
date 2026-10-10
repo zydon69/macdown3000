@@ -28,6 +28,7 @@ Changes proposed in #597; these are not a published release.
 
 - Restore preview text selection and the formatting panel on multiline quotations, including mixed styles and repeated text, while preserving Markdown provenance.
 - Preserve nested quote, heading and list prefixes when adding or removing inline styles inside quotations.
+- Allow inline formatting across empty quoted separator lines without removing paragraph boundaries or neighboring content.
 - Replace duplicate task-list bullets with checkboxes and align task text with ordinary list text. Position checkbox markers using the list font, including enlarged text and dark themes.
 - Preserve callout containers when changing their content's line type; explicit removal keeps titles, content and neighboring block boundaries intact.
 - Preserve the live expanded/collapsed state of generated disclosures during ordinary preview refreshes; explicit Reload restores source defaults.
