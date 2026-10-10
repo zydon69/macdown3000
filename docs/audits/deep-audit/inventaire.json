@@ -1218,14 +1218,14 @@
     },
     {
       "path": "MacDown/Code/Document/MPDocument.m",
-      "observed_sha256": "3d715eb8f13cfca3a30d311ed5f92392d8ad1ee21f80d9d11e08bfb62cb9598c",
+      "observed_sha256": "a6fae3944e7be9b2d058faa6823f54cdba9aec84e4c3ba7a3f888e3e9e931ddc",
       "sha256": "93479bf016b912ee7b3b518e550190fd34b50f2e64b06a91d2b86eacbb528cea",
       "read": false,
       "analyzed": false,
       "validation_tested": false,
       "validation_without_test": false,
-      "state": "modifié après campagne04 — correction ciblée testée, relecture intégrale à renouveler",
-      "evidence": "../../features/editor-zoom-after-typing.md",
+      "state": "modifié après campagne04 — évolution ciblée testée, relecture intégrale à renouveler",
+      "evidence": "../../features/generated-tables-centered.md",
       "open_findings": [],
       "read_ranges": [
         "diff de la correction des citations ; contrats et consommateurs concernés",
@@ -1234,7 +1234,8 @@
         "diff ciblé : plafond de taille des contrôles de sélection et propagation du facteur réel de zoom",
         "diff ciblé : bouton Texte normal, dimensions du tableau, grille de sélection et traduction française",
         "diff ciblé : détection des sélections de tableau, alignement Markdown de colonnes, restauration et tests du visualiseur",
-        "diff ciblé : actualisation des polices du moteur de coloration après un changement de zoom ; contrats et tests de frappe"
+        "diff ciblé : actualisation des polices du moteur de coloration après un changement de zoom ; contrats et tests de frappe",
+        "diff ciblé : centrage Markdown par défaut du générateur de tableaux et rendu des 64 dimensions"
       ],
       "review_flow": "document",
       "review_decision": "Correction ciblée après audit ; la validation intégrale de la version précédente est conservée séparément. Aucun nouvel audit intégral du fichier déclaré.",
@@ -1263,7 +1264,9 @@
         "preuves/alignement-tableau-final.log",
         "../../features/editor-zoom-after-typing.md",
         "preuves/zoom-frappe-red.log",
-        "preuves/zoom-frappe-final.log"
+        "preuves/zoom-frappe-final.log",
+        "../../features/generated-tables-centered.md",
+        "preuves/tableaux-centres-final.log"
       ],
       "historical_campaign04_validation": {
         "path": "MacDown/Code/Document/MPDocument.m",

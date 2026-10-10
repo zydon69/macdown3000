@@ -13,6 +13,8 @@
 
 #import <XCTest/XCTest.h>
 #import "MPDocument.h"
+#import "MPRenderer.h"
+#import "MPPreferences.h"
 
 // Expose the pure class helper for testing.
 @interface MPDocument (InsertTableTesting)
@@ -24,7 +26,7 @@
 @end
 
 static NSString *const kHeaderRow = @"| Column 1 | Column 2 | Column 3 |";
-static NSString *const kSeparatorRow = @"| --- | --- | --- |";
+static NSString *const kSeparatorRow = @"| :---: | :---: | :---: |";
 static NSString *const kBodyRow = @"|  |  |  |";
 
 @interface MPInsertTableTests : XCTestCase
@@ -278,6 +280,32 @@ static NSString *const kBodyRow = @"|  |  |  |";
     XCTAssertEqual(replacement.location, (NSUInteger)0);
     XCTAssertEqual(replacement.length, (NSUInteger)0);
     XCTAssertTrue([inserted hasPrefix:kHeaderRow]);
+}
+
+- (void)testGeneratedTablesRenderEveryCellCenteredForAll64Dimensions
+{
+    MPPreferences *prefs=[MPPreferences sharedInstance];
+    BOOL savedTables=prefs.extensionTables;
+    @try {
+        prefs.extensionTables=YES;
+        MPDocument *owner=[MPDocument new];
+        MPRenderer *renderer=[MPRenderer new];
+        renderer.delegate=(id<MPRendererDelegate>)owner;
+        for (NSUInteger rows=1;rows<=8;rows++) for (NSUInteger columns=1;columns<=8;columns++) {
+            NSString *markdown=[MPDocument tableInsertionForContent:@"" selectedRange:NSMakeRange(0,0) columns:columns rows:rows replacementRange:NULL caretLocation:NULL];
+            NSString *html=[renderer HTMLForMarkdownSnapshot:markdown];
+            NSError *error=nil;
+            NSXMLDocument *document=[[NSXMLDocument alloc] initWithXMLString:[NSString stringWithFormat:@"<root>%@</root>",html] options:0 error:&error];
+            XCTAssertNotNil(document,@"%@",error);
+            NSArray *cells=[document nodesForXPath:@"//th | //td" error:&error];
+            XCTAssertEqual(cells.count,columns*rows,@"%lu columns and %lu rows",(unsigned long)columns,(unsigned long)rows);
+            for (NSXMLElement *cell in cells) {
+                XCTAssertEqualObjects([cell attributeForName:@"style"].stringValue,@"text-align: center");
+            }
+        }
+    } @finally {
+        prefs.extensionTables=savedTables;
+    }
 }
 
 @end

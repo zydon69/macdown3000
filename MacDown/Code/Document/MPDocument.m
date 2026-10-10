@@ -3888,7 +3888,7 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     NSMutableString *core=[NSMutableString stringWithString:@"|"];
     for (NSUInteger column=1;column<=columns;column++) [core appendFormat:@" Column %lu |",(unsigned long)column];
     [core appendString:@"\n|"];
-    for (NSUInteger column=0;column<columns;column++) [core appendString:@" --- |"];
+    for (NSUInteger column=0;column<columns;column++) [core appendString:@" :---: |"];
     NSUInteger caretOffsetInCore=2;
     for (NSUInteger row=1;row<rows;row++) {
         [core appendString:@"\n|"];
