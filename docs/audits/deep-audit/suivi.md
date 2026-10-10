@@ -1,8 +1,12 @@
 # Deep audit — campagne04 : revue complète avec tests
 
-Statut : **prêt à livrer dans le périmètre local vérifié**. Version source finale `9bf9d54` ; tests UI finaux `ce171f1`. Révision initiale `15e63f22239c5073720b1610197cde51e442f7de` ; arbre initial propre. Aucune validation historique importée.
+Statut de la campagne04 à sa clôture : **prêt à livrer dans le périmètre local vérifié**. Version source finale `9bf9d54` ; tests UI finaux `ce171f1`. Révision initiale `15e63f22239c5073720b1610197cde51e442f7de` ; arbre initial propre. Aucune validation historique importée.
 
 Les campagnes précédentes sont conservées dans [le suivi historique](historique/avant-campagne04-suivi.md) et [son inventaire](historique/avant-campagne04-inventaire.json). Les preuves associées restent dans `preuves/`. Un seul inventaire actif : celui-ci et `inventaire.json`.
+
+## Suivi après campagne04 — correction des citations (10 octobre 2026)
+
+Trois fichiers de production ont changé depuis cette lecture intégrale : `MPDocument.m`, `MPPreviewInlineTransaction.h` et `preview-edit.js`. Leurs cases sont réinitialisées pour leur nouvelle version ; les validations intégrales antérieures restent conservées dans `historical_campaign04_validation` de l’inventaire JSON. **633 fichiers inchangés conservent leur validation intégrale ; 3 nécessitent une nouvelle relecture intégrale.** La correction ciblée et ses contrôles sont décrits dans [le rapport des citations](../../features/quote-selection.md). Les bilans de clôture ci-dessous décrivent la campagne04, pas une nouvelle revue complète.
 
 ## Périmètre
 
@@ -85,10 +89,10 @@ Exclusions individuelles et racines documentées dans [inventaire.json](inventai
 | `MacDown/Code/Document/MPAsset.h` | `c1a03ae5c84d0a4cd5ee4c2b6aec7a4920d979cfbaff84e0954a9d0f0dee3f2e` | ☑ | ☑ | ☑ | ☐ | validé avec tests | [Lecture/contrats](preuves/campagne04-lecture.md) · [contrôles](#contrôles) |
 | `MacDown/Code/Document/MPAsset.m` | `a4e260bd0ab242b7862c030229aac8892af464e8f63333db1cbe5ef86c22e943` | ☑ | ☑ | ☑ | ☐ | validé avec tests | [Lecture/contrats](preuves/campagne04-lecture.md) · [contrôles](#contrôles) |
 | `MacDown/Code/Document/MPDocument.h` | `bb4a26c1ff81e79a0e5a40df9d049653feaf1c3fe2c59f4a54764152e77edaf7` | ☑ | ☑ | ☑ | ☐ | validé avec tests | [Lecture/contrats](preuves/campagne04-lecture.md) · [contrôles](#contrôles) |
-| `MacDown/Code/Document/MPDocument.m` | `7fee3d8b06f48ef1551d100e63b1286e53359f26da738a4b66254557758cb41b` | ☑ | ☑ | ☑ | ☐ | validé avec tests | [Lecture/contrats](preuves/campagne04-lecture.md) · [contrôles](#contrôles) |
+| `MacDown/Code/Document/MPDocument.m` | `fa36e62e2612641d6e0d0d28a6e61cfdd5b0ec1f336d84c629959cb9c46f77c7` | ☐ | ☐ | ☐ | ☐ | modifié après campagne04 — correction ciblée testée ; relecture intégrale à renouveler | [Correction et contrôles](../../features/quote-selection.md) ; validation intégrale antérieure conservée dans l’inventaire JSON. |
 | `MacDown/Code/Document/MPPDFAnchorInjector.h` | `7dbaa29df89ed7405bb15a3471f5bdd75b7486a5b2558f60a826caa4430c5593` | ☑ | ☑ | ☑ | ☐ | validé avec tests | [Lecture/contrats](preuves/campagne04-lecture.md) · [contrôles](#contrôles) |
 | `MacDown/Code/Document/MPPDFAnchorInjector.m` | `902c57b2cb6354a651e0b981a49bfee390ae89fc1e003d0d1a71bd343c2ed5a0` | ☑ | ☑ | ☑ | ☐ | validé avec tests | [Lecture/contrats](preuves/campagne04-lecture.md) · [contrôles](#contrôles) |
-| `MacDown/Code/Document/MPPreviewInlineTransaction.h` | `bfd185193e91f787a9e7c508245ddafdcfdb137904c7a3edc71e8d27a2a43266` | ☑ | ☑ | ☑ | ☐ | validé avec tests | [Lecture/contrats](preuves/campagne04-lecture.md) · [contrôles](#contrôles) |
+| `MacDown/Code/Document/MPPreviewInlineTransaction.h` | `710f225034d476c309c84f6960e52992c8714a7bd04f96a2bbc1abdc0bf55e66` | ☐ | ☐ | ☐ | ☐ | modifié après campagne04 — correction ciblée testée ; relecture intégrale à renouveler | [Correction et contrôles](../../features/quote-selection.md) ; validation intégrale antérieure conservée dans l’inventaire JSON. |
 | `MacDown/Code/Document/MPRenderer.h` | `3b103f72eac6492c29ff7e3ed161b1e27c1ff342d2ed70e514f2fdbcb4a030cc` | ☑ | ☑ | ☑ | ☐ | validé avec tests | [Lecture/contrats](preuves/campagne04-lecture.md) · [contrôles](#contrôles) |
 | `MacDown/Code/Document/MPRenderer.m` | `689042071ec6802341fb99d41f773205c98bd48b7a2f055d920aafa0b1e56698` | ☑ | ☑ | ☑ | ☐ | validé avec tests | [Lecture/contrats](preuves/campagne04-lecture.md) · [contrôles](#contrôles) |
 | `MacDown/Code/Extension/DOMNode+Text.h` | `748eb6ded390d9261d7454819f8e2486b65735ff7f2239495208cb05952daed3` | ☑ | ☑ | ☑ | ☐ | validé avec tests | [Lecture/contrats](preuves/campagne04-lecture.md) · [contrôles](#contrôles) |
@@ -478,7 +482,7 @@ Exclusions individuelles et racines documentées dans [inventaire.json](inventai
 | `MacDown/Resources/Extensions/export.css` | `401a13f7ec8583be6b64ce605a1fdbdec4bf4063485ee9dac7b1864297d07c48` | ☑ | ☑ | ☑ | ☐ | validé avec tests | [Lecture/contrats](preuves/campagne04-lecture.md) · [contrôles](#contrôles) |
 | `MacDown/Resources/Extensions/mermaid.forest.css` | `30f7a6778b2cd70bffeb591b4d66b22bcbee1b31c5118a53e6431f462454bf8d` | ☑ | ☑ | ☑ | ☐ | validé avec tests | [Lecture/contrats](preuves/campagne04-lecture.md) · [contrôles](#contrôles) |
 | `MacDown/Resources/Extensions/mermaid.init.js` | `51e9477dfd4704fe15c1456023f35ba272229c84b8bd46764888f5bba3c59a72` | ☑ | ☑ | ☑ | ☐ | validé avec tests | [Lecture/contrats](preuves/campagne04-lecture.md) · [contrôles](#contrôles) |
-| `MacDown/Resources/Extensions/preview-edit.js` | `91a303da931911f88630be04e69351d4097e37a45aa97c499dcba4a9f77f71db` | ☑ | ☑ | ☑ | ☐ | validé avec tests | [Lecture/contrats](preuves/campagne04-lecture.md) · [contrôles](#contrôles) |
+| `MacDown/Resources/Extensions/preview-edit.js` | `80ec38cbd9f534fd0a19cbb2d9d44acae2c2b6d4d1c7a2f4a32f436ac825ed2e` | ☐ | ☐ | ☐ | ☐ | modifié après campagne04 — correction ciblée testée ; relecture intégrale à renouveler | [Correction et contrôles](../../features/quote-selection.md) ; validation intégrale antérieure conservée dans l’inventaire JSON. |
 | `MacDown/Resources/Extensions/print.css` | `da10026e3d91bc032fbbc237dfeb8bb74cf55297307c6b0263da142a1dbe553b` | ☑ | ☑ | ☑ | ☐ | validé avec tests | [Lecture/contrats](preuves/campagne04-lecture.md) · [contrôles](#contrôles) |
 | `MacDown/Resources/Extensions/show-information.css` | `b6264623da8f6833df5aaaef6d8d5d80a2b0720b36fee8e21e1e1967d7facf6e` | ☑ | ☑ | ☑ | ☐ | validé avec tests | [Lecture/contrats](preuves/campagne04-lecture.md) · [contrôles](#contrôles) |
 | `MacDown/Resources/Extensions/table-resize.js` | `bdd2edb6f2e28a58ab681afa69f5f3a07c3bf5bf46ab215b90f3bed42c2d8e44` | ☑ | ☑ | ☑ | ☐ | validé avec tests | [Lecture/contrats](preuves/campagne04-lecture.md) · [contrôles](#contrôles) |
@@ -720,7 +724,7 @@ L’exécution est locale arm64 sous macOS 26.6.2 / Xcode 26.2, build arm64+x86_
 | Configuration / données / permissions / reprise | Build, migration privée, sandbox et contrats de reprise vérifiés |
 | Pipelines / consommateurs | Adaptateurs recoupés ; aucune divergence confirmée restante |
 
-## Compteurs et reprise
+## Compteurs et reprise — clôture historique de campagne04
 
 **636 sources actives ; 636 entièrement lues ; 636 entièrement analysées ; 603 validées avec tests ; 33 validées uniquement par revue statique ; 0 à revalider.** Les deux modalités sont disjointes dans cette campagne : 636 fichiers validés au total. Défauts confirmés ouverts : 0 ; hypothèses déterminantes ouvertes : 0 ; contrôles locaux requis manquants : 0.
 

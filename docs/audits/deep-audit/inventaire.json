@@ -2,7 +2,7 @@
   "campaign": 4,
   "revision": "15e63f22239c5073720b1610197cde51e442f7de",
   "mode": "with-tests",
-  "status": "prêt à livrer dans le périmètre local vérifié",
+  "status": "633 fichiers inchangés validés ; 3 corrections ciblées testées, relecture intégrale de leurs nouvelles versions à renouveler",
   "historical_inventory": "historique/avant-campagne04-inventaire.json",
   "records": [
     {
@@ -1191,28 +1191,64 @@
     },
     {
       "path": "MacDown/Code/Document/MPDocument.m",
-      "observed_sha256": "ecceb7b9a0a57e5d77dce71f59e0f0def6496e7ab6915a501312e7adf0f942b0",
-      "sha256": "7fee3d8b06f48ef1551d100e63b1286e53359f26da738a4b66254557758cb41b",
-      "read": true,
-      "analyzed": true,
-      "validation_tested": true,
+      "observed_sha256": "fa36e62e2612641d6e0d0d28a6e61cfdd5b0ec1f336d84c629959cb9c46f77c7",
+      "sha256": "fa36e62e2612641d6e0d0d28a6e61cfdd5b0ec1f336d84c629959cb9c46f77c7",
+      "read": false,
+      "analyzed": false,
+      "validation_tested": false,
       "validation_without_test": false,
-      "state": "validé avec tests",
-      "evidence": "preuves/campagne04-lecture.md",
+      "state": "modifié après campagne04 — correction ciblée testée, relecture intégrale à renouveler",
+      "evidence": "../../features/quote-selection.md",
       "open_findings": [],
       "read_ranges": [
-        "entier"
+        "diff de la correction des citations ; contrats et consommateurs concernés"
       ],
       "review_flow": "document",
-      "review_decision": "Document/rendu/transactions/PDF et catégories de transformation ; branches/consommateurs et seconde passe décrits dans le registre.",
+      "review_decision": "Correction ciblée après audit ; la validation intégrale de la version précédente est conservée séparément. Aucun nouvel audit intégral du fichier déclaré.",
       "test_evidence": [
-        "preuves/campagne04-native-final.log",
-        "preuves/campagne04-ui-delivery-verified.log",
-        "preuves/campagne04-inline.log",
-        "preuves/campagne04-callout-green.log",
-        "preuves/campagne04-print-native-green.log",
-        "preuves/campagne04-preserved-file-final.log"
-      ]
+        "../../features/quote-selection.md",
+        "preuves/citations-native.log",
+        "preuves/citations-ui.log"
+      ],
+      "historical_campaign04_validation": {
+        "path": "MacDown/Code/Document/MPDocument.m",
+        "observed_sha256": "ecceb7b9a0a57e5d77dce71f59e0f0def6496e7ab6915a501312e7adf0f942b0",
+        "sha256": "7fee3d8b06f48ef1551d100e63b1286e53359f26da738a4b66254557758cb41b",
+        "read": true,
+        "analyzed": true,
+        "validation_tested": true,
+        "validation_without_test": false,
+        "state": "validé avec tests",
+        "evidence": "preuves/campagne04-lecture.md",
+        "open_findings": [],
+        "read_ranges": [
+          "entier"
+        ],
+        "review_flow": "document",
+        "review_decision": "Document/rendu/transactions/PDF et catégories de transformation ; branches/consommateurs et seconde passe décrits dans le registre.",
+        "test_evidence": [
+          "preuves/campagne04-native-final.log",
+          "preuves/campagne04-ui-delivery-verified.log",
+          "preuves/campagne04-inline.log",
+          "preuves/campagne04-callout-green.log",
+          "preuves/campagne04-print-native-green.log",
+          "preuves/campagne04-preserved-file-final.log"
+        ]
+      },
+      "targeted_validation": {
+        "source_revision": "7d5f2f5",
+        "read": "diff et contrats concernés",
+        "new_quote_scenarios": 212,
+        "new_quote_test_methods": 4,
+        "ui_tests": 18,
+        "ui_failures": 0,
+        "native_tests": 1553,
+        "native_failures": 1,
+        "native_failure": "MPZoomTests/testZoomChangeInDocAPropagatesToDocB",
+        "zoom_isolated_tests": 26,
+        "zoom_repeated_tests": 520,
+        "zoom_recheck_failures": 0
+      }
     },
     {
       "path": "MacDown/Code/Document/MPPDFAnchorInjector.h",
@@ -1266,28 +1302,64 @@
     },
     {
       "path": "MacDown/Code/Document/MPPreviewInlineTransaction.h",
-      "observed_sha256": "bfd185193e91f787a9e7c508245ddafdcfdb137904c7a3edc71e8d27a2a43266",
-      "sha256": "bfd185193e91f787a9e7c508245ddafdcfdb137904c7a3edc71e8d27a2a43266",
-      "read": true,
-      "analyzed": true,
-      "validation_tested": true,
+      "observed_sha256": "710f225034d476c309c84f6960e52992c8714a7bd04f96a2bbc1abdc0bf55e66",
+      "sha256": "710f225034d476c309c84f6960e52992c8714a7bd04f96a2bbc1abdc0bf55e66",
+      "read": false,
+      "analyzed": false,
+      "validation_tested": false,
       "validation_without_test": false,
-      "state": "validé avec tests",
-      "evidence": "preuves/campagne04-lecture.md",
+      "state": "modifié après campagne04 — correction ciblée testée, relecture intégrale à renouveler",
+      "evidence": "../../features/quote-selection.md",
       "open_findings": [],
       "read_ranges": [
-        "entier"
+        "diff de la correction des citations ; contrats et consommateurs concernés"
       ],
       "review_flow": "document",
-      "review_decision": "Document/rendu/transactions/PDF et catégories de transformation ; branches/consommateurs et seconde passe décrits dans le registre.",
+      "review_decision": "Correction ciblée après audit ; la validation intégrale de la version précédente est conservée séparément. Aucun nouvel audit intégral du fichier déclaré.",
       "test_evidence": [
-        "preuves/campagne04-native-final.log",
-        "preuves/campagne04-ui-delivery-verified.log",
-        "preuves/campagne04-inline.log",
-        "preuves/campagne04-callout-green.log",
-        "preuves/campagne04-print-native-green.log",
-        "preuves/campagne04-preserved-file-final.log"
-      ]
+        "../../features/quote-selection.md",
+        "preuves/citations-native.log",
+        "preuves/citations-ui.log"
+      ],
+      "historical_campaign04_validation": {
+        "path": "MacDown/Code/Document/MPPreviewInlineTransaction.h",
+        "observed_sha256": "bfd185193e91f787a9e7c508245ddafdcfdb137904c7a3edc71e8d27a2a43266",
+        "sha256": "bfd185193e91f787a9e7c508245ddafdcfdb137904c7a3edc71e8d27a2a43266",
+        "read": true,
+        "analyzed": true,
+        "validation_tested": true,
+        "validation_without_test": false,
+        "state": "validé avec tests",
+        "evidence": "preuves/campagne04-lecture.md",
+        "open_findings": [],
+        "read_ranges": [
+          "entier"
+        ],
+        "review_flow": "document",
+        "review_decision": "Document/rendu/transactions/PDF et catégories de transformation ; branches/consommateurs et seconde passe décrits dans le registre.",
+        "test_evidence": [
+          "preuves/campagne04-native-final.log",
+          "preuves/campagne04-ui-delivery-verified.log",
+          "preuves/campagne04-inline.log",
+          "preuves/campagne04-callout-green.log",
+          "preuves/campagne04-print-native-green.log",
+          "preuves/campagne04-preserved-file-final.log"
+        ]
+      },
+      "targeted_validation": {
+        "source_revision": "7d5f2f5",
+        "read": "diff et contrats concernés",
+        "new_quote_scenarios": 212,
+        "new_quote_test_methods": 4,
+        "ui_tests": 18,
+        "ui_failures": 0,
+        "native_tests": 1553,
+        "native_failures": 1,
+        "native_failure": "MPZoomTests/testZoomChangeInDocAPropagatesToDocB",
+        "zoom_isolated_tests": 26,
+        "zoom_repeated_tests": 520,
+        "zoom_recheck_failures": 0
+      }
     },
     {
       "path": "MacDown/Code/Document/MPRenderer.h",
@@ -10398,29 +10470,65 @@
     },
     {
       "path": "MacDown/Resources/Extensions/preview-edit.js",
-      "observed_sha256": "91a303da931911f88630be04e69351d4097e37a45aa97c499dcba4a9f77f71db",
-      "sha256": "91a303da931911f88630be04e69351d4097e37a45aa97c499dcba4a9f77f71db",
-      "read": true,
-      "analyzed": true,
-      "validation_tested": true,
+      "observed_sha256": "80ec38cbd9f534fd0a19cbb2d9d44acae2c2b6d4d1c7a2f4a32f436ac825ed2e",
+      "sha256": "80ec38cbd9f534fd0a19cbb2d9d44acae2c2b6d4d1c7a2f4a32f436ac825ed2e",
+      "read": false,
+      "analyzed": false,
+      "validation_tested": false,
       "validation_without_test": false,
-      "state": "validé avec tests",
-      "evidence": "preuves/campagne04-lecture.md",
+      "state": "modifié après campagne04 — correction ciblée testée, relecture intégrale à renouveler",
+      "evidence": "../../features/quote-selection.md",
       "open_findings": [],
       "read_ranges": [
-        "entier"
+        "diff de la correction des citations ; contrats et consommateurs concernés"
       ],
       "review_flow": "styles",
-      "review_decision": "Styles/templates/JS : toutes entrées, cascade, ressources, provenance, teardown et consommateurs de rendu recoupés.",
+      "review_decision": "Correction ciblée après audit ; la validation intégrale de la version précédente est conservée séparément. Aucun nouvel audit intégral du fichier déclaré.",
       "test_evidence": [
-        "preuves/campagne04-native-final.log",
-        "preuves/campagne04-ui-delivery-verified.log",
-        "preuves/campagne04-heading_spacing.log",
-        "preuves/campagne04-wrap-themes.log",
-        "preuves/campagne04-community-themes.log",
-        "preuves/campagne04-mermaid-js.log",
-        "preuves/campagne04-header-locations.log"
-      ]
+        "../../features/quote-selection.md",
+        "preuves/citations-native.log",
+        "preuves/citations-ui.log"
+      ],
+      "historical_campaign04_validation": {
+        "path": "MacDown/Resources/Extensions/preview-edit.js",
+        "observed_sha256": "91a303da931911f88630be04e69351d4097e37a45aa97c499dcba4a9f77f71db",
+        "sha256": "91a303da931911f88630be04e69351d4097e37a45aa97c499dcba4a9f77f71db",
+        "read": true,
+        "analyzed": true,
+        "validation_tested": true,
+        "validation_without_test": false,
+        "state": "validé avec tests",
+        "evidence": "preuves/campagne04-lecture.md",
+        "open_findings": [],
+        "read_ranges": [
+          "entier"
+        ],
+        "review_flow": "styles",
+        "review_decision": "Styles/templates/JS : toutes entrées, cascade, ressources, provenance, teardown et consommateurs de rendu recoupés.",
+        "test_evidence": [
+          "preuves/campagne04-native-final.log",
+          "preuves/campagne04-ui-delivery-verified.log",
+          "preuves/campagne04-heading_spacing.log",
+          "preuves/campagne04-wrap-themes.log",
+          "preuves/campagne04-community-themes.log",
+          "preuves/campagne04-mermaid-js.log",
+          "preuves/campagne04-header-locations.log"
+        ]
+      },
+      "targeted_validation": {
+        "source_revision": "7d5f2f5",
+        "read": "diff et contrats concernés",
+        "new_quote_scenarios": 212,
+        "new_quote_test_methods": 4,
+        "ui_tests": 18,
+        "ui_failures": 0,
+        "native_tests": 1553,
+        "native_failures": 1,
+        "native_failure": "MPZoomTests/testZoomChangeInDocAPropagatesToDocB",
+        "zoom_isolated_tests": 26,
+        "zoom_repeated_tests": 520,
+        "zoom_recheck_failures": 0
+      }
     },
     {
       "path": "MacDown/Resources/Extensions/print.css",
@@ -15475,10 +15583,11 @@
   },
   "counts": {
     "total": 636,
-    "read": 636,
-    "analyzed": 636,
-    "validation_tested": 603,
-    "validation_without_test": 33
+    "read": 633,
+    "analyzed": 633,
+    "validation_tested": 600,
+    "validation_without_test": 33,
+    "pending_full_revalidation": 3
   },
   "final_source_revision": "9bf9d54",
   "validation_revision": "ce171f1",
@@ -15491,5 +15600,17 @@
     "open_determinant_hypotheses": 0,
     "missing_required_local_controls": 0,
     "correction_commits": 10
+  },
+  "historical_campaign04_counts": {
+    "total": 636,
+    "read": 636,
+    "analyzed": 636,
+    "validation_tested": 603,
+    "validation_without_test": 33
+  },
+  "post_campaign04_quote_fix": {
+    "source_revision": "7d5f2f5",
+    "report": "../../features/quote-selection.md",
+    "full_audit_claimed": false
   }
 }
