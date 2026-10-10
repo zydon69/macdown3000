@@ -79,8 +79,7 @@
         var end=node===range.endContainer?range.endOffset:node.nodeValue.length;
         var selectedText=node.nodeValue.substring(start,end);
         if(!selectedText || spans.some(function(span){return span.contains(node);})) continue;
-        if(/\S/.test(selectedText) || !/[\r\n]/.test(selectedText) ||
-          node.parentElement.closest('p,h1,h2,h3,h4,h5,h6,li,pre')) return null;
+        if(/\S/.test(selectedText) || !/[\r\n]/.test(selectedText)) return null;
         var before=null, after=null;
         spans.forEach(function(span){
           var position=span.compareDocumentPosition(node);
@@ -89,7 +88,14 @@
         });
         var beforeBlock=before && before.closest('p,h1,h2,h3,h4,h5,h6,li,pre');
         var afterBlock=after && after.closest('p,h1,h2,h3,h4,h5,h6,li,pre');
-        if(!beforeBlock || !afterBlock || beforeBlock===afterBlock) return null;
+        var separatorBlock=node.parentElement.closest('p,h1,h2,h3,h4,h5,h6,li,pre');
+        if(!beforeBlock || !afterBlock) return null;
+        // A soft break inside prose joins two independently proven source
+        // lines. Fenced code and unproven visible characters remain excluded.
+        if(separatorBlock) {
+          if(separatorBlock.tagName==='PRE' || beforeBlock!==separatorBlock ||
+            afterBlock!==separatorBlock) return null;
+        } else if(beforeBlock===afterBlock) return null;
       }
     }
     return {id:matches[0].id,start:matches[0].start,end:matches[0].end,

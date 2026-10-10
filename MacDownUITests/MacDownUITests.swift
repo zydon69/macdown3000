@@ -357,6 +357,41 @@ final class MacDownUITests: XCTestCase {
         XCTAssertEqual(editor.value as? String, source)
     }
 
+    func testPreviewMultilineQuotePlainWordOpensFormattingPanel() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        for first in ["Firstword", "**Firstword**"] {
+            let file = directory.appendingPathComponent("MultilineQuote.md")
+            let source = ">\(first)\n> Secondword\n\nNeighbor\n"
+            try source.write(to: file, atomically: true, encoding: .utf8)
+            let window = openPreviewBlockFixture(file)
+            let editor = window.textViews.matching(identifier: "editor-text-view").firstMatch
+            XCTAssertTrue(editor.waitForExistence(timeout: 10))
+            let text = window.webViews.staticTexts.matching(
+                NSPredicate(format: "label == %@ OR value == %@", "Secondword", "Secondword")).firstMatch
+            XCTAssertTrue(text.waitForExistence(timeout: 10), window.debugDescription)
+            text.doubleClick()
+            let bold = window.webViews.descendants(matching: .any).matching(
+                NSPredicate(format: "label == %@", "Gras")).firstMatch
+            XCTAssertTrue(bold.waitForExistence(timeout: 5), window.debugDescription)
+            XCTAssertTrue(bold.isEnabled)
+            bold.click()
+            let expected = ">\(first)\n> **Secondword**\n\nNeighbor\n"
+            wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", expected), object: editor)], timeout: 10)
+            let italic = window.webViews.descendants(matching: .any).matching(
+                NSPredicate(format: "label == %@", "Italique")).firstMatch
+            XCTAssertTrue(italic.waitForExistence(timeout: 5))
+            italic.click()
+            wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value CONTAINS %@", "***Secondword***"), object: editor)], timeout: 10)
+            XCTAssertFalse((editor.value as? String ?? "").contains("<"))
+            app.typeKey("z", modifierFlags: .command)
+            XCTAssertEqual(editor.value as? String, expected)
+            app.typeKey("z", modifierFlags: .command)
+            XCTAssertEqual(editor.value as? String, source)
+        }
+    }
+
     func testPreviewQuoteToCodeRemovesQuotePrefixAndKeepsNeighbor() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

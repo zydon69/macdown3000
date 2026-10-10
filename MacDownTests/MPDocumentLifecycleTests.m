@@ -2036,6 +2036,184 @@ static id MPControlledExportPanelFactory(id receiver, SEL selector)
     } @finally { [document close]; document.preferences.htmlTaskList=tasks; }
 }
 
+- (void)testPreviewMultilineQuoteSelectionMapsPlainAndStyledLines
+{
+    NSArray *cases = @[
+        @[@">ezrtgfvqds\n> erfvsgfe\n\nNeighbor.\n", @">ezrtgfvqds\n> **erfvsgfe**\n\nNeighbor.\n"],
+        @[@">**ezrtgfvqds**\n> erfvsgfe\n\nNeighbor.\n", @">**ezrtgfvqds**\n> **erfvsgfe**\n\nNeighbor.\n"],
+        @[@"> ezrtgfvqds\n> erfvsgfe\n\nNeighbor.\n", @"> ezrtgfvqds\n> **erfvsgfe**\n\nNeighbor.\n"],
+        @[@"> ezrtgfvqds  \n> erfvsgfe\n\nNeighbor.\n", @"> ezrtgfvqds  \n> **erfvsgfe**\n\nNeighbor.\n"],
+        @[@"> ezrtgfvqds\n> erfvsgfe\n\nerfvsgfe\n", @"> ezrtgfvqds\n> **erfvsgfe**\n\nerfvsgfe\n"],
+        @[@"> ezrtgfvqds\n> erfvsgfe\n> erfvsgfe\n\nNeighbor.\n", @"> ezrtgfvqds\n> **erfvsgfe**\n> erfvsgfe\n\nNeighbor.\n"],
+        @[@"> *ezrtgfvqds*\n> erfvsgfe\n\nNeighbor.\n", @"> *ezrtgfvqds*\n> **erfvsgfe**\n\nNeighbor.\n"],
+        @[@"> ezrtgfvqds\n> erfvsgfe 😀 café 日本語\n\nNeighbor.\n", @"> ezrtgfvqds\n> **erfvsgfe** 😀 café 日本語\n\nNeighbor.\n"]
+    ];
+    for (NSArray *scenario in cases) {
+        MPDocument *document = [MPDocument new];
+        document.fileURL = self.testFileURL;
+        MPEditorView *editor = [[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+        WebView *web = [[WebView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+        NSWindow *window = [[NSWindow alloc] initWithContentRect:web.frame styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+        window.releasedWhenClosed = NO; window.contentView = web;
+        MPRenderer *renderer = [MPRenderer new];
+        document.editor = editor; document.preview = web; document.renderer = renderer;
+        web.frameLoadDelegate = (id<WebFrameLoadDelegate>)document;
+        web.policyDelegate = (id<WebPolicyDelegate>)document;
+        renderer.delegate = (id<MPRendererDelegate>)document;
+        renderer.dataSource = (id<MPRendererDataSource>)document;
+        BOOL math = document.preferences.htmlMathJax, smarty = document.preferences.extensionSmartyPants;
+        @try {
+            document.preferences.htmlMathJax = NO; document.preferences.extensionSmartyPants = NO;
+            editor.string = scenario[0];
+            [renderer parseMarkdown:editor.string]; [renderer render];
+            NSString *token = renderer.checkboxBridgeToken;
+            [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc]
+                initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o, NSDictionary *b) {
+                    return !web.isLoading && [document.previewEditToken isEqualToString:token];
+                }] object:web]] timeout:10];
+            for (NSString *text in @[@"ezrtgfvqds", @"erfvsgfe"]) {
+                XCTAssertTrue([document.previewEditRanges indexOfObjectPassingTest:^BOOL(NSDictionary *entry, NSUInteger i, BOOL *stop) { return [entry[@"text"] containsString:text]; }] != NSNotFound, @"%@", scenario[0]);
+            }
+            [web stringByEvaluatingJavaScriptFromString:@"(function(){var w=document.createTreeWalker(document.querySelector('blockquote'),NodeFilter.SHOW_TEXT),n;while(n=w.nextNode()){var start=n.nodeValue.indexOf('erfvsgfe');if(start<0)continue;var r=document.createRange();r.setStart(n,start);r.setEnd(n,start+8);getSelection().removeAllRanges();getSelection().addRange(r);document.dispatchEvent(new Event('selectionchange'));break;}})()"];
+            [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc]
+                initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o, NSDictionary *b) {
+                    return [[web stringByEvaluatingJavaScriptFromString:@"getComputedStyle(document.getElementById('macdown-preview-format')).display"] isEqualToString:@"block"];
+                }] object:web]] timeout:3];
+            [web stringByEvaluatingJavaScriptFromString:@"document.querySelector('[data-mp-style=bold]').click()"];
+            [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc]
+                initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o, NSDictionary *b) {
+                    return !web.isLoading && [editor.string isEqualToString:scenario[1]] &&
+                        [[web stringByEvaluatingJavaScriptFromString:@"getSelection().toString()"] isEqualToString:@"erfvsgfe"];
+                }] object:web]] timeout:5];
+            XCTAssertEqualObjects(editor.string, scenario[1]);
+            XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"Array.from(document.querySelectorAll('blockquote strong')).find(function(n){return n.textContent==='erfvsgfe';}).textContent"], @"erfvsgfe");
+            XCTAssertFalse([editor.string containsString:@"<"]);
+            [web stringByEvaluatingJavaScriptFromString:@"(function(){var nodes=document.querySelectorAll('blockquote [data-mp-edit-id]'),r=document.createRange();r.setStart(nodes[0].firstChild,0);var last=nodes[nodes.length-1].firstChild;r.setEnd(last,last.length);getSelection().removeAllRanges();getSelection().addRange(r);document.dispatchEvent(new Event('selectionchange'));})()"];
+            [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o, NSDictionary *b) {
+                return [[web stringByEvaluatingJavaScriptFromString:@"getComputedStyle(document.getElementById('macdown-preview-format')).display"] isEqualToString:@"block"];
+            }] object:web]] timeout:3];
+            [web stringByEvaluatingJavaScriptFromString:@"document.querySelector('[data-mp-style=italic]').click()"];
+            [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o, NSDictionary *b) {
+                return !web.isLoading && [[web stringByEvaluatingJavaScriptFromString:@"Array.from(document.querySelectorAll('blockquote [data-mp-edit-id]')).filter(function(n){return n.textContent.trim();}).every(function(n){return !!n.closest('em');}) && !!document.querySelector('blockquote strong') && getSelection().toString().indexOf('erfvsgfe')>=0"] boolValue];
+            }] object:web]] timeout:8];
+            NSString *separator=[scenario[0] containsString:@"\r\n"] ? @"\r\n\r\n" : @"\n\n";
+            NSRange boundary=[scenario[0] rangeOfString:separator options:NSBackwardsSearch];
+            XCTAssertNotEqual(boundary.location,NSNotFound);
+            if(boundary.location!=NSNotFound) XCTAssertTrue([editor.string hasSuffix:[scenario[0] substringFromIndex:boundary.location]], @"Neighboring source must be preserved");
+            XCTAssertFalse([editor.string containsString:@"<"]);
+        } @finally {
+            web.frameLoadDelegate = nil; web.policyDelegate = nil; [document close]; [window close];
+            document.preferences.htmlMathJax = math; document.preferences.extensionSmartyPants = smarty;
+        }
+    }
+}
+
+- (void)testPreviewQuoteAllInlineStyleCombinationsRetainSelectionAndNeighbors
+{
+    NSArray *actions = @[@"bold", @"italic", @"underline", @"strike", @"code"];
+    NSArray *tags = @[@"strong", @"em", @"u", @"del", @"code"];
+    // Every subset of five inline styles, in both physical newline formats.
+    for (NSString *ending in @[@"\n", @"\r\n"]) {
+        MPDocument *document = [MPDocument new]; document.fileURL = self.testFileURL;
+        MPEditorView *editor = [[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+        WebView *web = [[WebView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+        NSWindow *window = [[NSWindow alloc] initWithContentRect:web.frame styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+        window.releasedWhenClosed = NO; window.contentView = web;
+        MPRenderer *renderer = [MPRenderer new];
+        document.editor = editor; document.preview = web; document.renderer = renderer;
+        web.frameLoadDelegate = (id<WebFrameLoadDelegate>)document; web.policyDelegate = (id<WebPolicyDelegate>)document;
+        renderer.delegate = (id<MPRendererDelegate>)document; renderer.dataSource = (id<MPRendererDataSource>)document;
+        MPPreferences *preferences = document.preferences;
+        BOOL math=preferences.htmlMathJax, smarty=preferences.extensionSmartyPants;
+        BOOL underline=preferences.extensionUnderline, strike=preferences.extensionStrikethough;
+        NSString *prefix=[NSString stringWithFormat:@"> First.%@> ",ending];
+        NSString *suffix=[NSString stringWithFormat:@"%@%@Neighbor.%@",ending,ending,ending];
+        NSString *source=[NSString stringWithFormat:@"%@Target%@",prefix,suffix];
+        @try {
+            preferences.htmlMathJax=NO; preferences.extensionSmartyPants=NO;
+            preferences.extensionUnderline=YES; preferences.extensionStrikethough=YES;
+            for (NSUInteger combination=0; combination<32; combination++) {
+                editor.string=source; [renderer parseMarkdown:source]; [renderer render];
+                NSString *token=renderer.checkboxBridgeToken;
+                [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o, NSDictionary *b) {
+                    return !web.isLoading && [document.previewEditToken isEqualToString:token];
+                }] object:web]] timeout:10];
+                [web stringByEvaluatingJavaScriptFromString:@"(function(){var span=Array.from(document.querySelectorAll('blockquote [data-mp-edit-id]')).find(function(n){return n.textContent==='Target';}),r=document.createRange();r.selectNodeContents(span);getSelection().removeAllRanges();getSelection().addRange(r);document.dispatchEvent(new Event('selectionchange'));})()"];
+                [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o, NSDictionary *b) {
+                    return [[web stringByEvaluatingJavaScriptFromString:@"getComputedStyle(document.getElementById('macdown-preview-format')).display"] isEqualToString:@"block"];
+                }] object:web]] timeout:3];
+                for (NSUInteger index=0;index<actions.count;index++) {
+                    if (!(combination & (1u<<index))) continue;
+                    NSString *before=[editor.string copy];
+                    [web stringByEvaluatingJavaScriptFromString:[NSString stringWithFormat:@"document.querySelector('[data-mp-style=%@]').click()",actions[index]]];
+                    XCTNSPredicateExpectation *formatted=[[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o, NSDictionary *b) {
+                        return !web.isLoading && ![editor.string isEqualToString:before] && [[web stringByEvaluatingJavaScriptFromString:@"getSelection().toString()"] isEqualToString:@"Target"];
+                    }] object:web];
+                    if([XCTWaiter waitForExpectations:@[formatted] timeout:8]!=XCTWaiterResultCompleted) {
+                        XCTFail(@"Combination %lu, action %@, ending %@: before %@; after %@; selection %@",(unsigned long)combination,actions[index],ending,before,editor.string,[web stringByEvaluatingJavaScriptFromString:@"getSelection().toString()"]);
+                        return;
+                    }
+                }
+                for (NSUInteger index=0;index<actions.count;index++) {
+                    NSString *check=[NSString stringWithFormat:@"(function(){var s=Array.from(document.querySelectorAll('blockquote [data-mp-edit-id]')).find(function(n){return n.textContent==='Target';});return !!s&&!!s.closest('%@');})()",tags[index]];
+                    XCTAssertEqual([[web stringByEvaluatingJavaScriptFromString:check] boolValue], !!(combination & (1u<<index)), @"Combination %lu, %@",(unsigned long)combination,actions[index]);
+                    NSString *state=[NSString stringWithFormat:@"document.querySelector('[data-mp-style=%@]').getAttribute('aria-pressed')",actions[index]];
+                    XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:state], (combination & (1u<<index)) ? @"true" : @"false");
+                }
+                XCTAssertTrue([editor.string hasPrefix:prefix]); XCTAssertTrue([editor.string hasSuffix:suffix]);
+                XCTAssertFalse([editor.string containsString:@"<"]);
+                XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"getSelection().toString()"], @"Target");
+            }
+        } @finally {
+            web.frameLoadDelegate=nil; web.policyDelegate=nil; [document close]; [window close];
+            preferences.htmlMathJax=math; preferences.extensionSmartyPants=smarty;
+            preferences.extensionUnderline=underline; preferences.extensionStrikethough=strike;
+        }
+    }
+}
+
+- (void)testPreviewQuoteMappingRejectsUnprovenTextAndExcessiveLeafCount
+{
+    NSMutableString *large=[NSMutableString new];
+    for(NSUInteger i=0;i<2100;i++) [large appendFormat:@"> word%lu\n",(unsigned long)i];
+    NSString *largePlain=[large stringByReplacingOccurrencesOfString:@"> " withString:@""];
+    NSArray *sources=@[@"> <span title=\"Secret\">Se&#99;ret</span>\n> Plainword\n",
+        @"> [Se&#99;ret](https://example.test/Secret)\n> Plainword\n",large,largePlain];
+    for(NSString *source in sources) {
+        MPDocument *document=[MPDocument new];document.fileURL=self.testFileURL;
+        MPEditorView *editor=[[MPEditorView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+        WebView *web=[[WebView alloc] initWithFrame:NSMakeRect(0,0,500,300)];
+        NSWindow *window=[[NSWindow alloc] initWithContentRect:web.frame styleMask:NSWindowStyleMaskTitled backing:NSBackingStoreBuffered defer:NO];
+        window.releasedWhenClosed=NO;window.contentView=web;
+        MPRenderer *renderer=[MPRenderer new];document.editor=editor;document.preview=web;document.renderer=renderer;
+        renderer.delegate=(id<MPRendererDelegate>)document;renderer.dataSource=(id<MPRendererDataSource>)document;
+        web.frameLoadDelegate=(id<WebFrameLoadDelegate>)document;web.policyDelegate=(id<WebPolicyDelegate>)document;
+        BOOL math=document.preferences.htmlMathJax;document.preferences.htmlMathJax=NO;
+        @try {
+            editor.string=source;[renderer parseMarkdown:source];[renderer render];NSString *token=renderer.checkboxBridgeToken;
+            [self waitForExpectations:@[[[XCTNSPredicateExpectation alloc] initWithPredicate:[NSPredicate predicateWithBlock:^BOOL(id o,NSDictionary *b){
+                return !web.isLoading && [document.previewEditToken isEqualToString:token];
+            }] object:web]] timeout:10];
+            if(source==largePlain) {
+                XCTAssertEqual(document.previewEditRanges.count,1U,@"A long ordinary paragraph keeps its existing contiguous mapping");
+                XCTAssertTrue([document.previewEditRanges.firstObject[@"text"] containsString:@"word2099"]);
+            } else if(source==large) {
+                XCTAssertEqual(document.previewEditRanges.count,0U);
+                XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"String(document.querySelector('blockquote p').childNodes.length)"],@"1",@"The split budget must be checked before changing the DOM");
+            } else {
+                XCTAssertFalse([[document.previewEditRanges valueForKey:@"text"] containsObject:@"Secret"]);
+                XCTAssertTrue([[document.previewEditRanges valueForKey:@"text"] containsObject:@"Plainword"]);
+                [web stringByEvaluatingJavaScriptFromString:@"(function(){var w=document.createTreeWalker(document.querySelector('blockquote'),NodeFilter.SHOW_TEXT),n;while(n=w.nextNode()){if(n.nodeValue!=='Secret')continue;var r=document.createRange();r.selectNodeContents(n);getSelection().removeAllRanges();getSelection().addRange(r);document.dispatchEvent(new Event('selectionchange'));break;}})()"];
+                XCTAssertEqualObjects([web stringByEvaluatingJavaScriptFromString:@"window.macdownPreviewEditor.selectionPayload()===null ? 'refused' : 'accepted'"],@"refused");
+            }
+            XCTAssertFalse(([document applyPreviewEditPayload:@{@"action":@"bold",@"token":@"forged",@"id":@0,@"start":@0,@"end":@1}]));
+            XCTAssertEqualObjects(editor.string,source);
+        } @finally {
+            web.frameLoadDelegate=nil;web.policyDelegate=nil;[document close];[window close];document.preferences.htmlMathJax=math;
+        }
+    }
+}
+
 - (void)testPreviewQuoteToCodeRemovesOnlyStructuralPrefix
 {
     [self assertPreviewBlockSource:@"> Quotedword\n\nNeighbor.\n" texts:@[@"Quotedword"] value:@"code-block"
