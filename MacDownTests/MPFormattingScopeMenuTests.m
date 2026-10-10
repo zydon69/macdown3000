@@ -385,7 +385,7 @@
     XCTAssertEqualObjects([self JS:@"String(document.querySelectorAll('#macdown-preview-format [role=separator]').length)"],@"1");
     XCTAssertTrue([[self JS:@"Array.from(document.querySelectorAll('#macdown-preview-format > [data-mp-inline],#macdown-preview-format > [data-mp-edit-text]')).every(function(b){return b.querySelector('svg') && b.title && b.getAttribute('aria-label')===b.title && !Array.from(b.childNodes).some(function(n){return n.nodeType===3 && n.textContent.trim();});})"] boolValue]);
     XCTAssertTrue([[self JS:@"Array.from(document.querySelectorAll('[data-mp-option]')).every(function(b){return b.querySelector('span').textContent===b.getAttribute('aria-label');})"] boolValue]);
-    XCTAssertEqualObjects([self JS:@"document.querySelector('[data-mp-format-menu]').textContent"],@"Titre 1 ▾");
+    XCTAssertEqualObjects([self JS:@"document.querySelector('[data-mp-format-menu]').textContent"],@"Titre 1");
     XCTAssertTrue([[self JS:@"document.querySelector('[role=menu]').hidden"] boolValue]);
     [self JS:@"document.querySelector('[data-mp-format-menu]').click()"];
     XCTAssertFalse([[self JS:@"document.querySelector('[role=menu]').hidden"] boolValue]);

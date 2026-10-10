@@ -21,3 +21,5 @@ Résultat : 17 tests du composant réussis, puis 3 tests ciblés réussis sur la
 Le texte du sélecteur de la barre courte utilise maintenant 16 px au lieu de 13 px. Le bouton conserve sa hauteur de 36 px et sa largeur existante ; sa ligne de texte utilise 22 px, sans retour à la ligne. Un libellé exceptionnellement long est abrégé par une ellipse.
 
 Validation de cet ajustement : les 3 tests existants du positionnement, du plafond de zoom et des commandes du menu réussissent. Journal local : `/tmp/macdown-selector-font-tests.log`.
+
+Le sélecteur affiche maintenant un chevron orienté à droite, aligné au bord droit du bouton. Le libellé et le chevron sont indépendants : un libellé long est abrégé sans masquer la flèche. Les dimensions du bouton et la taille du texte restent inchangées.
