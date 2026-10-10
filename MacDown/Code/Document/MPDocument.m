@@ -4621,8 +4621,10 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 
 - (void)applyCurrentZoom
 {
-    [self applyEditorFontAndParagraphStyle];
-    [self scaleWebview];
+    // Highlighting stores the base font and builds theme fonts from it. Refresh
+    // both caches through the font setup path before the next edit can reapply
+    // the previous zoom. That path also updates the preview scale.
+    [self setupEditor:@"editorBaseFontInfo"];
 }
 
 /**
