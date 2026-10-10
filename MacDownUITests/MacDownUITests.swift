@@ -245,59 +245,54 @@ final class MacDownUITests: XCTestCase {
         let file = directory.appendingPathComponent("MixedSelection.md")
         let source = "test **mot** selection\n\n[Preserved link](https://example.com)\n"
         try source.write(to: file, atomically: true, encoding: .utf8)
-        app.terminate()
-        app.launchArguments = ["-ApplePersistenceIgnoreState", "YES", "-MPDisableUpdater", "YES",
-                               "-editorStartInPreviewMode", "NO", "-htmlMathJax", "NO",
-                               "-AppleLanguages", "(fr)"]
-        app.launch()
-        app.typeKey("o", modifierFlags: .command)
-        app.typeKey("g", modifierFlags: [.command, .shift])
-        app.typeText(file.path)
-        app.typeKey(XCUIKeyboardKey.return.rawValue, modifierFlags: [])
-        app.typeKey(XCUIKeyboardKey.return.rawValue, modifierFlags: [])
-        let window = app.windows["MixedSelection.md"]
-        let editor = window.textViews.matching(identifier: "editor-text-view").firstMatch
-        XCTAssertTrue(editor.waitForExistence(timeout: 10))
-        let plain = window.webViews.staticTexts.matching(NSPredicate(format: "label == %@ OR value == %@", "test ", "test ")).firstMatch
-        let styled = window.webViews.staticTexts.matching(NSPredicate(format: "label == %@ OR value == %@", "mot", "mot")).firstMatch
-        XCTAssertTrue(plain.waitForExistence(timeout: 10), window.debugDescription)
-        XCTAssertTrue(styled.waitForExistence(timeout: 10), window.debugDescription)
-        plain.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5)).press(forDuration: 0.1,
-            thenDragTo: styled.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5)))
-        let bold = window.webViews.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Gras")).firstMatch
-        XCTAssertTrue(bold.waitForExistence(timeout: 5), window.debugDescription)
-        bold.click()
-        let boldSource = "**test mot** selection\n\n[Preserved link](https://example.com)\n"
-        wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", boldSource), object: editor)], timeout: 10)
-        let italic = window.webViews.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Italique")).firstMatch
-        XCTAssertTrue(italic.waitForExistence(timeout: 5))
-        italic.click()
-        let combined = "***test mot*** selection\n\n[Preserved link](https://example.com)\n"
-        wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", combined), object: editor)], timeout: 10)
-        XCTAssertFalse((editor.value as? String ?? "").contains("<"))
-        for element in window.webViews.staticTexts.allElementsBoundByIndex {
-            XCTAssertFalse(element.label.contains("**"))
-            XCTAssertFalse((element.value as? String ?? "").contains("**"))
+        for enabled in [false, true] {
+            let window = openPreviewBlockFixture(file, style: "Github2 (dark)", intraWordEmphasis: enabled)
+            let editor = window.textViews.matching(identifier: "editor-text-view").firstMatch
+            XCTAssertTrue(editor.waitForExistence(timeout: 10))
+            let plain = window.webViews.staticTexts.matching(NSPredicate(format: "label == %@ OR value == %@", "test ", "test ")).firstMatch
+            let styled = window.webViews.staticTexts.matching(NSPredicate(format: "label == %@ OR value == %@", "mot", "mot")).firstMatch
+            XCTAssertTrue(plain.waitForExistence(timeout: 10), window.debugDescription)
+            XCTAssertTrue(styled.waitForExistence(timeout: 10), window.debugDescription)
+            plain.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5)).press(forDuration: 0.1,
+                thenDragTo: styled.coordinate(withNormalizedOffset: CGVector(dx: 1, dy: 0.5)))
+            let bold = window.webViews.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Gras")).firstMatch
+            XCTAssertTrue(bold.waitForExistence(timeout: 5), window.debugDescription)
+            bold.click()
+            let boldSource = "**test mot** selection\n\n[Preserved link](https://example.com)\n"
+            wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", boldSource), object: editor)], timeout: 10)
+            let italic = window.webViews.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Italique")).firstMatch
+            XCTAssertTrue(italic.waitForExistence(timeout: 5))
+            italic.click()
+            let combined = "***test mot*** selection\n\n[Preserved link](https://example.com)\n"
+            wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", combined), object: editor)], timeout: 10)
+            XCTAssertFalse((editor.value as? String ?? "").contains("<"))
+            for element in window.webViews.staticTexts.allElementsBoundByIndex {
+                XCTAssertFalse(element.label.contains("**"))
+                XCTAssertFalse((element.value as? String ?? "").contains("**"))
+            }
+            let screenshot = XCTAttachment(screenshot: window.screenshot())
+            screenshot.name = "Mixed selection with common bold and italic styles"
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
+            app.typeKey("s", modifierFlags: .command)
+            XCTAssertEqual(try String(contentsOf: file, encoding: .utf8), combined)
+            app.typeKey("z", modifierFlags: .command)
+            XCTAssertEqual(editor.value as? String, boldSource)
+            app.typeKey("z", modifierFlags: .command)
+            XCTAssertEqual(editor.value as? String, source)
+            app.typeKey("s", modifierFlags: .command)
         }
-        let screenshot = XCTAttachment(screenshot: window.screenshot())
-        screenshot.name = "Mixed selection with common bold and italic styles"
-        screenshot.lifetime = .keepAlways
-        add(screenshot)
-        app.typeKey("s", modifierFlags: .command)
-        XCTAssertEqual(try String(contentsOf: file, encoding: .utf8), combined)
-        app.typeKey("z", modifierFlags: .command)
-        XCTAssertEqual(editor.value as? String, boldSource)
-        app.typeKey("z", modifierFlags: .command)
-        XCTAssertEqual(editor.value as? String, source)
     }
 
-    private func openPreviewBlockFixture(_ file: URL, style: String? = nil) -> XCUIElement {
+
+    private func openPreviewBlockFixture(_ file: URL, style: String? = nil, intraWordEmphasis: Bool? = nil) -> XCUIElement {
         app.terminate()
         app.launchArguments = ["-ApplePersistenceIgnoreState", "YES", "-MPDisableUpdater", "YES",
                                "-editorStartInPreviewMode", "NO", "-htmlMathJax", "NO",
                                "-extensionFencedCode", "YES", "-extensionStrikethough", "YES",
                                "-htmlSyntaxHighlighting", "NO", "-AppleLanguages", "(fr)"]
         if let style { app.launchArguments += ["-htmlStyleName", style] }
+        if let intraWordEmphasis { app.launchArguments += ["-extensionIntraEmphasis", intraWordEmphasis ? "YES" : "NO"] }
         app.launch()
         XCTAssertTrue(app.textViews.matching(identifier: "editor-text-view").firstMatch.waitForExistence(timeout: 10))
         app.typeKey("o", modifierFlags: .command)

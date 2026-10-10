@@ -70,6 +70,19 @@ static NSString *MPNormalizePreviewSelectionText(NSString *text)
     return [newlines stringByReplacingMatchesInString:normalized options:0 range:NSMakeRange(0,normalized.length) withTemplate:@"\n"];
 }
 
+// Keep Markdown delimiter flanking intact: probe markers belong inside the
+// literal's edge whitespace, not between that whitespace and adjacent syntax.
+static NSString *MPPreviewMarkedLiteral(NSString *text,NSString *marker)
+{
+    NSCharacterSet *content=[NSCharacterSet characterSetWithCharactersInString:@" \t\r\n\f\v"].invertedSet;
+    NSRange first=[text rangeOfCharacterFromSet:content];
+    if (first.location==NSNotFound) return [NSString stringWithFormat:@"%@%@%@",marker,text,marker];
+    NSRange last=[text rangeOfCharacterFromSet:content options:NSBackwardsSearch];
+    NSUInteger end=NSMaxRange(last);
+    return [NSString stringWithFormat:@"%@%@%@%@%@",[text substringToIndex:first.location],marker,
+        [text substringWithRange:NSMakeRange(first.location,end-first.location)],marker,[text substringFromIndex:end]];
+}
+
 static NSString *MPPreviewSourceSeparators(NSString *source,NSUInteger start,NSUInteger end)
 {
     NSMutableString *separators=[NSMutableString string];
@@ -5831,19 +5844,20 @@ to link outside that scope.", \
         restore = nil; self.previewSelectionToRestore = nil; self.previewQueuedFormatting = nil;
     }
     NSRange restoreRange = restore ? NSMakeRange([restore[@"location"] unsignedIntegerValue],[restore[@"length"] unsignedIntegerValue]) : NSMakeRange(NSNotFound,0);
-    NSString *selectionProbe = [NSString stringWithFormat:@"(function(){%@var d=new DOMParser().parseFromString(window.__mpSelectionProbeHTML,'text/html'),a=proseNodes(d,[]),old=window.__macdownPreviewEditNodes,found=-1,m=window.__mpSelectionMarker;if(a.length!==old.length)return -1;for(var i=0;i<a.length;i++){if(a[i].parentElement.tagName!==old[i].parentElement.tagName)return -1;if(a[i].nodeValue===m+old[i].nodeValue+m){if(found!==-1)return -1;found=i;}else if(a[i].nodeValue!==old[i].nodeValue)return -1;}return found;})()",proseTraversal];
+    NSString *selectionProbe = [NSString stringWithFormat:@"(function(){%@var d=new DOMParser().parseFromString(window.__mpSelectionProbeHTML,'text/html'),a=proseNodes(d,[]),old=window.__macdownPreviewEditNodes,found=-1,marked=window.__mpSelectionMarkedText;if(a.length!==old.length)return -1;for(var i=0;i<a.length;i++){if(a[i].parentElement.tagName!==old[i].parentElement.tagName)return -1;if(a[i].nodeValue===marked&&old[i].nodeValue===window.__mpSelectionOriginalText){if(found!==-1)return -1;found=i;}else if(a[i].nodeValue!==old[i].nodeValue)return -1;}return found;})()",proseTraversal];
     NSInteger anchoredNode = -1;
     if (restore && NSMaxRange(restoreRange)<=source.length && [[source substringWithRange:restoreRange] isEqualToString:restore[@"text"]]) {
         // A selected word may now be a separate styled node, repeated elsewhere.
         // Prove its exact occurrence by comparing the complete ordered text DOM
         // against a single source-range probe, without relaxing other mappings.
         NSString *marker = [NSString stringWithFormat:@"\uE000%@\uE001",NSUUID.UUID.UUIDString];
-        NSString *probe = [source stringByReplacingCharactersInRange:restoreRange withString:[NSString stringWithFormat:@"%@%@%@",marker,restore[@"text"],marker]];
+        NSString *probe = [source stringByReplacingCharactersInRange:restoreRange withString:MPPreviewMarkedLiteral(restore[@"text"],marker)];
         context[@"window"][@"__mpSelectionProbeHTML"] = [self.renderer HTMLForMarkdownSnapshot:probe];
-        context[@"window"][@"__mpSelectionMarker"] = marker;
+        context[@"window"][@"__mpSelectionMarkedText"] = MPPreviewMarkedLiteral(restore[@"text"],marker);
+        context[@"window"][@"__mpSelectionOriginalText"] = restore[@"text"];
         JSValue *value = [context evaluateScript:selectionProbe];
         if (value.isNumber) anchoredNode = value.toInt32;
-        [context evaluateScript:@"delete window.__mpSelectionProbeHTML;delete window.__mpSelectionMarker;"];
+        [context evaluateScript:@"delete window.__mpSelectionProbeHTML;delete window.__mpSelectionMarkedText;delete window.__mpSelectionOriginalText;"];
     }
     NSMutableArray *mapping = [NSMutableArray array], *nodes = [NSMutableArray array];
     NSMutableDictionary *cache = [NSMutableDictionary dictionary];
@@ -5851,7 +5865,8 @@ to link outside that scope.", \
     // word: a large document must not trigger thousands of synchronous parses.
     __block NSUInteger remainingOccurrenceProbes = 128;
     [texts enumerateObjectsUsingBlock:^(NSString *text, NSUInteger node, BOOL *stop) {
-        if (![text isKindOfClass:NSString.class] || !text.length) return;
+        if (![text isKindOfClass:NSString.class] || !text.length ||
+            ![text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet].length) return;
         id cached = cache[text];
         NSRange range = NSMakeRange(NSNotFound, 0);
         if ([cached isKindOfClass:NSDictionary.class]) {
@@ -5876,16 +5891,17 @@ to link outside that scope.", \
                     remainingOccurrenceProbes--;
                     NSRange candidate=candidateValue.rangeValue;
                     NSString *marker=[NSString stringWithFormat:@"\uE000%@\uE001",NSUUID.UUID.UUIDString];
-                    NSString *probeSource=[source stringByReplacingCharactersInRange:candidate withString:[NSString stringWithFormat:@"%@%@%@",marker,text,marker]];
+                    NSString *probeSource=[source stringByReplacingCharactersInRange:candidate withString:MPPreviewMarkedLiteral(text,marker)];
                     context[@"window"][@"__mpSelectionProbeHTML"]=[self.renderer HTMLForMarkdownSnapshot:probeSource];
-                    context[@"window"][@"__mpSelectionMarker"]=marker;
+                    context[@"window"][@"__mpSelectionMarkedText"]=MPPreviewMarkedLiteral(text,marker);
+                    context[@"window"][@"__mpSelectionOriginalText"]=text;
                     JSValue *value=[context evaluateScript:selectionProbe];
                     if (!value.isNumber || value.toInt32<0) continue;
                     NSNumber *matched=@(value.toInt32);
                     if (resolved[matched]) { [resolved removeObjectForKey:matched];[ambiguous addObject:matched]; }
                     else if (![ambiguous containsObject:matched]) resolved[matched]=candidateValue;
                 }
-                [context evaluateScript:@"delete window.__mpSelectionProbeHTML;delete window.__mpSelectionMarker;"];
+                [context evaluateScript:@"delete window.__mpSelectionProbeHTML;delete window.__mpSelectionMarkedText;delete window.__mpSelectionOriginalText;"];
                 cache[text]=resolved;
                 NSValue *value=resolved[@(node)];range=value?value.rangeValue:NSMakeRange(NSNotFound,0);
             } else {
@@ -5937,16 +5953,21 @@ to link outside that scope.", \
         if (NSMaxRange(range) > boundary) continue;
         NSUInteger index = [item[@"index"] unsignedIntegerValue];
         NSString *marker = [NSString stringWithFormat:@"%@-%lu\uE001",probe,(unsigned long)index];
-        [probeSource replaceCharactersInRange:range withString:[NSString stringWithFormat:@"%@%@%@",marker,item[@"text"],marker]];
+        // Doubling bounded whitespace preserves delimiter flanking while proving
+        // that this physical range, rather than an HTML attribute, owns the leaf.
+        NSString *marked=[nodes[index][@"bounded"] boolValue]
+            ? [item[@"text"] stringByAppendingString:item[@"text"]]
+            : MPPreviewMarkedLiteral(item[@"text"],marker);
+        [probeSource replaceCharactersInRange:range withString:marked];
+        NSMutableDictionary *node=[nodes[index] mutableCopy];node[@"probeText"]=marked;nodes[index]=node;
         [probed addObject:@(index)]; boundary = range.location;
     }
     context[@"window"][@"__mpProbeHTML"] = [self.renderer HTMLForMarkdownSnapshot:probeSource];
-    context[@"window"][@"__mpProbePrefix"] = probe;
     context[@"window"][@"__mpProbeNodes"] = nodes;
-    NSString *verification = [NSString stringWithFormat:@"(function(){%@var d=new DOMParser().parseFromString(window.__mpProbeHTML,'text/html'),values=new Set(),counts=new Map();proseNodes(d,[]).forEach(function(n){values.add(JSON.stringify([n.nodeValue,n.parentElement.tagName]));});window.__macdownPreviewEditNodes.forEach(function(n){counts.set(n.nodeValue,(counts.get(n.nodeValue)||0)+1);});return JSON.stringify(window.__mpProbeNodes.map(function(item){var original=window.__macdownPreviewEditNodes[item.node],marker=window.__mpProbePrefix+'-'+item.id+'\uE001';return (item.bounded||counts.get(item.text)===1)&&values.has(JSON.stringify([marker+item.text+marker,original.parentElement.tagName]));}));})()",proseTraversal];
+    NSString *verification = [NSString stringWithFormat:@"(function(){%@var d=new DOMParser().parseFromString(window.__mpProbeHTML,'text/html'),values=new Set(),counts=new Map();var probeNodes=proseNodes(d,[]);probeNodes.forEach(function(n){values.add(JSON.stringify([n.nodeValue,n.parentElement.tagName]));});window.__macdownPreviewEditNodes.forEach(function(n){counts.set(n.nodeValue,(counts.get(n.nodeValue)||0)+1);});return JSON.stringify(window.__mpProbeNodes.map(function(item){var original=window.__macdownPreviewEditNodes[item.node];if(item.bounded){var adjacent=probeNodes[item.node];return probeNodes.length===window.__macdownPreviewEditNodes.length&&adjacent&&adjacent.nodeValue===item.probeText&&adjacent.parentElement.tagName===original.parentElement.tagName;}return counts.get(item.text)===1&&values.has(JSON.stringify([item.probeText,original.parentElement.tagName]));}));})()",proseTraversal];
     NSString *verifiedJSON = [[context evaluateScript:verification] toString];
     NSArray *verified = verifiedJSON ? [NSJSONSerialization JSONObjectWithData:[verifiedJSON dataUsingEncoding:NSUTF8StringEncoding] options:0 error:NULL] : nil;
-    [context evaluateScript:@"delete window.__mpProbeHTML;delete window.__mpProbePrefix;delete window.__mpProbeNodes;"];
+    [context evaluateScript:@"delete window.__mpProbeHTML;delete window.__mpProbeNodes;"];
     NSMutableArray *validMapping = [NSMutableArray array], *validNodes = [NSMutableArray array];
     if ([verified isKindOfClass:NSArray.class] && verified.count == nodes.count) {
         for (NSUInteger i=0;i<nodes.count;i++) {

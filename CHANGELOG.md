@@ -26,6 +26,7 @@ Changes proposed in #597; these are not a published release.
 
 ### Fixed
 
+- Preserve Markdown delimiter boundaries in preview mapping probes so mixed selections remain editable with intra-word emphasis disabled.
 - Retain the exact source-editor inline selection after formatting instead of selecting the entire replaced line.
 - Clear preview selection on a single click in blank page space so the formatting panel stays dismissed.
 - Suppress native Force Touch word-lookup preparation on mapped preview prose while preserving ordinary selection and link/control gestures.

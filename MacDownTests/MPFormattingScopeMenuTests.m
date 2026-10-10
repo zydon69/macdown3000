@@ -38,6 +38,7 @@
 @property (copy) NSDictionary<NSString *, NSNumber *> *savedPreferences;
 @property (copy) NSString *savedStyleName;
 @property (strong) NSURL *fixtureDirectory;
+@property (copy) NSString *settledPreviewToken;
 @end
 
 @implementation MPFormattingScopeMenuTests
@@ -91,9 +92,17 @@
 
 - (void)waitUntil:(BOOL (^)(void))condition description:(NSString *)description
 {
-    XCTNSPredicateExpectation *expectation=[[XCTNSPredicateExpectation alloc] initWithPredicate:
-        [NSPredicate predicateWithBlock:^BOOL(id object,NSDictionary *bindings){return condition();}] object:self.web];
+    XCTestExpectation *expectation=[[XCTestExpectation alloc] initWithDescription:description];
+    __block BOOL finished=NO;
+    __block void (^poll)(void);
+    poll=^{
+        if (finished) {poll=nil;return;}
+        if (condition()) {finished=YES;[expectation fulfill];poll=nil;return;}
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW,20*NSEC_PER_MSEC),dispatch_get_main_queue(),poll);
+    };
+    poll();
     XCTWaiterResult result=[XCTWaiter waitForExpectations:@[expectation] timeout:10];
+    finished=YES;
     if (result!=XCTWaiterResultCompleted) {
         NSString *state=[self JS:@"JSON.stringify({selection:getSelection().toString(),payload:window.macdownPreviewEditor&&macdownPreviewEditor.selectionPayload('bold'),panel:document.getElementById('macdown-preview-format')&&getComputedStyle(document.getElementById('macdown-preview-format')).display,menus:Array.from(document.querySelectorAll('#macdown-preview-format select')).map(function(s){return {scope:s.getAttribute('data-mp-scope'),value:s.value,active:s.hasAttribute('data-mp-active')};})})"];
         XCTFail(@"%@ timed out after 10 seconds; loading=%d rendering=%d mapped=%lu sourceCurrent=%d previewToken=%@ rendererToken=%@ pending=%@ DOM=%@",description,self.web.isLoading,self.document.alreadyRenderingInWeb,(unsigned long)self.document.previewEditRanges.count,[self.document.previewEditSource isEqualToString:self.editor.string],self.document.previewEditToken,self.renderer.checkboxBridgeToken,[self.document valueForKey:@"renderToWebPending"],state);
@@ -122,16 +131,19 @@
             self.document.previewEditRanges.count>0;
     } description:@"Load document and install preview mapping"];
     XCTAssertTrue([self.window makeFirstResponder:self.web]);
+    self.settledPreviewToken=self.document.previewEditToken;
 }
 
 - (void)waitForFormatting
 {
     [self waitUntil:^BOOL{
         return !self.web.isLoading && !self.document.alreadyRenderingInWeb &&
+            ![self.document.previewEditToken isEqualToString:self.settledPreviewToken] &&
             [self.document.previewEditSource isEqualToString:self.editor.string] &&
             ![self.document valueForKey:@"previewSelectionToRestore"] &&
             ![[self.document valueForKey:@"previewQueuedFormatting"] count];
     } description:@"Finish formatting and restore selection"];
+    self.settledPreviewToken=self.document.previewEditToken;
 }
 
 - (void)selectFromText:(NSString *)first throughText:(NSString *)last
@@ -139,7 +151,7 @@
     NSData *JSON=[NSJSONSerialization dataWithJSONObject:@[first,last] options:0 error:NULL];
     NSString *arguments=[[NSString alloc] initWithData:JSON encoding:NSUTF8StringEncoding];
     NSString *script=[NSString stringWithFormat:
-        @"(function(){var text=%@,nodes=macdownPreviewEditor.elements().spans,a=nodes.find(function(n){return n.textContent===text[0];}),b=nodes.find(function(n){return n.textContent===text[1];});if(!a||!b)return false;a.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,button:0}));var r=document.createRange();r.setStart(a.firstChild,0);r.setEnd(b.firstChild,b.textContent.length);getSelection().removeAllRanges();getSelection().addRange(r);window.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,button:0}));return true;})()",arguments];
+        @"(function(){var text=%@,nodes=macdownPreviewEditor.elements().spans,a=nodes.find(function(n){return n.textContent===text[0];})||nodes.find(function(n){return n.textContent.includes(text[0]);}),b=nodes.find(function(n){return n.textContent===text[1];})||nodes.find(function(n){return n.textContent.includes(text[1]);});if(!a||!b)return false;a.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,button:0}));var r=document.createRange();r.setStart(a.firstChild,a.textContent.indexOf(text[0]));r.setEnd(b.firstChild,b.textContent.indexOf(text[1])+text[1].length);getSelection().removeAllRanges();getSelection().addRange(r);window.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,button:0}));return true;})()",arguments];
     XCTAssertTrue([[self JS:script] boolValue],@"Mapped selection %@ through %@ must exist",first,last);
     [self waitUntil:^BOOL{return [[self JS:@"getComputedStyle(document.getElementById('macdown-preview-format')).display"] isEqualToString:@"block"];} description:[NSString stringWithFormat:@"Show panel for selection %@ through %@",first,last]];
 }
@@ -314,6 +326,114 @@
             XCTAssertEqualObjects(self.editor.string,source);
         }
     }
+}
+
+- (void)testMixedPreviewSelectionWorksWithIntraWordEmphasisDisabledAndEnabled
+{
+    NSArray *cases=@[
+        @[@"test **mot** selection\n",@"test ",@"mot",@"test mot"],
+        @[@"**premier** **second**\n",@"premier",@"second",@"premier second"],
+        @[@"**mot** et **mot**\n",@"mot",@" et ",@"mot et "]
+    ];
+    for (NSNumber *enabled in @[@NO,@YES]) for (NSString *prefix in @[@"",@"> ",@"# "]) for (NSArray *scenario in cases) {
+        self.document.preferences.extensionIntraEmphasis=enabled.boolValue;
+        self.renderer.rendererFlags=self.document.preferences.rendererFlags;
+        NSString *source=[NSString stringWithFormat:@"%@%@\n[Preserved link](https://example.com)\n",prefix,scenario[0]];
+        [self loadSource:source];
+        if ([scenario[0] hasPrefix:@"**mot**"]) XCTAssertEqualObjects([self JS:@"String(macdownPreviewEditor.elements().spans.filter(function(n){return n.textContent==='mot';}).length)"],@"2");
+        [self selectFromText:scenario[1] throughText:scenario[2]];
+        XCTAssertEqualObjects([self JS:@"macdownPreviewEditor.selectionPayload('bold').text"],scenario[3],@"%@ %@ %@",enabled,prefix,scenario[0]);
+        XCTAssertEqual(self.document.preferences.extensionIntraEmphasis,enabled.boolValue,@"Installing the mapping must preserve the user's setting");
+        [self JS:@"document.querySelector('[data-mp-style=bold]').click()"];
+        [self waitForFormatting];
+        // Inline actions intentionally exclude edge whitespace from their
+        // retained range; all selected letters must survive the render.
+        XCTAssertEqualObjects([self JS:@"getSelection().toString()"],[scenario[3] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet]);
+        XCTAssertTrue([self.editor.string hasSuffix:@"[Preserved link](https://example.com)\n"]);
+        XCTAssertFalse([self.editor.string containsString:@"<"]);
+    }
+}
+
+- (void)testWhitespaceMappingRejectsAttributeLookalikesAndAcceptsLiteralSeparators
+{
+    for (NSNumber *enabled in @[@NO,@YES]) {
+        self.document.preferences.extensionIntraEmphasis=enabled.boolValue;
+        self.renderer.rendererFlags=self.document.preferences.rendererFlags;
+        NSString *source=@"first<span title=\"  \">&#32;&#32;</span>second\n";
+        [self loadSource:source];
+        XCTAssertEqualObjects([self JS:@"JSON.stringify(macdownPreviewEditor.elements().spans.map(function(n){return n.textContent;}))"],@"[\"first\",\"second\"]");
+        [self JS:@"(function(){var p=document.querySelector('p'),r=document.createRange();r.selectNodeContents(p);getSelection().removeAllRanges();getSelection().addRange(r);window.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,button:0}));})()"];
+        XCTAssertEqualObjects([self JS:@"String(macdownPreviewEditor.selectionPayload('bold'))"],@"null");
+        XCTAssertEqualObjects(self.editor.string,source);
+        for (NSString *separator in @[@" ",@"  "]) {
+            source=[NSString stringWithFormat:@"**first**%@**second**\n",separator];
+            [self loadSource:source];
+            [self selectFromText:@"first" throughText:@"second"];
+            XCTAssertEqualObjects([self JS:@"macdownPreviewEditor.selectionPayload('bold').text"],([NSString stringWithFormat:@"first%@second",separator]));
+            XCTAssertEqualObjects(self.editor.string,source);
+        }
+        // Hoedown normalizes a source tab into a displayed space. Literal
+        // provenance cannot equate those two offsets and must refuse safely.
+        source=@"**first**\t**second**\n";
+        [self loadSource:source];
+        [self JS:@"(function(){var p=document.querySelector('p'),r=document.createRange();r.selectNodeContents(p);getSelection().removeAllRanges();getSelection().addRange(r);})()"];
+        XCTAssertEqualObjects([self JS:@"String(macdownPreviewEditor.selectionPayload('bold'))"],@"null");
+        XCTAssertEqualObjects(self.editor.string,source);
+    }
+}
+
+- (void)testAllInlineSubsetsMapAcrossParserModesAndLightAndDarkThemes
+{
+    NSArray *styles=@[@"code",@"underline",@"strike",@"italic",@"bold",@"link"];
+    NSUInteger exercised=0;
+    for (NSString *theme in @[@"GitHub2",@"Github2 (dark)"]) for (NSNumber *enabled in @[@NO,@YES]) for (NSUInteger mask=0;mask<64;mask++) {
+        self.document.preferences.htmlStyleName=theme;
+        self.document.preferences.extensionIntraEmphasis=enabled.boolValue;
+        self.renderer.rendererFlags=self.document.preferences.rendererFlags;
+        // Compose through the public source adapter, then independently prove
+        // that the real WebView maps the result and exposes the expected styles.
+        self.editor.string=@"Lead Needle tail.\n\nNeighbor unchanged.\n";
+        for (NSUInteger bit=0;bit<styles.count;bit++) if (mask&(1u<<bit)) {
+            self.editor.selectedRange=[self.editor.string rangeOfString:@"Needle"];
+            XCTAssertTrue([self.document formatSourceInlineAction:styles[bit] value:[styles[bit] isEqual:@"link"]?@"https://example.org/target":nil],@"mask=%lu %@",(unsigned long)mask,styles[bit]);
+        }
+        NSString *source=self.editor.string.copy;
+        self.document.preferences.extensionIntraEmphasis=enabled.boolValue;
+        self.renderer.rendererFlags=self.document.preferences.rendererFlags;
+        [self loadSource:source];
+        [self selectFromText:@"Needle" throughText:@"Needle"];
+        XCTAssertEqual(self.document.preferences.extensionIntraEmphasis,enabled.boolValue);
+        XCTAssertEqualObjects([self JS:@"macdownPreviewEditor.selectionPayload('bold').text"],@"Needle",@"%@ %@ mask=%lu",theme,enabled,(unsigned long)mask);
+        for (NSUInteger bit=0;bit<styles.count;bit++) {
+            NSString *script=[NSString stringWithFormat:@"document.querySelector('[data-mp-style=%@]').getAttribute('aria-pressed')",styles[bit]];
+            XCTAssertEqualObjects([self JS:script],(mask&(1u<<bit))?@"true":@"false",@"mask=%lu %@",(unsigned long)mask,styles[bit]);
+        }
+        XCTAssertEqualObjects(self.editor.string,source);
+        XCTAssertTrue([source hasSuffix:@"Neighbor unchanged.\n"]);
+        exercised++;
+    }
+    XCTAssertEqual(exercised,256u);
+}
+
+- (void)testMixedUnicodeMappingAcrossLineTypesContainersAndLineEndings
+{
+    NSUInteger exercised=0;
+    for (NSString *ending in @[@"\n",@"\r\n"]) for (NSString *prefix in @[@"",@"# ",@"## ",@"> ",@"- ",@"1. ",@"- [ ] "]) for (NSString *container in @[@"",@"::: {.callout-note}\n## Title\n",@"::: {.callout-note collapse=\"true\"}\n## Title\n"]) {
+        NSString *source=[NSString stringWithFormat:@"%@%@Été 👩🏽‍💻 **émoji** suite\n%@\nNeighbor unchanged.\n",container,prefix,container.length?@":::\n":@""];
+        source=[source stringByReplacingOccurrencesOfString:@"\n" withString:ending];
+        [self loadSource:source];
+        [self JS:@"document.querySelectorAll('details').forEach(function(d){d.open=true;})"];
+        [self selectFromText:@"Été 👩🏽‍💻 " throughText:@"émoji"];
+        XCTAssertEqualObjects([self JS:@"macdownPreviewEditor.selectionPayload('bold').text"],@"Été 👩🏽‍💻 émoji");
+        [self JS:@"document.querySelector('[data-mp-style=bold]').click()"];
+        [self waitForFormatting];
+        XCTAssertEqualObjects([self JS:@"getSelection().toString()"],@"Été 👩🏽‍💻 émoji");
+        XCTAssertTrue([self.editor.string hasSuffix:[@"Neighbor unchanged." stringByAppendingString:ending]]);
+        if (container.length) XCTAssertEqualObjects([self JS:@"document.querySelector('aside,details').textContent.includes('Title')"],@"true");
+        if ([container containsString:@"collapse"]) XCTAssertEqualObjects([self JS:@"String(document.querySelector('details').open)"],@"true");
+        exercised++;
+    }
+    XCTAssertEqual(exercised,42u);
 }
 
 - (void)testSourceInlineActionsKeepTheChosenWordWithSelectionNotifications
