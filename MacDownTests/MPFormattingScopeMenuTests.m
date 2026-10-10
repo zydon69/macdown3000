@@ -314,6 +314,26 @@
     }
 }
 
+- (void)testBlankPreviewPressClearsSelectionAndKeepsPanelClosed
+{
+    for (NSString *style in @[@"GitHub2",@"Github2 (dark)"]) {
+        self.document.preferences.htmlStyleName=style;
+        for (NSString *prefix in @[@"",@"> ",@"# "]) {
+            NSString *source=[NSString stringWithFormat:@"%@Bonjour test\n",prefix];
+            [self loadSource:source];
+            for (NSString *target in @[@"body",@"block",@"blank"]) {
+                [self selectFromText:@"Bonjour test" throughText:@"Bonjour test"];
+                NSData *data=[NSJSONSerialization dataWithJSONObject:@[target] options:0 error:NULL];
+                NSString *argument=[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+                [self JS:[NSString stringWithFormat:@"(function(){var kind=%@[0],span=macdownPreviewEditor.elements().spans[0],range=document.createRange();range.setStart(span.firstChild,8);range.setEnd(span.firstChild,12);getSelection().removeAllRanges();getSelection().addRange(range);var blank=document.createElement('div');document.body.appendChild(blank);var node=kind==='body'?document.body:kind==='block'?span.parentElement:blank;window.blankPressResult=null;node.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,button:0,detail:1}));window.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,button:0}));setTimeout(function(){window.blankPressResult=JSON.stringify([getSelection().toString(),getComputedStyle(document.getElementById('macdown-preview-format')).display]);blank.remove();},250);})()",argument]];
+                [self waitUntil:^BOOL{return [[self JS:@"String(window.blankPressResult!==null)"] boolValue];} description:@"Wait past the selection-change panel timer"];
+                XCTAssertEqualObjects([self JS:@"window.blankPressResult"],@"[\"\",\"none\"]",@"%@ %@ %@",style,prefix,target);
+                XCTAssertEqualObjects(self.editor.string,source);
+            }
+        }
+    }
+}
+
 - (void)testFreshPreviewPressClearsOnlyUnmodifiedSingleClickSelections
 {
     for (NSString *prefix in @[@"",@"> ",@"# "]) {
@@ -330,7 +350,7 @@
             @{@"name":@"context menu",@"options":@{@"detail":@1,@"button":@2},@"target":@"plain",@"retained":@YES},
             @{@"name":@"link activation",@"options":@{@"detail":@1},@"target":@"link",@"retained":@YES},
             @{@"name":@"formatting control",@"options":@{@"detail":@1},@"target":@"button",@"retained":@YES},
-            @{@"name":@"unmapped content",@"options":@{@"detail":@1},@"target":@"body",@"retained":@YES}
+            @{@"name":@"empty preview background",@"options":@{@"detail":@1},@"target":@"body",@"retained":@NO}
         ];
         for (NSDictionary *gesture in gestures) {
             NSData *data=[NSJSONSerialization dataWithJSONObject:gesture options:0 error:NULL];

@@ -26,6 +26,7 @@ Changes proposed in #597; these are not a published release.
 
 ### Fixed
 
+- Clear preview selection on a single click in blank page space so the formatting panel stays dismissed.
 - Suppress native Force Touch word-lookup preparation on mapped preview prose while preserving ordinary selection and link/control gestures.
 - Keep the Rendering CSS selector and syntax-highlighting controls on separate rows in localized settings layouts.
 - Start a fresh character selection on a single preview press instead of retaining an earlier word selection for dragging; preserve native double-click and modifier gestures.

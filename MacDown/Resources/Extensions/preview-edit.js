@@ -384,10 +384,10 @@
   listen(document,'mousedown',function(event){
     if(event.button!==0 || panel.contains(event.target)) return;
     // WebKit retains an existing word selection on press to start a text
-    // drag. A fresh single press in preview prose must instead start a new
-    // character selection; leave multi-click and modifier gestures native.
+    // drag. A fresh single press on the preview page, including its blank
+    // background, must start a new selection. Leave multi-click and modifiers native.
     if(!active && event.detail===1 && !event.shiftKey && !event.metaKey &&
-      !event.ctrlKey && !event.altKey && event.target.closest('.'+runClass) &&
+      !event.ctrlKey && !event.altKey &&
       !event.target.closest('a,button,input,textarea,select,[contenteditable]')) {
       window.getSelection().removeAllRanges();
     }

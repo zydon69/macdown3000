@@ -299,7 +299,9 @@ final class MacDownUITests: XCTestCase {
                                "-htmlSyntaxHighlighting", "NO", "-AppleLanguages", "(fr)"]
         if let style { app.launchArguments += ["-htmlStyleName", style] }
         app.launch()
+        XCTAssertTrue(app.textViews.matching(identifier: "editor-text-view").firstMatch.waitForExistence(timeout: 10))
         app.typeKey("o", modifierFlags: .command)
+        XCTAssertTrue(app.buttons["Ouvrir"].waitForExistence(timeout: 10), app.debugDescription)
         app.typeKey("g", modifierFlags: [.command, .shift])
         app.typeText(file.path)
         app.typeKey(XCUIKeyboardKey.return.rawValue, modifierFlags: [])
@@ -425,6 +427,44 @@ final class MacDownUITests: XCTestCase {
             point.click()
             wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@ OR label == %@", "Click samples: [\"\"] count: 1", "Click samples: [\"\"] count: 1"), object: probe)], timeout: 5)
             XCTAssertFalse(bold.exists)
+        }
+    }
+
+    func testBlankPreviewClickDismissesSelectionAndPanel() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let script = """
+        document.addEventListener('mouseup', function() {
+          setTimeout(function() {
+            document.getElementById('blank-click-probe').textContent =
+              'After click: ' + JSON.stringify([getSelection().toString(),
+                getComputedStyle(document.getElementById('macdown-preview-format')).display]);
+          }, 500);
+        });
+        """
+        try script.write(to: directory.appendingPathComponent("blank-click-probe.js"), atomically: true, encoding: .utf8)
+        for prefix in ["", "> ", "# "] {
+            let file = directory.appendingPathComponent("BlankClick.md")
+            let source = """
+            \(prefix)Bonjour test
+
+            <div id="blank-click-probe" style="margin-top:300px">Awaiting click</div>
+            <script src="blank-click-probe.js"></script>
+            """
+            try source.write(to: file, atomically: true, encoding: .utf8)
+            let window = openPreviewBlockFixture(file, style: "Github2 (dark)")
+            let text = window.webViews.staticTexts.matching(NSPredicate(format: "label == %@ OR value == %@", "Bonjour test", "Bonjour test")).firstMatch
+            XCTAssertTrue(text.waitForExistence(timeout: 10), window.debugDescription)
+            text.coordinate(withNormalizedOffset: CGVector(dx: 0.85, dy: 0.5)).doubleClick()
+            let bold = window.webViews.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Gras")).firstMatch
+            XCTAssertTrue(bold.waitForExistence(timeout: 5))
+            // Below the floating panel, still inside the preview's blank page.
+            text.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).withOffset(CGVector(dx: 0, dy: 190)).click()
+            let probe = window.webViews.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@ OR value BEGINSWITH %@", "After click:", "After click:")).firstMatch
+            wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@ OR label == %@", "After click: [\"\",\"none\"]", "After click: [\"\",\"none\"]"), object: probe)], timeout: 5)
+            XCTAssertFalse(bold.exists, prefix)
+            XCTAssertEqual(window.textViews.matching(identifier: "editor-text-view").firstMatch.value as? String, source)
         }
     }
 
