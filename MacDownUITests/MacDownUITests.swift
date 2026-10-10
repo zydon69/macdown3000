@@ -357,6 +357,72 @@ final class MacDownUITests: XCTestCase {
         XCTAssertEqual(editor.value as? String, source)
     }
 
+    func testPreviewStationaryPressDoesNotSelectWord() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        // A local script is permitted by the preview CSP. It only observes the
+        // real mouse gesture; synthetic DOM events cannot test native selection.
+        let probeScript = """
+        document.addEventListener('mousedown', function(event) {
+          if (!event.target.closest('[data-mp-edit-id]')) return;
+          setTimeout(function() {
+            document.getElementById('mouse-probe').textContent = 'Held selection: [' + getSelection().toString() + '] click count: ' + event.detail;
+          }, 200);
+        });
+        document.addEventListener('mouseup', function() {
+          setTimeout(function() {
+            document.getElementById('release-probe').textContent = 'Released selection: [' + getSelection().toString() + ']';
+          }, 0);
+        });
+        """
+        try probeScript.write(to: directory.appendingPathComponent("mouse-probe.js"), atomically: true, encoding: .utf8)
+        for prefix in ["", "> ", "# "] {
+            let file = directory.appendingPathComponent("MouseSelection.md")
+            let source = """
+            \(prefix)Selectionword neighboring text.
+
+            <div id="mouse-probe">Awaiting press</div>
+            <div id="release-probe">Awaiting release</div>
+            <script src="mouse-probe.js"></script>
+            """
+            try source.write(to: file, atomically: true, encoding: .utf8)
+            let window = openPreviewBlockFixture(file)
+            let editor = window.textViews.matching(identifier: "editor-text-view").firstMatch
+            XCTAssertTrue(editor.waitForExistence(timeout: 10))
+            let text = window.webViews.staticTexts.matching(
+                NSPredicate(format: "label == %@ OR value == %@", "Selectionword neighboring text.", "Selectionword neighboring text.")).firstMatch
+            XCTAssertTrue(text.waitForExistence(timeout: 10), window.debugDescription)
+            let start = text.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: 0.5))
+            start.press(forDuration: 1)
+            let probe = window.webViews.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@ OR value BEGINSWITH %@", "Held selection:", "Held selection:")).firstMatch
+            XCTAssertTrue(probe.waitForExistence(timeout: 5), window.debugDescription)
+            XCTAssertEqual(probe.value as? String ?? probe.label, "Held selection: [] click count: 1", prefix)
+            start.doubleClick()
+            let bold = window.webViews.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Gras")).firstMatch
+            XCTAssertTrue(bold.waitForExistence(timeout: 5))
+            let released = window.webViews.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@ OR value BEGINSWITH %@", "Released selection:", "Released selection:")).firstMatch
+            XCTAssertEqual(released.value as? String ?? released.label, "Released selection: [Selectionword]")
+            text.coordinate(withNormalizedOffset: CGVector(dx: 0.18, dy: 0.5)).press(forDuration: 1)
+            XCTAssertEqual(probe.value as? String ?? probe.label, "Held selection: [] click count: 1", prefix)
+            XCTAssertFalse(bold.exists, "A stationary press must not reopen the formatting panel")
+            start.press(forDuration: 1, thenDragTo: text.coordinate(withNormalizedOffset: CGVector(dx: 0.30, dy: 0.5)))
+            XCTAssertEqual(probe.value as? String ?? probe.label, "Held selection: [] click count: 1", prefix)
+            XCTAssertTrue(bold.waitForExistence(timeout: 5))
+            let releaseText = released.value as? String ?? released.label
+            XCTAssertTrue(releaseText.hasPrefix("Released selection: [") && releaseText.hasSuffix("]"))
+            let selected = String(releaseText.dropFirst("Released selection: [".count).dropLast())
+            XCTAssertFalse(selected.isEmpty)
+            XCTAssertLessThan(selected.count, "Selectionword".count, "Drag must select characters, not snap to a whole word")
+            XCTAssertTrue("Selectionword".contains(selected))
+            XCTAssertEqual(editor.value as? String, source)
+            bold.click()
+            wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value CONTAINS %@", "**\(selected)**"), object: editor)], timeout: 10)
+            app.typeKey("z", modifierFlags: .command)
+            XCTAssertEqual(editor.value as? String, source)
+        }
+    }
+
     func testPreviewMultilineQuotePlainWordOpensFormattingPanel() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

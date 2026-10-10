@@ -376,6 +376,14 @@
   });
   listen(document,'mousedown',function(event){
     if(event.button!==0 || panel.contains(event.target)) return;
+    // WebKit retains an existing word selection on press to start a text
+    // drag. A fresh single press in preview prose must instead start a new
+    // character selection; leave multi-click and modifier gestures native.
+    if(!active && event.detail===1 && !event.shiftKey && !event.metaKey &&
+      !event.ctrlKey && !event.altKey && event.target.closest('.'+runClass) &&
+      !event.target.closest('a,button,input,textarea,select,[contenteditable]')) {
+      window.getSelection().removeAllRanges();
+    }
     selectingWithMouse=true; clearTimeout(timer); saved=null; hide();
   });
   function finishMouseSelection() {

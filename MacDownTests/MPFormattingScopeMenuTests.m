@@ -294,6 +294,41 @@
     XCTAssertEqualObjects(self.editor.string,@"::: {.callout-note}\n## Title\n# **Heading**\n\nBody\n:::\n\nNeighbor.\n");
 }
 
+- (void)testFreshPreviewPressClearsOnlyUnmodifiedSingleClickSelections
+{
+    for (NSString *prefix in @[@"",@"> ",@"# "]) {
+        NSString *source=[NSString stringWithFormat:@"%@Plainword [Linkword](https://example.com) **Boldword**\n\nNeighbor.\n",prefix];
+        [self loadSource:source];
+        NSArray *gestures=@[
+            @{@"name":@"fresh press",@"options":@{@"detail":@1},@"target":@"plain",@"retained":@NO},
+            @{@"name":@"double click",@"options":@{@"detail":@2},@"target":@"plain",@"retained":@YES},
+            @{@"name":@"triple click",@"options":@{@"detail":@3},@"target":@"plain",@"retained":@YES},
+            @{@"name":@"shift extension",@"options":@{@"detail":@1,@"shiftKey":@YES},@"target":@"plain",@"retained":@YES},
+            @{@"name":@"command gesture",@"options":@{@"detail":@1,@"metaKey":@YES},@"target":@"plain",@"retained":@YES},
+            @{@"name":@"control gesture",@"options":@{@"detail":@1,@"ctrlKey":@YES},@"target":@"plain",@"retained":@YES},
+            @{@"name":@"option gesture",@"options":@{@"detail":@1,@"altKey":@YES},@"target":@"plain",@"retained":@YES},
+            @{@"name":@"context menu",@"options":@{@"detail":@1,@"button":@2},@"target":@"plain",@"retained":@YES},
+            @{@"name":@"link activation",@"options":@{@"detail":@1},@"target":@"link",@"retained":@YES},
+            @{@"name":@"formatting control",@"options":@{@"detail":@1},@"target":@"button",@"retained":@YES},
+            @{@"name":@"unmapped content",@"options":@{@"detail":@1},@"target":@"body",@"retained":@YES}
+        ];
+        for (NSDictionary *gesture in gestures) {
+            NSData *data=[NSJSONSerialization dataWithJSONObject:gesture options:0 error:NULL];
+            NSString *arguments=[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+            NSString *result=[self JS:[NSString stringWithFormat:
+                @"(function(){var g=%@,nodes=macdownPreviewEditor.elements().spans,p=nodes.find(function(n){return n.textContent==='Plainword ';}),link=nodes.find(function(n){return n.textContent==='Linkword';});if(!p||!link)return 'missing mapped fixture';var r=document.createRange();r.setStart(p.firstChild,0);r.setEnd(p.firstChild,9);getSelection().removeAllRanges();getSelection().addRange(r);var targets={plain:p,link:link,button:document.querySelector('[data-mp-style=bold]'),body:document.body};targets[g.target].dispatchEvent(new MouseEvent('mousedown',Object.assign({bubbles:true,button:0},g.options)));var selected=getSelection().toString();window.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,button:0}));return selected;})()",arguments]];
+            XCTAssertEqualObjects(result,[gesture[@"retained"] boolValue]?@"Plainword":@"",@"%@ %@",prefix,gesture[@"name"]);
+            XCTAssertEqualObjects(self.editor.string,source);
+        }
+        // Explicit text editing owns its range, even during a single press.
+        [self selectFromText:@"Plainword " throughText:@"Plainword "];
+        [self JS:@"document.querySelector('[data-mp-edit-text]').click()"];
+        XCTAssertEqualObjects([self JS:@"(function(){var p=document.querySelector('[contenteditable=true]');if(!p)return 'missing active edit';p.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,button:0,detail:1}));var text=getSelection().toString();window.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,button:0}));p.dispatchEvent(new KeyboardEvent('keydown',{bubbles:true,key:'Escape'}));return text;})()"],@"Plainword ");
+        [self waitForFormatting];
+        XCTAssertEqualObjects(self.editor.string,source);
+    }
+}
+
 - (void)testInlineCodeAndEmphasisCanCoexistWhileFencedCodeKeepsStructuralMenus
 {
     [self loadSource:@"::: {.callout-tip}\n## Title\n# **`Inline`**\n\n```\nLiteral\n```\n:::\n"];
