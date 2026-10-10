@@ -282,6 +282,28 @@
     }
     XCTAssertEqual(exercised,1331u);
 }
+
+- (void)testEveryToggleFromEveryInlineSubsetRetainsTheOtherStylesAndContainer
+{
+    // Link replaces a destination rather than toggling a style. Exercise each
+    // of the five actual toggles from all 64 states, including linked states.
+    NSUInteger exercised=0;
+    for (NSString *container in self.containers) for (NSUInteger mask=0;mask<64;mask++)
+        for (NSNumber *index in @[@0,@1,@2,@3,@5]) @autoreleasepool {
+            NSString *action=self.styles[index.unsignedIntegerValue];
+            NSString *context=[NSString stringWithFormat:@"%@ / mask=%lu / toggle %@",container,(unsigned long)mask,action];
+            MPScopeFixture *f=[[MPScopeFixture alloc] initWithSource:[self sourceForContainer:container body:@"# Lead Needle tail.\n"]];
+            [self applyStyles:mask fixture:f reverse:NO context:context];
+            XCTAssertTrue([f apply:action value:nil text:@"Needle"],@"%@",context);
+            [self assertFixture:f block:@"h1" container:container mask:mask^(1u<<index.unsignedIntegerValue) context:context];
+            // Reapplying must remove only the requested style or restore it;
+            // another style, hyperlink, heading or envelope must survive.
+            XCTAssertTrue([f apply:action value:nil text:@"Needle"],@"%@ — second toggle",context);
+            [self assertFixture:f block:@"h1" container:container mask:mask context:context];
+            exercised+=2;
+        }
+    XCTAssertEqual(exercised,7040u);
+}
 - (void)testEveryContainerReplacementAndRemovalRetainsAllContentTypesAndInlineStyles
 {
     // 11 × 11 × 11 = 1,331 replacement/unwrap transitions.
