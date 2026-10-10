@@ -1191,24 +1191,32 @@
     },
     {
       "path": "MacDown/Code/Document/MPDocument.m",
-      "observed_sha256": "fa36e62e2612641d6e0d0d28a6e61cfdd5b0ec1f336d84c629959cb9c46f77c7",
-      "sha256": "fa36e62e2612641d6e0d0d28a6e61cfdd5b0ec1f336d84c629959cb9c46f77c7",
+      "observed_sha256": "6e50b66e356f7c8529443743b4eea89da6164918467a085e6880c150f188f8c5",
+      "sha256": "6e50b66e356f7c8529443743b4eea89da6164918467a085e6880c150f188f8c5",
       "read": false,
       "analyzed": false,
       "validation_tested": false,
       "validation_without_test": false,
       "state": "modifié après campagne04 — correction ciblée testée, relecture intégrale à renouveler",
-      "evidence": "../../features/quote-selection.md",
+      "evidence": "../../features/source-inline-selection.md",
       "open_findings": [],
       "read_ranges": [
-        "diff de la correction des citations ; contrats et consommateurs concernés"
+        "diff de la correction des citations ; contrats et consommateurs concernés",
+        "diff de la restauration de sélection source en ligne ; notifications de focus, transaction Markdown et contrats concernés"
       ],
       "review_flow": "document",
       "review_decision": "Correction ciblée après audit ; la validation intégrale de la version précédente est conservée séparément. Aucun nouvel audit intégral du fichier déclaré.",
       "test_evidence": [
         "../../features/quote-selection.md",
         "preuves/citations-native.log",
-        "preuves/citations-ui.log"
+        "preuves/citations-ui.log",
+        "../../features/source-inline-selection.md",
+        "preuves/selection-source-red.log",
+        "preuves/selection-source-native.log",
+        "preuves/selection-source-ui-targeted.log",
+        "preuves/selection-source-ui-first.log",
+        "preuves/selection-source-ui-recheck.log",
+        "preuves/selection-source-ui-baseline.log"
       ],
       "historical_campaign04_validation": {
         "path": "MacDown/Code/Document/MPDocument.m",
@@ -1235,7 +1243,7 @@
           "preuves/campagne04-preserved-file-final.log"
         ]
       },
-      "targeted_validation": {
+      "historical_quote_targeted_validation": {
         "source_revision": "7d5f2f5",
         "read": "diff et contrats concernés",
         "new_quote_scenarios": 212,
@@ -1248,7 +1256,23 @@
         "zoom_isolated_tests": 26,
         "zoom_repeated_tests": 520,
         "zoom_recheck_failures": 0
-      }
+      },
+      "targeted_validation": {
+        "source_revision": "ea9f506d",
+        "native_tests": 14,
+        "native_failures": 0,
+        "new_source_selection_scenarios": 28,
+        "consecutive_toggle_scenarios": 20,
+        "red_assertion_failures": 48,
+        "ui_targeted_tests": 2,
+        "ui_targeted_failures": 0,
+        "additional_preview_ui_failure": "testPreviewMixedSelectionFormattingPreservesSelectionAndNeighbor — formatting panel absent after drag",
+        "additional_failure_reproduced_without_fix": true,
+        "full_suite_rerun": false
+      },
+      "unresolved_controls": [
+        "Sélection mixte dans l’aperçu : échec UI avant et après correction source, cause à diagnostiquer ; voir rapport ciblé."
+      ]
     },
     {
       "path": "MacDown/Code/Document/MPPDFAnchorInjector.h",
@@ -15710,6 +15734,11 @@
   "post_campaign04_blank_click_fix": {
     "source_revision": "c0fe8a47",
     "report": "../../features/preview-blank-click.md",
+    "full_audit_claimed": false
+  },
+  "post_campaign04_source_inline_selection_fix": {
+    "source_revision": "ea9f506d",
+    "report": "../../features/source-inline-selection.md",
     "full_audit_claimed": false
   }
 }
