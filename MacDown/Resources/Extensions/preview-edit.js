@@ -374,6 +374,13 @@
   listen(document,'selectionchange',function(){
     clearTimeout(timer); timer=setTimeout(updatePanel,120);
   });
+  // Force Touch prepares a native word lookup before mousedown. Suppress
+  // that transient highlight on editable preview prose, without cancelling
+  // the ordinary click/drag events or link previews and explicit text edits.
+  listen(document,'webkitmouseforcewillbegin',function(event){
+    if(!active && !panel.contains(event.target) && event.target.closest('.'+runClass) &&
+      !event.target.closest('a,button,input,textarea,select,[contenteditable]')) event.preventDefault();
+  });
   listen(document,'mousedown',function(event){
     if(event.button!==0 || panel.contains(event.target)) return;
     // WebKit retains an existing word selection on press to start a text

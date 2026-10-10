@@ -294,6 +294,26 @@
     XCTAssertEqualObjects(self.editor.string,@"::: {.callout-note}\n## Title\n# **Heading**\n\nBody\n:::\n\nNeighbor.\n");
 }
 
+- (void)testForceTouchPreparationIsCancelledOnlyForMappedPreviewProse
+{
+    for (NSString *style in @[@"GitHub2",@"Github2 (dark)"]) {
+        self.document.preferences.htmlStyleName=style;
+        for (NSString *prefix in @[@"",@"> ",@"# "]) {
+            NSString *source=[NSString stringWithFormat:@"%@Plainword [Linkword](https://example.com) **Boldword**\n\nNeighbor.\n",prefix];
+            [self loadSource:source];
+            [self selectFromText:@"Plainword " throughText:@"Plainword "];
+            NSString *result=[self JS:@"(function(){var nodes=macdownPreviewEditor.elements().spans,p=nodes.find(function(n){return n.textContent==='Plainword ';}),bold=nodes.find(function(n){return n.textContent==='Boldword';}),link=nodes.find(function(n){return n.textContent==='Linkword';}),button=document.querySelector('[data-mp-style=bold]');if(!p||!bold||!link)return 'missing mapped fixture';return JSON.stringify([p,bold,link,button,document.body].map(function(target){var event=new MouseEvent('webkitmouseforcewillbegin',{bubbles:true,cancelable:true,button:0});target.dispatchEvent(event);return event.defaultPrevented;}));})()"];
+            XCTAssertEqualObjects(result,@"[true,true,false,false,false]",@"%@ %@",style,prefix);
+            XCTAssertEqualObjects([self JS:@"getSelection().toString()"],@"Plainword ");
+            XCTAssertEqualObjects(self.editor.string,source);
+            [self JS:@"document.querySelector('[data-mp-edit-text]').click()"];
+            XCTAssertEqualObjects([self JS:@"(function(){var p=document.querySelector('[contenteditable=true]');if(!p)return 'missing active edit';var event=new MouseEvent('webkitmouseforcewillbegin',{bubbles:true,cancelable:true,button:0});p.dispatchEvent(event);p.dispatchEvent(new KeyboardEvent('keydown',{bubbles:true,key:'Escape'}));return String(event.defaultPrevented);})()"],@"false");
+            [self waitForFormatting];
+            XCTAssertEqualObjects(self.editor.string,source);
+        }
+    }
+}
+
 - (void)testFreshPreviewPressClearsOnlyUnmodifiedSingleClickSelections
 {
     for (NSString *prefix in @[@"",@"> ",@"# "]) {

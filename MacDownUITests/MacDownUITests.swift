@@ -291,12 +291,13 @@ final class MacDownUITests: XCTestCase {
         XCTAssertEqual(editor.value as? String, source)
     }
 
-    private func openPreviewBlockFixture(_ file: URL) -> XCUIElement {
+    private func openPreviewBlockFixture(_ file: URL, style: String? = nil) -> XCUIElement {
         app.terminate()
         app.launchArguments = ["-ApplePersistenceIgnoreState", "YES", "-MPDisableUpdater", "YES",
                                "-editorStartInPreviewMode", "NO", "-htmlMathJax", "NO",
                                "-extensionFencedCode", "YES", "-extensionStrikethough", "YES",
                                "-htmlSyntaxHighlighting", "NO", "-AppleLanguages", "(fr)"]
+        if let style { app.launchArguments += ["-htmlStyleName", style] }
         app.launch()
         app.typeKey("o", modifierFlags: .command)
         app.typeKey("g", modifierFlags: [.command, .shift])
@@ -381,6 +382,52 @@ final class MacDownUITests: XCTestCase {
         }
     }
 
+    func testPreviewSingleClickDoesNotFlashSelectionInGithubDark() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let script = """
+        var serial=0;
+        document.addEventListener('mousedown',function(event){
+          if(!event.target.closest('[data-mp-edit-id]'))return;
+          var current=++serial, samples=[],deadline=performance.now()+650;
+          function sample(){
+            if(current!==serial)return;
+            var text=getSelection().toString();
+            if(samples.indexOf(text)<0)samples.push(text);
+            if(performance.now()<deadline)requestAnimationFrame(sample);
+            else document.getElementById('click-probe').textContent='Click samples: '+JSON.stringify(samples)+' count: '+event.detail;
+          }
+          requestAnimationFrame(sample);
+        });
+        """
+        try script.write(to: directory.appendingPathComponent("click-probe.js"), atomically: true, encoding: .utf8)
+        for prefix in ["", "> ", "# "] {
+            let file = directory.appendingPathComponent("ClickFlash.md")
+            let source = """
+            \(prefix)Selectionword neighboring text.
+
+            <div id="click-probe">Awaiting click</div>
+            <script src="click-probe.js"></script>
+            """
+            try source.write(to: file, atomically: true, encoding: .utf8)
+            let window = openPreviewBlockFixture(file, style: "Github2 (dark)")
+            let text = window.webViews.staticTexts.matching(NSPredicate(format: "label == %@ OR value == %@", "Selectionword neighboring text.", "Selectionword neighboring text.")).firstMatch
+            XCTAssertTrue(text.waitForExistence(timeout: 10))
+            let point = text.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: prefix == "# " ? 0.20 : 0.5))
+            point.click()
+            let probe = window.webViews.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@ OR value BEGINSWITH %@", "Click samples:", "Click samples:")).firstMatch
+            XCTAssertTrue(probe.waitForExistence(timeout: 5), window.debugDescription)
+            XCTAssertEqual(probe.value as? String ?? probe.label, "Click samples: [\"\"] count: 1", prefix)
+            point.doubleClick()
+            let bold = window.webViews.descendants(matching: .any).matching(NSPredicate(format: "label == %@", "Gras")).firstMatch
+            XCTAssertTrue(bold.waitForExistence(timeout: 5))
+            point.click()
+            wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@ OR label == %@", "Click samples: [\"\"] count: 1", "Click samples: [\"\"] count: 1"), object: probe)], timeout: 5)
+            XCTAssertFalse(bold.exists)
+        }
+    }
+
     func testPreviewStationaryPressDoesNotSelectWord() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -411,13 +458,13 @@ final class MacDownUITests: XCTestCase {
             <script src="mouse-probe.js"></script>
             """
             try source.write(to: file, atomically: true, encoding: .utf8)
-            let window = openPreviewBlockFixture(file)
+            let window = openPreviewBlockFixture(file, style: "Github2 (dark)")
             let editor = window.textViews.matching(identifier: "editor-text-view").firstMatch
             XCTAssertTrue(editor.waitForExistence(timeout: 10))
             let text = window.webViews.staticTexts.matching(
                 NSPredicate(format: "label == %@ OR value == %@", "Selectionword neighboring text.", "Selectionword neighboring text.")).firstMatch
             XCTAssertTrue(text.waitForExistence(timeout: 10), window.debugDescription)
-            let start = text.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: 0.5))
+            let start = text.coordinate(withNormalizedOffset: CGVector(dx: 0.15, dy: prefix == "# " ? 0.20 : 0.5))
             start.press(forDuration: 1)
             let probe = window.webViews.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@ OR value BEGINSWITH %@", "Held selection:", "Held selection:")).firstMatch
             XCTAssertTrue(probe.waitForExistence(timeout: 5), window.debugDescription)
@@ -427,12 +474,12 @@ final class MacDownUITests: XCTestCase {
             XCTAssertTrue(bold.waitForExistence(timeout: 5))
             let released = window.webViews.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@ OR value BEGINSWITH %@", "Released selection:", "Released selection:")).firstMatch
             XCTAssertEqual(released.value as? String ?? released.label, "Released selection: [Selectionword]")
-            text.coordinate(withNormalizedOffset: CGVector(dx: 0.18, dy: 0.5)).press(forDuration: 1)
+            text.coordinate(withNormalizedOffset: CGVector(dx: 0.18, dy: prefix == "# " ? 0.20 : 0.5)).press(forDuration: 1)
             XCTAssertEqual(probe.value as? String ?? probe.label, "Held selection: [] click count: 1", prefix)
             XCTAssertFalse(bold.exists, "A stationary press must not reopen the formatting panel")
-            start.press(forDuration: 1, thenDragTo: text.coordinate(withNormalizedOffset: CGVector(dx: 0.30, dy: 0.5)))
+            start.press(forDuration: 1, thenDragTo: text.coordinate(withNormalizedOffset: CGVector(dx: 0.30, dy: prefix == "# " ? 0.20 : 0.5)))
             XCTAssertEqual(probe.value as? String ?? probe.label, "Held selection: [] click count: 1", prefix)
-            XCTAssertTrue(bold.waitForExistence(timeout: 5))
+            XCTAssertTrue(bold.waitForExistence(timeout: 5), "prefix=\(prefix); release=\(released.value as? String ?? released.label)")
             let releaseText = released.value as? String ?? released.label
             XCTAssertTrue(releaseText.hasPrefix("Released selection: [") && releaseText.hasSuffix("]"))
             let selected = String(releaseText.dropFirst("Released selection: [".count).dropLast())
