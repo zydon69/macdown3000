@@ -325,6 +325,15 @@
     }
 }
 
+- (void)testNormalTextClearsRenderedStylesAndHeadingWithoutLosingSelection
+{
+    [self loadSource:@"# **Heading**\n\nBody\n"];
+    [self selectFromText:@"Heading" throughText:@"Heading"];
+    [self.document resetToNormalText:nil];
+    [self waitForFormatting];
+    [self waitUntil:^BOOL{return [self.editor.string isEqualToString:@"Heading\n\nBody\n"] && ![self.document valueForKey:@"previewSelectionToRestore"];} description:@"Complete both normal-text formatting stages"];
+    XCTAssertEqualObjects([self JS:@"getSelection().toString()"],@"Heading");
+}
 - (void)testNewSelectionAlwaysReopensCompactToolbar
 {
     [self loadSource:@"Heading\n\nBody\n"];

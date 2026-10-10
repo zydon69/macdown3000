@@ -53,4 +53,6 @@
 - (IBAction)performDocumentFindAction:(id)sender;
 - (BOOL)validateDocumentFindAction:(NSMenuItem *)item;
 
+- (IBAction)resetToNormalText:(id)sender;
+
 @end

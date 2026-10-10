@@ -798,8 +798,8 @@
 {
     NSToolbarItemGroup *group=(id)[self.controller toolbar:nil itemForItemIdentifier:@"code" willBeInsertedIntoToolbar:YES];
     XCTAssertTrue([group isKindOfClass:NSToolbarItemGroup.class]);
-    XCTAssertEqual(group.subitems.count,2u);
-    if (group.subitems.count!=2) return;
+    XCTAssertEqual(group.subitems.count,3u);
+    if (group.subitems.count!=3) return;
     XCTAssertEqualObjects(group.subitems[0].itemIdentifier,@"inline-code");
     XCTAssertEqualObjects(group.subitems[1].itemIdentifier,@"code-block");
     NSImage *image=[NSImage imageNamed:@"ToolbarIconCodeBlock"];
@@ -904,15 +904,15 @@
         @[@"text-formatting-group", @1, @4, @"toggleEmphasis:"],
         @[@"text-formatting-group", @2, @4, @"toggleUnderline:"],
         @[@"text-formatting-group", @3, @4, @"toggleStrikethrough:"],
-        @[@"heading-group", @0, @4, @"convertToH1:"],
-        @[@"heading-group", @1, @4, @"convertToH2:"],
-        @[@"heading-group", @2, @4, @"convertToH3:"],
-        @[@"heading-group", @3, @4, @"convertToParagraph:"],
+        @[@"heading-group", @0, @3, @"convertToH1:"],
+        @[@"heading-group", @1, @3, @"convertToH2:"],
+        @[@"heading-group", @2, @3, @"convertToH3:"],
         @[@"list-group", @0, @3, @"toggleUnorderedList:"],
         @[@"list-group", @1, @3, @"toggleOrderedList:"],
         @[@"list-group", @2, @3, @"toggleTaskList:"],
-        @[@"code", @0, @2, @"toggleInlineCode:"],
-        @[@"code", @1, @2, @"convertToCodeBlock:"],
+        @[@"code", @0, @3, @"toggleInlineCode:"],
+        @[@"code", @1, @3, @"convertToCodeBlock:"],
+        @[@"code", @2, @3, @"resetToNormalText:"],
     ];
 
     for (NSArray *mapping in expectedMappings) {

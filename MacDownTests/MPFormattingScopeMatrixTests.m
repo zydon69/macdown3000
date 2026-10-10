@@ -338,6 +338,19 @@
         if (mask & (1u<<i)) XCTAssertTrue([f apply:action value:[action isEqual:@"link"] ? @"https://example.org/target" : nil text:@"Needle"],@"%@ — %@",context,action);
     }
 }
+- (void)testNormalTextClearsAll32RequestedStyleCombinations
+{
+    for(NSUInteger subset=0;subset<32;subset++) for(NSNumber *mode in @[@0,@1,@2]) {
+        NSUInteger mask=(subset & 15)|((subset & 16)<<1);
+        MPScopeFixture *f=[[MPScopeFixture alloc] initWithSource:@"# Lead Needle tail.\n"];
+        [self applyStyles:mask fixture:f reverse:NO context:@"normal text"];
+        NSRange word=[f.editor.string rangeOfString:@"Needle"];
+        f.editor.selectedRange=mode.intValue==0 ? NSMakeRange(0,f.editor.string.length) :
+            (mode.intValue==1 ? word : NSMakeRange(word.location+2,0));
+        [f.document resetToNormalText:nil];
+        XCTAssertEqualObjects(f.editor.string,@"Lead Needle tail.\n",@"subset=%lu mode=%@",(unsigned long)subset,mode);
+    }
+}
 - (void)testEveryInlineSubsetComposesWithEveryContentBlockAndContainer
 {
     // 64 inline subsets × 11 content types × 11 containers = 7,744 final states.

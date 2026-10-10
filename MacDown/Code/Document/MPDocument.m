@@ -3698,6 +3698,20 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     [self convertSelectionToBlock:@"paragraph"];
 }
 
+- (IBAction)resetToNormalText:(id)sender
+{
+    if ([self performPreviewFormattingAction:@"block" value:@"paragraph"]) {
+        [self performPreviewFormattingAction:@"clear" value:nil];
+        return;
+    }
+    if (self.documentClosed || self.printing || [self previewDraft]) return;
+    NSRange selection=self.editor.selectedRange;
+    if (selection.location>self.editor.string.length) return;
+    if (!selection.length) self.editor.selectedRange=[self.editor.string lineRangeForRange:selection];
+    [self convertSelectionToBlock:@"paragraph"];
+    if (self.editor.selectedRange.length && ![self formatSourceInlineAction:@"clear" value:nil]) NSBeep();
+}
+
 // Native source selections and rendered selections share the same proven
 // inline transaction. An empty source caret is an explicit syntax insertion,
 // never a fallback when a selected passage cannot be represented safely.

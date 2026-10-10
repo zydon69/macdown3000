@@ -129,8 +129,7 @@ static NSArray<NSNumber *> *MPToolbarDocumentZoomLevels(void)
         [self toolbarItemGroupWithIdentifier:@"heading-group" separated:NO label:NSLocalizedString(@"Headings", @"") items:@[
             [self toolbarItemWithIdentifier:@"heading1" label:NSLocalizedString(@"Heading 1", @"Heading 1 toolbar button") icon:@"ToolbarIconHeading1" action:@selector(convertToH1:)],
             [self toolbarItemWithIdentifier:@"heading2" label:NSLocalizedString(@"Heading 2", @"Heading 2 toolbar button") icon:@"ToolbarIconHeading2" action:@selector(convertToH2:)],
-            [self toolbarItemWithIdentifier:@"heading3" label:NSLocalizedString(@"Heading 3", @"Heading 3 toolbar button") icon:@"ToolbarIconHeading3" action:@selector(convertToH3:)],
-            [self toolbarItemWithIdentifier:@"normal-text" label:NSLocalizedString(@"Normal Text", @"Convert heading to normal text toolbar button") icon:nil action:@selector(convertToParagraph:)]
+            [self toolbarItemWithIdentifier:@"heading3" label:NSLocalizedString(@"Heading 3", @"Heading 3 toolbar button") icon:@"ToolbarIconHeading3" action:@selector(convertToH3:)]
             ]
          ],
         [self toolbarItemGroupWithIdentifier:@"list-group" separated:YES label:NSLocalizedString(@"Ordered/Unordered List", @"") items:@[
@@ -144,7 +143,8 @@ static NSArray<NSNumber *> *MPToolbarDocumentZoomLevels(void)
         // adjacent block action to existing customized configurations.
         [self toolbarItemGroupWithIdentifier:@"code" separated:NO label:NSLocalizedString(@"Code", @"Code toolbar group") items:@[
             [self toolbarItemWithIdentifier:@"inline-code" label:NSLocalizedString(@"Inline Code", @"Inline code toolbar button") icon:@"ToolbarIconInlineCode" action:@selector(toggleInlineCode:)],
-            [self toolbarItemWithIdentifier:@"code-block" label:NSLocalizedString(@"Code Block", @"Code block toolbar button") icon:@"ToolbarIconCodeBlock" action:@selector(convertToCodeBlock:)]
+            [self toolbarItemWithIdentifier:@"code-block" label:NSLocalizedString(@"Code Block", @"Code block toolbar button") icon:@"ToolbarIconCodeBlock" action:@selector(convertToCodeBlock:)],
+            [self toolbarItemWithIdentifier:@"normal-text" label:NSLocalizedString(@"Normal Text", @"Normal text toolbar button") icon:nil action:@selector(resetToNormalText:)]
             ]
         ],
         [self toolbarItemWithIdentifier:@"link" label:NSLocalizedString(@"Link", @"Link toolbar button") icon:@"ToolbarIconLink" action:@selector(toggleLink:)],
@@ -451,6 +451,7 @@ static NSArray<NSNumber *> *MPToolbarDocumentZoomLevels(void)
     [itemImage setSize:CGSizeMake(19, 19)];
     NSButton *itemButton = [[NSButton alloc] initWithFrame:NSMakeRect(0, 0, itemWidth, 27)];
     itemButton.image = itemImage;
+    if (!itemImage) itemButton.title=label;
     itemButton.imageScaling = NSImageScaleProportionallyDown;
     itemButton.bezelStyle = NSBezelStyleTexturedRounded;
     itemButton.focusRingType = NSFocusRingTypeDefault;
@@ -460,6 +461,7 @@ static NSArray<NSNumber *> *MPToolbarDocumentZoomLevels(void)
     itemButton.target = self;
     itemButton.action = @selector(standaloneToolbarItemClicked:);
 
+    if (!itemImage) [itemButton sizeToFit];
     toolbarItem.view = itemButton;
 
     [self->toolbarItemIdentifierObjectDictionary setObject:toolbarItem forKey:itemIdentifier];
