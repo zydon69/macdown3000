@@ -259,6 +259,28 @@ static NSArray<NSButton *> *MPCheckboxes(NSView *content)
 // other's column width, which pushes adjacent controls into overlap (the
 // Compilation pane coupled "CSS:" to "Default path:"). Labels must size
 // independently.
+- (void)testRenderingControlsDoNotOverlap
+{
+    MPHtmlPreferencesViewController *controller=[MPHtmlPreferencesViewController new];
+    NSView *content=MPContentView(controller);
+    [controller viewWillAppear]; // Populate actual theme menus as in Settings.
+    [content layoutSubtreeIfNeeded];
+    NSMutableArray<NSControl *> *controls=[NSMutableArray array];
+    MPCollectViews(content,NSControl.class,controls);
+    for (NSUInteger i=0;i<controls.count;i++) {
+        NSControl *first=controls[i];
+        NSRect firstRect=[first convertRect:first.bounds toView:content];
+        for(NSUInteger j=i+1;j<controls.count;j++) {
+            NSControl *second=controls[j];
+            if([first isDescendantOf:second] || [second isDescendantOf:first]) continue;
+            NSRect secondRect=[second convertRect:second.bounds toView:content];
+            NSRect overlap=NSIntersectionRect(firstRect,secondRect);
+            XCTAssertTrue(NSIsEmptyRect(overlap)||NSWidth(overlap)<1||NSHeight(overlap)<1,
+                @"Rendering controls overlap: %@ %@ and %@ %@",first,NSStringFromRect(firstRect),second,NSStringFromRect(secondRect));
+        }
+    }
+}
+
 - (void)testHtmlLabelWidthsAreIndependent
 {
     MPHtmlPreferencesViewController *vc = [[MPHtmlPreferencesViewController alloc] init];

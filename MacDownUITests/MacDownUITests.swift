@@ -357,6 +357,30 @@ final class MacDownUITests: XCTestCase {
         XCTAssertEqual(editor.value as? String, source)
     }
 
+    func testRenderingPreferencesFrenchControlsHaveSeparateFrames() throws {
+        app.terminate()
+        app.launchArguments = ["-ApplePersistenceIgnoreState", "YES", "-MPDisableUpdater", "YES", "-AppleLanguages", "(fr)"]
+        app.launch()
+        app.typeKey(",", modifierFlags: .command)
+        let rendering = app.toolbars.buttons["Compilation"]
+        XCTAssertTrue(rendering.waitForExistence(timeout: 10), app.debugDescription)
+        rendering.click()
+        let window = app.windows["Préférences"]
+        XCTAssertTrue(window.waitForExistence(timeout: 5))
+        let attachment = XCTAttachment(screenshot: window.screenshot())
+        attachment.name = "French rendering settings geometry"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        let controls = (window.checkBoxes.allElementsBoundByIndex + window.popUpButtons.allElementsBoundByIndex).filter { $0.isHittable }
+        XCTAssertGreaterThan(controls.count, 8)
+        for (i, first) in controls.enumerated() {
+            for second in controls.dropFirst(i + 1) {
+                XCTAssertTrue(first.frame.intersection(second.frame).isEmpty,
+                    "Overlapping rendering controls: \(first.label) \(first.frame) / \(second.label) \(second.frame)")
+            }
+        }
+    }
+
     func testPreviewStationaryPressDoesNotSelectWord() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
