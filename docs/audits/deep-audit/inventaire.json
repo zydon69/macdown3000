@@ -1191,18 +1191,19 @@
     },
     {
       "path": "MacDown/Code/Document/MPDocument.m",
-      "observed_sha256": "6e50b66e356f7c8529443743b4eea89da6164918467a085e6880c150f188f8c5",
-      "sha256": "6e50b66e356f7c8529443743b4eea89da6164918467a085e6880c150f188f8c5",
+      "observed_sha256": "c33a128abcbf739b75a0b00d185a505ba5da085b7ae3c7a5ee43fd62fd701a10",
+      "sha256": "c33a128abcbf739b75a0b00d185a505ba5da085b7ae3c7a5ee43fd62fd701a10",
       "read": false,
       "analyzed": false,
       "validation_tested": false,
       "validation_without_test": false,
       "state": "modifié après campagne04 — correction ciblée testée, relecture intégrale à renouveler",
-      "evidence": "../../features/source-inline-selection.md",
+      "evidence": "../../features/preview-mixed-mapping.md",
       "open_findings": [],
       "read_ranges": [
         "diff de la correction des citations ; contrats et consommateurs concernés",
-        "diff de la restauration de sélection source en ligne ; notifications de focus, transaction Markdown et contrats concernés"
+        "diff de la restauration de sélection source en ligne ; notifications de focus, transaction Markdown et contrats concernés",
+        "diff des sondages de correspondance aperçu/source ; transactions, restauration, espaces et consommateurs concernés"
       ],
       "review_flow": "document",
       "review_decision": "Correction ciblée après audit ; la validation intégrale de la version précédente est conservée séparément. Aucun nouvel audit intégral du fichier déclaré.",
@@ -1216,7 +1217,13 @@
         "preuves/selection-source-ui-targeted.log",
         "preuves/selection-source-ui-first.log",
         "preuves/selection-source-ui-recheck.log",
-        "preuves/selection-source-ui-baseline.log"
+        "preuves/selection-source-ui-baseline.log",
+        "../../features/preview-mixed-mapping.md",
+        "preuves/selection-mixte-red.log",
+        "preuves/selection-mixte-menu.log",
+        "preuves/selection-mixte-native.log",
+        "preuves/selection-mixte-ui.log",
+        "preuves/selection-mixte-matrices.json"
       ],
       "historical_campaign04_validation": {
         "path": "MacDown/Code/Document/MPDocument.m",
@@ -1258,6 +1265,26 @@
         "zoom_recheck_failures": 0
       },
       "targeted_validation": {
+        "production_correction_revision": "0c7d9e2b",
+        "matrix_extension_revision": "a62ffb66",
+        "production_sha256": "c33a128abcbf739b75a0b00d185a505ba5da085b7ae3c7a5ee43fd62fd701a10",
+        "native_tests": 1563,
+        "native_failures": 0,
+        "native_sessions_disjoint": [
+          14,
+          1549
+        ],
+        "ui_tests": 23,
+        "ui_failures": 0,
+        "new_parametrized_cases": 7364,
+        "new_dom_cases": 324,
+        "new_toggle_transitions": 7040,
+        "full_native_suite_rerun": true,
+        "full_ui_suite_rerun": true,
+        "full_file_review_claimed": false
+      },
+      "unresolved_controls": [],
+      "historical_source_inline_targeted_validation": {
         "source_revision": "ea9f506d",
         "native_tests": 14,
         "native_failures": 0,
@@ -1270,8 +1297,8 @@
         "additional_failure_reproduced_without_fix": true,
         "full_suite_rerun": false
       },
-      "unresolved_controls": [
-        "Sélection mixte dans l’aperçu : échec UI avant et après correction source, cause à diagnostiquer ; voir rapport ciblé."
+      "resolved_controls": [
+        "Sélection mixte dans l’aperçu : sondages corrigés, reproduction avant correction conservée ; test UI réussi avec emphase intra-mot activée et désactivée."
       ]
     },
     {
@@ -15739,6 +15766,12 @@
   "post_campaign04_source_inline_selection_fix": {
     "source_revision": "ea9f506d",
     "report": "../../features/source-inline-selection.md",
+    "full_audit_claimed": false
+  },
+  "post_campaign04_mixed_preview_mapping_fix": {
+    "source_revision": "0c7d9e2b",
+    "matrix_revision": "a62ffb66",
+    "report": "../../features/preview-mixed-mapping.md",
     "full_audit_claimed": false
   }
 }

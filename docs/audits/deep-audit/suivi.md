@@ -12,6 +12,8 @@ Le correctif souris `fdf48aa` ajoute une validation ciblée du même script : [p
 
 La correction des réglages Compilation et le parcours Force Touch sont décrits dans [ce rapport ciblé](../../features/rendering-layout-force-touch.md). Les certifications intégrales des versions modifiées restent à renouveler.
 
+La correction `0c7d9e2b` résout le contrôle UI de sélection mixte : **1 563 tests natifs et 23 tests UI réussis**, avec 7 364 cas paramétrés supplémentaires. [Diagnostic, matrices et preuves](../../features/preview-mixed-mapping.md). Cette validation ciblée ne change pas les cases de relecture intégrale.
+
 ## Périmètre
 
 Application Objective-C/C AppKit/WebKit ; moteur partagé, Quick Look, CLI, scripts et configurations de build/livraison, UI déclarative, styles et traductions. Tests et documentation examinés comme preuves, hors compteur source. Pas de dossiers Laravel app/database dans ce dépôt.
@@ -93,7 +95,7 @@ Exclusions individuelles et racines documentées dans [inventaire.json](inventai
 | `MacDown/Code/Document/MPAsset.h` | `c1a03ae5c84d0a4cd5ee4c2b6aec7a4920d979cfbaff84e0954a9d0f0dee3f2e` | ☑ | ☑ | ☑ | ☐ | validé avec tests | [Lecture/contrats](preuves/campagne04-lecture.md) · [contrôles](#contrôles) |
 | `MacDown/Code/Document/MPAsset.m` | `a4e260bd0ab242b7862c030229aac8892af464e8f63333db1cbe5ef86c22e943` | ☑ | ☑ | ☑ | ☐ | validé avec tests | [Lecture/contrats](preuves/campagne04-lecture.md) · [contrôles](#contrôles) |
 | `MacDown/Code/Document/MPDocument.h` | `bb4a26c1ff81e79a0e5a40df9d049653feaf1c3fe2c59f4a54764152e77edaf7` | ☑ | ☑ | ☑ | ☐ | validé avec tests | [Lecture/contrats](preuves/campagne04-lecture.md) · [contrôles](#contrôles) |
-| `MacDown/Code/Document/MPDocument.m` | `6e50b66e356f7c8529443743b4eea89da6164918467a085e6880c150f188f8c5` | ☐ | ☐ | ☐ | ☐ | modifié après campagne04 — relecture intégrale à renouveler | [Sélection source en ligne](../../features/source-inline-selection.md) ; validations historiques conservées dans JSON. |
+| `MacDown/Code/Document/MPDocument.m` | `c33a128abcbf739b75a0b00d185a505ba5da085b7ae3c7a5ee43fd62fd701a10` | ☐ | ☐ | ☐ | ☐ | modifié après campagne04 — relecture intégrale à renouveler | [Sélections mixtes et matrices élargies](../../features/preview-mixed-mapping.md) ; validations historiques conservées dans JSON. |
 | `MacDown/Code/Document/MPPDFAnchorInjector.h` | `7dbaa29df89ed7405bb15a3471f5bdd75b7486a5b2558f60a826caa4430c5593` | ☑ | ☑ | ☑ | ☐ | validé avec tests | [Lecture/contrats](preuves/campagne04-lecture.md) · [contrôles](#contrôles) |
 | `MacDown/Code/Document/MPPDFAnchorInjector.m` | `902c57b2cb6354a651e0b981a49bfee390ae89fc1e003d0d1a71bd343c2ed5a0` | ☑ | ☑ | ☑ | ☐ | validé avec tests | [Lecture/contrats](preuves/campagne04-lecture.md) · [contrôles](#contrôles) |
 | `MacDown/Code/Document/MPPreviewInlineTransaction.h` | `710f225034d476c309c84f6960e52992c8714a7bd04f96a2bbc1abdc0bf55e66` | ☐ | ☐ | ☐ | ☐ | modifié après campagne04 — correction ciblée testée ; relecture intégrale à renouveler | [Correction et contrôles](../../features/quote-selection.md) ; validation intégrale antérieure conservée dans l’inventaire JSON. |

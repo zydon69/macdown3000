@@ -29,3 +29,7 @@ Le code corrigé a été restauré après comparaison, avec vérification de son
 Les **2 tests UI ciblés réussissent ensemble** sur le code corrigé : commandes successives dans la sélection source, puis exclusivité des sélections et boutons rapides entre source et aperçu. [Log final UI](../audits/deep-audit/preuves/selection-source-ui-targeted.log), [14 tests natifs](../audits/deep-audit/preuves/selection-source-native.log) et [test de régression avant correction](../audits/deep-audit/preuves/selection-source-red.log). Les sessions et préférences utilisateur sont isolées puis restaurées avec vérification.
 
 Commit de correction : `ea9f506d`. Compilation Release pour Intel et Apple Silicon ; tests exécutés sur Apple Silicon.
+
+## Résolution ultérieure du contrôle d’aperçu
+
+L’échec supplémentaire décrit plus haut est désormais corrigé par `0c7d9e2b`. Le sondage des littéraux altérait les espaces nécessaires aux délimiteurs de gras lorsque l’emphase à l’intérieur des mots était désactivée. Le test UI original passe maintenant dans les deux modes, sans suppression de ses assertions, parmi les 23 tests UI réussis. Voir [le diagnostic et les matrices élargies](preview-mixed-mapping.md). Les échecs historiques restent conservés comme preuve de reproduction.
