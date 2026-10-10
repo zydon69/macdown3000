@@ -20,7 +20,13 @@
     payload.token = config.token;
     window.location.href = 'x-macdown-preview://edit/?payload=' + encodeURIComponent(JSON.stringify(payload));
   }
-  function hide() { if (panel) panel.style.display = 'none'; }
+  function closeMenu() {
+    if(!panel) return;
+    var menu=panel.querySelector('[role=menu]'), opener=panel.querySelector('[data-mp-format-menu]');
+    if(menu) menu.hidden=true;
+    if(opener) opener.setAttribute('aria-expanded','false');
+  }
+  function hide() { closeMenu(); if (panel) panel.style.display = 'none'; }
   function clearSelection() {
     clearTimeout(timer); saved=null; selectingWithMouse=false;
     window.getSelection().removeAllRanges();
@@ -361,6 +367,7 @@
       errorMessage.remove(); errorMessage=null; errorSelection=null;
     }
     if(!selected){if(!panel.contains(document.activeElement)){saved=null;hide();}return;}
+    if(panel.style.display==='none' || JSON.stringify(saved)!==JSON.stringify(selected)) closeMenu();
     saved=selected; updateStyles(selected);
     panel.style.display='block'; positionPanel();
   }

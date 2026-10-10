@@ -258,6 +258,18 @@
     XCTAssertEqualObjects([self JS:@"document.querySelector('[data-mp-style=link]').getAttribute('aria-pressed')"],@"true");
 }
 
+- (void)testNewSelectionAlwaysReopensCompactToolbar
+{
+    [self loadSource:@"Heading\n\nBody\n"];
+    [self selectFromText:@"Heading" throughText:@"Heading"];
+    [self JS:@"document.querySelector('[data-mp-format-menu]').click()"];
+    XCTAssertFalse([[self JS:@"document.querySelector('[role=menu]').hidden"] boolValue]);
+    [self JS:@"document.body.dispatchEvent(new MouseEvent('mousedown',{bubbles:true,button:0,detail:1}));window.dispatchEvent(new MouseEvent('mouseup',{bubbles:true,button:0}));"];
+    [self selectFromText:@"Body" throughText:@"Body"];
+    XCTAssertTrue([[self JS:@"document.querySelector('[role=menu]').hidden"] boolValue]);
+    XCTAssertEqualObjects([self JS:@"document.querySelector('[data-mp-format-menu]').getAttribute('aria-expanded')"],@"false");
+}
+
 - (void)testTextDropdownHasSeparatedScopesAndInlineIconsKeepTooltips
 {
     [self loadSource:@"# **Heading**\n\nBody\n"];
