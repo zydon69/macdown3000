@@ -10511,19 +10511,20 @@
     },
     {
       "path": "MacDown/Resources/Extensions/preview-edit.js",
-      "observed_sha256": "ead8657780849581024a103dc0a7643f6bccbfe3367d97a36b614133d954c1c3",
-      "sha256": "ead8657780849581024a103dc0a7643f6bccbfe3367d97a36b614133d954c1c3",
+      "observed_sha256": "16b41b77c6a23da171c54bbe30aad0edc75276268c2c8c1d1766ddece6940f0f",
+      "sha256": "16b41b77c6a23da171c54bbe30aad0edc75276268c2c8c1d1766ddece6940f0f",
       "read": false,
       "analyzed": false,
       "validation_tested": false,
       "validation_without_test": false,
       "state": "modifié après campagne04 — correction ciblée testée, relecture intégrale à renouveler",
-      "evidence": "../../features/rendering-layout-force-touch.md",
+      "evidence": "../../features/preview-blank-click.md",
       "open_findings": [],
       "read_ranges": [
         "diff de la correction des citations ; contrats et consommateurs concernés",
         "diff du parcours mousedown ; protection des modificateurs, liens, édition et contrôles",
-        "correction ciblée : chaîne verticale des contrôles Compilation et parcours Force Touch, selon le fichier"
+        "correction ciblée : chaîne verticale des contrôles Compilation et parcours Force Touch, selon le fichier",
+        "diff de la désélection par clic hors segments mappés et protections des gestes"
       ],
       "review_flow": "styles",
       "review_decision": "Correction ciblée ; certification intégrale de la version précédente conservée séparément. Nouvelle validation exhaustive non déclarée.",
@@ -10538,7 +10539,11 @@
         "preuves/compilation-force-native.log",
         "preuves/compilation-force-ui-verified.log",
         "preuves/compilation-force-ui-first.log",
-        "preuves/compilation-force-drag-recheck.log"
+        "preuves/compilation-force-drag-recheck.log",
+        "../../features/preview-blank-click.md",
+        "preuves/clic-vide-native.log",
+        "preuves/clic-vide-ui-first.log",
+        "preuves/clic-vide-ui-final.log"
       ],
       "historical_campaign04_validation": {
         "path": "MacDown/Resources/Extensions/preview-edit.js",
@@ -10590,7 +10595,7 @@
         "physical_content_fixtures": 3,
         "full_suite_rerun": false
       },
-      "targeted_validation": {
+      "historical_rendering_force_targeted_validation": {
         "source_revision": "ae5566e4",
         "native_tests": 40,
         "native_failures": 0,
@@ -10601,6 +10606,16 @@
         "isolated_drag_recheck_failures": 0,
         "full_suite_rerun": false,
         "physical_force_touch_confirmed": false
+      },
+      "targeted_validation": {
+        "source_revision": "c0fe8a47",
+        "native_tests": 9,
+        "native_failures": 0,
+        "new_blank_click_scenarios": 18,
+        "ui_tests": 3,
+        "ui_failures": 0,
+        "initial_ui_setup_failures": 1,
+        "full_suite_rerun": false
       }
     },
     {
@@ -15691,5 +15706,10 @@
     "full_audit_claimed": false,
     "physical_trackpad_confirmation_pending": true,
     "source_revision": "ae5566e4"
+  },
+  "post_campaign04_blank_click_fix": {
+    "source_revision": "c0fe8a47",
+    "report": "../../features/preview-blank-click.md",
+    "full_audit_claimed": false
   }
 }
