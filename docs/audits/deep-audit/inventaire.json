@@ -4267,26 +4267,67 @@
     },
     {
       "path": "MacDown/Localization/Base.lproj/MPHtmlPreferencesViewController.xib",
-      "observed_sha256": "846e6a4543eff2ea8b1d05cb03a5cf343c7c5d72f745b1ef33b821e14b90ed3e",
-      "sha256": "846e6a4543eff2ea8b1d05cb03a5cf343c7c5d72f745b1ef33b821e14b90ed3e",
-      "read": true,
-      "analyzed": true,
-      "validation_tested": true,
+      "observed_sha256": "1aedbdc6a885ecc93f9dbdfd8196c62cfec5fe50d2e9047b90ceb24cd4aeb320",
+      "sha256": "1aedbdc6a885ecc93f9dbdfd8196c62cfec5fe50d2e9047b90ceb24cd4aeb320",
+      "read": false,
+      "analyzed": false,
+      "validation_tested": false,
       "validation_without_test": false,
-      "state": "validé avec tests",
-      "evidence": "preuves/campagne04-lecture.md",
+      "state": "modifié après campagne04 — correction ciblée testée, relecture intégrale à renouveler",
+      "evidence": "../../features/rendering-layout-force-touch.md",
       "open_findings": [],
       "read_ranges": [
-        "entier"
+        "entier",
+        "correction ciblée : chaîne verticale des contrôles Compilation et parcours Force Touch, selon le fichier"
       ],
       "review_flow": "catalogue",
-      "review_decision": "Toutes déclarations catalogues/XIB/plist/entitlements/alias, chemins physiques et consommateurs build/AppKit recoupés.",
+      "review_decision": "Correction ciblée ; certification intégrale de la version précédente conservée séparément. Nouvelle validation exhaustive non déclarée.",
       "test_evidence": [
         "preuves/campagne04-build-for-testing.log",
         "preuves/campagne04-native-final.log",
         "preuves/campagne04-ui-delivery-verified.log",
-        "preuves/campagne04-community-themes.log"
-      ]
+        "preuves/campagne04-community-themes.log",
+        "../../features/rendering-layout-force-touch.md",
+        "preuves/compilation-force-native.log",
+        "preuves/compilation-force-ui-verified.log",
+        "preuves/compilation-force-ui-first.log",
+        "preuves/compilation-force-drag-recheck.log"
+      ],
+      "historical_campaign04_validation": {
+        "path": "MacDown/Localization/Base.lproj/MPHtmlPreferencesViewController.xib",
+        "observed_sha256": "846e6a4543eff2ea8b1d05cb03a5cf343c7c5d72f745b1ef33b821e14b90ed3e",
+        "sha256": "846e6a4543eff2ea8b1d05cb03a5cf343c7c5d72f745b1ef33b821e14b90ed3e",
+        "read": true,
+        "analyzed": true,
+        "validation_tested": true,
+        "validation_without_test": false,
+        "state": "validé avec tests",
+        "evidence": "preuves/campagne04-lecture.md",
+        "open_findings": [],
+        "read_ranges": [
+          "entier"
+        ],
+        "review_flow": "catalogue",
+        "review_decision": "Toutes déclarations catalogues/XIB/plist/entitlements/alias, chemins physiques et consommateurs build/AppKit recoupés.",
+        "test_evidence": [
+          "preuves/campagne04-build-for-testing.log",
+          "preuves/campagne04-native-final.log",
+          "preuves/campagne04-ui-delivery-verified.log",
+          "preuves/campagne04-community-themes.log"
+        ]
+      },
+      "targeted_validation": {
+        "source_revision": "ae5566e4",
+        "native_tests": 40,
+        "native_failures": 0,
+        "ui_tests": 3,
+        "ui_failures": 0,
+        "initial_ui_failures": 1,
+        "isolated_drag_recheck_tests": 1,
+        "isolated_drag_recheck_failures": 0,
+        "full_suite_rerun": false,
+        "physical_force_touch_confirmed": false
+      }
     },
     {
       "path": "MacDown/Localization/Base.lproj/MPMarkdownPreferencesViewController.xib",
@@ -10470,28 +10511,34 @@
     },
     {
       "path": "MacDown/Resources/Extensions/preview-edit.js",
-      "observed_sha256": "bbb5e7cc1f4db9912d7229497e7bafc83f7d655cda2a7f15bddb68747391ada1",
-      "sha256": "bbb5e7cc1f4db9912d7229497e7bafc83f7d655cda2a7f15bddb68747391ada1",
+      "observed_sha256": "ead8657780849581024a103dc0a7643f6bccbfe3367d97a36b614133d954c1c3",
+      "sha256": "ead8657780849581024a103dc0a7643f6bccbfe3367d97a36b614133d954c1c3",
       "read": false,
       "analyzed": false,
       "validation_tested": false,
       "validation_without_test": false,
       "state": "modifié après campagne04 — correction ciblée testée, relecture intégrale à renouveler",
-      "evidence": "../../features/preview-mouse-selection.md",
+      "evidence": "../../features/rendering-layout-force-touch.md",
       "open_findings": [],
       "read_ranges": [
         "diff de la correction des citations ; contrats et consommateurs concernés",
-        "diff du parcours mousedown ; protection des modificateurs, liens, édition et contrôles"
+        "diff du parcours mousedown ; protection des modificateurs, liens, édition et contrôles",
+        "correction ciblée : chaîne verticale des contrôles Compilation et parcours Force Touch, selon le fichier"
       ],
       "review_flow": "styles",
-      "review_decision": "Correction ciblée après audit ; la validation intégrale de la version précédente est conservée séparément. Aucun nouvel audit intégral du fichier déclaré.",
+      "review_decision": "Correction ciblée ; certification intégrale de la version précédente conservée séparément. Nouvelle validation exhaustive non déclarée.",
       "test_evidence": [
         "../../features/quote-selection.md",
         "preuves/citations-native.log",
         "preuves/citations-ui.log",
         "../../features/preview-mouse-selection.md",
         "preuves/souris-native.log",
-        "preuves/souris-ui.log"
+        "preuves/souris-ui.log",
+        "../../features/rendering-layout-force-touch.md",
+        "preuves/compilation-force-native.log",
+        "preuves/compilation-force-ui-verified.log",
+        "preuves/compilation-force-ui-first.log",
+        "preuves/compilation-force-drag-recheck.log"
       ],
       "historical_campaign04_validation": {
         "path": "MacDown/Resources/Extensions/preview-edit.js",
@@ -10533,7 +10580,7 @@
         "zoom_repeated_tests": 520,
         "zoom_recheck_failures": 0
       },
-      "targeted_validation": {
+      "historical_mouse_targeted_validation": {
         "source_revision": "fdf48aa",
         "read": "diff et contrats concernés",
         "native_tests": 7,
@@ -10542,6 +10589,18 @@
         "new_guard_cases": 36,
         "physical_content_fixtures": 3,
         "full_suite_rerun": false
+      },
+      "targeted_validation": {
+        "source_revision": "ae5566e4",
+        "native_tests": 40,
+        "native_failures": 0,
+        "ui_tests": 3,
+        "ui_failures": 0,
+        "initial_ui_failures": 1,
+        "isolated_drag_recheck_tests": 1,
+        "isolated_drag_recheck_failures": 0,
+        "full_suite_rerun": false,
+        "physical_force_touch_confirmed": false
       }
     },
     {
@@ -15597,11 +15656,11 @@
   },
   "counts": {
     "total": 636,
-    "read": 633,
-    "analyzed": 633,
-    "validation_tested": 600,
+    "read": 632,
+    "analyzed": 632,
+    "validation_tested": 599,
     "validation_without_test": 33,
-    "pending_full_revalidation": 3
+    "pending_full_revalidation": 4
   },
   "final_source_revision": "9bf9d54",
   "validation_revision": "ce171f1",
@@ -15626,5 +15685,11 @@
     "source_revision": "7d5f2f5",
     "report": "../../features/quote-selection.md",
     "full_audit_claimed": false
+  },
+  "post_campaign04_rendering_force_fix": {
+    "report": "../../features/rendering-layout-force-touch.md",
+    "full_audit_claimed": false,
+    "physical_trackpad_confirmation_pending": true,
+    "source_revision": "ae5566e4"
   }
 }
