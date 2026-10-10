@@ -73,6 +73,8 @@
       }
     });
     var text=range.toString();
+    var selectedTable=spans[0] && spans[0].closest('table');
+    if(!spans.every(function(span){return span.closest('td,th') && span.closest('table')===selectedTable;})) selectedTable=null;
     if(!matches.length) return null;
     if(matches.map(function(run){return run.text;}).join('')!==text) {
       // HTML inserts whitespace text nodes between blocks. Those separators
@@ -86,6 +88,7 @@
         var end=node===range.endContainer?range.endOffset:node.nodeValue.length;
         var selectedText=node.nodeValue.substring(start,end);
         if(!selectedText || spans.some(function(span){return span.contains(node);})) continue;
+        if(selectedTable && node.parentElement.closest('table')===selectedTable && !/\S/.test(selectedText)) continue;
         if(/\S/.test(selectedText) || !/[\r\n]/.test(selectedText)) return null;
         var before=null, after=null;
         spans.forEach(function(span){
@@ -141,6 +144,9 @@
       'callout-warning':'M3 3h18v18H3zM12 6v8M12 18h.01',
       'callout-important':'M3 3h18v18H3zM12 6l2 4 4 1-3 3 1 4-4-2-4 2 1-4-3-3 4-1z',
       'callout-caution':'M3 3h18v18H3zM12 6l7 12H5zM12 11v3M12 16h.01',
+      'align-left':'M3 5h18M3 10h12M3 15h18M3 20h12',
+      'align-center':'M3 5h18M6 10h12M3 15h18M6 20h12',
+      'align-right':'M3 5h18M9 10h12M3 15h18M9 20h12',
       toggle:'M3 5l4 4-4 4M11 5h10M11 11h10M3 18h18'
     };
     var heading=/^(?:toggle-)?h([1-6])$/.exec(name);
@@ -273,10 +279,18 @@
       hide(); if(span) begin(span);
     },null,'edit');
     editButton.setAttribute('data-mp-edit-text','');
+    var alignmentRow=document.createElement('div');
+    alignmentRow.setAttribute('data-mp-table-alignment',''); alignmentRow.hidden=true;
+    alignmentRow.setAttribute('role','group'); alignmentRow.setAttribute('aria-label','Alignement des colonnes');
+    [['Gauche','left'],['Centrer','center'],['Droite','right']].forEach(function(item){
+      var control=button(item[0],function(){command('table-align',item[1]);},null,'align-'+item[1],alignmentRow);
+      control.setAttribute('data-mp-align',item[1]);
+    });
+    panel.appendChild(alignmentRow);
     panel.appendChild(panel.querySelector('[role="menu"]'));
     panelStyle = retainedUI ? retainedUI.style : document.createElement('style'); panelStyle.id='macdown-preview-edit-style';
     var selector='.'+panelClass;
-    panelStyle.textContent=selector+' button{font:inherit;color:#fff;background:#3c3c3c;border:1px solid #666;border-radius:4px;margin:2px;padding:6px;cursor:pointer;vertical-align:middle;width:36px;height:36px} '+selector+' svg{display:block;pointer-events:none} '+selector+' button:disabled{opacity:.5;cursor:default} '+selector+' [aria-pressed="true"],'+selector+' [data-mp-active]{color:#2784DE} '+selector+' [role="menu"]{position:absolute;box-sizing:border-box;width:260px;max-width:calc(100vw - 24px);max-height:calc(100vh - 16px);overflow:auto;background:#292929;color:#fff;border:1px solid #666;border-radius:8px;padding:8px;box-shadow:0 4px 20px #0005;margin:0} '+selector+' [role="menu"][hidden]{display:none!important} '+selector+' [data-mp-format-menu]{box-sizing:border-box;display:flex;align-items:center;gap:8px;width:calc(100% - 4px);text-align:left;font-size:16px;line-height:22px} '+selector+' [data-mp-format-label]{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} '+selector+' [data-mp-format-menu]::after{content:"";display:block;flex-shrink:0;width:6px;height:6px;margin-right:3px;border-top:2px solid currentColor;border-right:2px solid currentColor;transform:rotate(45deg)} '+selector+' [role="group"]{display:block} '+selector+' [role="menu"] button{display:flex;align-items:center;gap:10px;width:calc(100% - 4px);height:auto;min-height:36px;text-align:left} '+selector+' [role="menu"] svg{flex-shrink:0} '+selector+' [role="separator"]{border-top:1px solid #666;margin:8px 2px} '+selector+' button:focus-visible{outline:2px solid #2784DE;outline-offset:1px} .'+runClass+'[contenteditable]{outline:2px solid #4385be;outline-offset:3px} @media print{'+selector+'{display:none!important}}';
+    panelStyle.textContent=selector+' [data-mp-table-alignment]{border-top:1px solid #666;margin:4px 2px 0;padding-top:4px} '+selector+' [data-mp-table-alignment][hidden]{display:none!important} '+selector+' button{font:inherit;color:#fff;background:#3c3c3c;border:1px solid #666;border-radius:4px;margin:2px;padding:6px;cursor:pointer;vertical-align:middle;width:36px;height:36px} '+selector+' svg{display:block;pointer-events:none} '+selector+' button:disabled{opacity:.5;cursor:default} '+selector+' [aria-pressed="true"],'+selector+' [data-mp-active]{color:#2784DE} '+selector+' [role="menu"]{position:absolute;box-sizing:border-box;width:260px;max-width:calc(100vw - 24px);max-height:calc(100vh - 16px);overflow:auto;background:#292929;color:#fff;border:1px solid #666;border-radius:8px;padding:8px;box-shadow:0 4px 20px #0005;margin:0} '+selector+' [role="menu"][hidden]{display:none!important} '+selector+' [data-mp-format-menu]{box-sizing:border-box;display:flex;align-items:center;gap:8px;width:calc(100% - 4px);text-align:left;font-size:16px;line-height:22px} '+selector+' [data-mp-format-label]{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} '+selector+' [data-mp-format-menu]::after{content:"";display:block;flex-shrink:0;width:6px;height:6px;margin-right:3px;border-top:2px solid currentColor;border-right:2px solid currentColor;transform:rotate(45deg)} '+selector+' [role="group"]{display:block} '+selector+' [role="menu"] button{display:flex;align-items:center;gap:10px;width:calc(100% - 4px);height:auto;min-height:36px;text-align:left} '+selector+' [role="menu"] svg{flex-shrink:0} '+selector+' [role="separator"]{border-top:1px solid #666;margin:8px 2px} '+selector+' button:focus-visible{outline:2px solid #2784DE;outline-offset:1px} .'+runClass+'[contenteditable]{outline:2px solid #4385be;outline-offset:3px} @media print{'+selector+'{display:none!important}}';
     document.body.appendChild(panelStyle); document.body.appendChild(panel);
   }
   function begin(span) {
@@ -315,6 +329,18 @@
     // Fenced code is literal block content; its structure remains editable via
     // both selectors. Inline code can itself be wrapped by emphasis or a link,
     // with those markers outside the backticks rather than inside the literal.
+    var cells=spans.map(function(span){return span && span.closest('td,th');});
+    var table=cells[0] && cells[0].closest('table');
+    var inTable=!!table && cells.every(function(cell){return cell && cell.closest('table')===table;});
+    var alignmentRow=panel.querySelector('[data-mp-table-alignment]');
+    alignmentRow.hidden=!inTable;
+    alignmentRow.querySelectorAll('[data-mp-align]').forEach(function(control){
+      var requested=control.getAttribute('data-mp-align');
+      control.setAttribute('aria-pressed',String(inTable && cells.every(function(cell){
+        var alignment=cell.style.textAlign || cell.getAttribute('align') || 'left';
+        return alignment===requested;
+      })));
+    });
     var containsCodeBlock=spans.some(function(span){return !!(span && span.closest('pre'));});
     panel.querySelectorAll('button[data-mp-inline]').forEach(function(control){control.disabled=containsCodeBlock;});
     var selectors={bold:'strong,b',italic:'em,i',underline:'u',strike:'del,s,strike',code:'code',link:'a[href]',math:'.MathJax,.MathJax_Display'};
@@ -492,7 +518,10 @@
     var range=document.createRange();
     range.setStart(spans[0].firstChild,runs[0].start);
     range.setEnd(spans[spans.length-1].firstChild,runs[runs.length-1].end);
-    if(selected.text!==undefined && normalizedSelectionText(range.toString())!==normalizedSelectionText(selected.text)) return;
+    var table=spans[0].closest('table');
+    var inTable=table && spans.every(function(span){return span.closest('td,th') && span.closest('table')===table;});
+    function normalize(text){return inTable ? text.replace(/\s/g,'') : normalizedSelectionText(text);}
+    if(selected.text!==undefined && normalize(range.toString())!==normalize(selected.text)) return;
     var selection=window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
     saved=currentSelection();
     updatePanel();

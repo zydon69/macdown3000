@@ -1218,21 +1218,22 @@
     },
     {
       "path": "MacDown/Code/Document/MPDocument.m",
-      "observed_sha256": "8ac17758b1ee737832052fccc3b06736ee17825663a3339899b7e2c66ca3da4b",
+      "observed_sha256": "97a296dff918b6e87ffed9b582625440780a66992a07a2039e22917d18887fd5",
       "sha256": "93479bf016b912ee7b3b518e550190fd34b50f2e64b06a91d2b86eacbb528cea",
       "read": false,
       "analyzed": false,
       "validation_tested": false,
       "validation_without_test": false,
       "state": "modifié après campagne04 — modification ciblée testée, relecture intégrale à renouveler",
-      "evidence": "../../features/normal-text-table-picker.md",
+      "evidence": "../../features/preview-table-alignment.md",
       "open_findings": [],
       "read_ranges": [
         "diff de la correction des citations ; contrats et consommateurs concernés",
         "diff de la restauration de sélection source en ligne ; notifications de focus, transaction Markdown et contrats concernés",
         "diff des sondages de correspondance aperçu/source ; transactions, restauration, espaces et consommateurs concernés",
         "diff ciblé : plafond de taille des contrôles de sélection et propagation du facteur réel de zoom",
-        "diff ciblé : bouton Texte normal, dimensions du tableau, grille de sélection et traduction française"
+        "diff ciblé : bouton Texte normal, dimensions du tableau, grille de sélection et traduction française",
+        "diff ciblé : détection des sélections de tableau, alignement Markdown de colonnes, restauration et tests du visualiseur"
       ],
       "review_flow": "document",
       "review_decision": "Correction ciblée après audit ; la validation intégrale de la version précédente est conservée séparément. Aucun nouvel audit intégral du fichier déclaré.",
@@ -1256,7 +1257,9 @@
         "../../features/preview-popover-zoom.md",
         "preuves/modale-zoom-final.log",
         "../../features/normal-text-table-picker.md",
-        "preuves/texte-normal-grille-tableau-final.log"
+        "preuves/texte-normal-grille-tableau-final.log",
+        "../../features/preview-table-alignment.md",
+        "preuves/alignement-tableau-final.log"
       ],
       "historical_campaign04_validation": {
         "path": "MacDown/Code/Document/MPDocument.m",
@@ -10632,14 +10635,14 @@
     },
     {
       "path": "MacDown/Resources/Extensions/preview-edit.js",
-      "observed_sha256": "0c1c500b98cf83171876f1bf004506cbd614bb47cf0f4e6e261b28cda840c2b1",
+      "observed_sha256": "4c731db076eaeb648e38190cbd9c24910b351d402652c018b2ded8ab8eb51393",
       "sha256": "16b41b77c6a23da171c54bbe30aad0edc75276268c2c8c1d1766ddece6940f0f",
       "read": false,
       "analyzed": false,
       "validation_tested": false,
       "validation_without_test": false,
-      "state": "modifié après campagne04 — correction ciblée testée, relecture intégrale à renouveler",
-      "evidence": "../../features/preview-popover-zoom.md",
+      "state": "modifié après campagne04 — modification ciblée testée, relecture intégrale à renouveler",
+      "evidence": "../../features/preview-table-alignment.md",
       "open_findings": [],
       "read_ranges": [
         "diff de la correction des citations ; contrats et consommateurs concernés",
@@ -10650,7 +10653,8 @@
         "diff ciblé : plafond de taille des contrôles de sélection et propagation du facteur réel de zoom",
         "diff ciblé : texte du sélecteur à 16 px, bouton de dimensions inchangées",
         "diff ciblé : libellé du sélecteur séparé du chevron décoratif aligné à droite",
-        "diff ciblé : bord droit du sélecteur aligné sur les boutons visibles, après prise en compte du zoom"
+        "diff ciblé : bord droit du sélecteur aligné sur les boutons visibles, après prise en compte du zoom",
+        "diff ciblé : détection des sélections de tableau, alignement Markdown de colonnes, restauration et tests du visualiseur"
       ],
       "review_flow": "styles",
       "review_decision": "Correction ciblée ; certification intégrale de la version précédente conservée séparément. Nouvelle validation exhaustive non déclarée.",
@@ -10674,7 +10678,9 @@
         "preuves/menu-survol-final.log",
         "preuves/menu-survol-positionnement.log",
         "../../features/preview-popover-zoom.md",
-        "preuves/modale-zoom-final.log"
+        "preuves/modale-zoom-final.log",
+        "../../features/preview-table-alignment.md",
+        "preuves/alignement-tableau-final.log"
       ],
       "historical_campaign04_validation": {
         "path": "MacDown/Resources/Extensions/preview-edit.js",

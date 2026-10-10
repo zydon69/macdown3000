@@ -6315,6 +6315,7 @@ to link outside that scope.", \
         [ranges addObject:[NSValue valueWithRange:selected]];
     }
     NSString *(^normalizeText)(NSString *)=^NSString *(NSString *text){
+        if ([payload[@"action"] isEqual:@"table-align"]) return [[text componentsSeparatedByCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet] componentsJoinedByString:@""];
         return codeBlockRange ? [[text stringByReplacingOccurrencesOfString:@"\r\n" withString:@"\n"] stringByReplacingOccurrencesOfString:@"\r" withString:@"\n"] : MPNormalizePreviewSelectionText(text);
     };
     if (submitted && (![payload[@"text"] isKindOfClass:NSString.class] || ![normalizeText(payload[@"text"]) isEqualToString:normalizeText(visible)])) return nil;
@@ -7010,6 +7011,83 @@ to link outside that scope.", \
         preservingSelection:originalSelection restoringRange:restoration];
 }
 
+// The selected DOM leaves are source-proven by verifiedPreviewSelection. Column
+// indices come from those leaves, never from an index supplied by the page.
+// A parser round trip proves that changing a candidate separator affects only
+// the requested columns of that exact table, including nested containers.
+- (BOOL)alignPreviewTable:(NSDictionary *)payload selection:(NSDictionary *)verified value:(NSString *)alignment
+{
+    if (![@[@"left",@"center",@"right"] containsObject:alignment]) return NO;
+    JSContext *context=self.preview.mainFrame.javaScriptContext;
+    NSArray *runs=payload[@"runs"] ?: @[payload];
+    NSMutableArray *ids=[NSMutableArray array];
+    for (NSDictionary *run in runs) [ids addObject:run[@"id"]];
+    context[@"__mpTableIDs"]=ids;
+    NSDictionary *table=[[context evaluateScript:@"(function(){var cells=__mpTableIDs.map(function(id){var n=macdownPreviewEditor.elements().spans.find(function(span){return span._mpID===id;});return n&&n.closest('td,th');}),t=cells[0]&&cells[0].closest('table');if(!t||cells.some(function(c){return !c||c.closest('table')!==t;}))return null;return {index:Array.from(document.querySelectorAll('table')).indexOf(t),columns:Array.from(new Set(cells.map(function(c){return c.cellIndex;}))),width:t.rows[0].cells.length};})()"] toDictionary];
+    if (!table || ![table[@"columns"] count]) return NO;
+    context[@"__mpTableTarget"]=table;
+    context[@"__mpTableOriginalHTML"]=[self.renderer HTMLForMarkdownSnapshot:self.editor.string];
+    // Use an alternate alignment for the proof even if the requested alignment
+    // is already active: an unchanged DOM cannot identify a source separator.
+    NSString *probeAlignment=[[context evaluateScript:@"(function(){var d=new DOMParser().parseFromString(__mpTableOriginalHTML,'text/html'),t=d.querySelectorAll('table')[__mpTableTarget.index];return t&&__mpTableTarget.columns.every(function(c){return Array.from(t.rows).every(function(r){return r.cells[c]&&r.cells[c].style.textAlign==='center';});})?'right':'center';})()"] toString];
+    NSString *proof=@"(function(){var a=new DOMParser().parseFromString(__mpTableOriginalHTML,'text/html'),b=new DOMParser().parseFromString(__mpTableCandidateHTML,'text/html'),ta=a.querySelectorAll('table')[__mpTableTarget.index],tb=b.querySelectorAll('table')[__mpTableTarget.index];if(!ta||!tb||ta.rows.length!==tb.rows.length)return false;for(var i=0;i<ta.rows.length;i++){if(ta.rows[i].cells.length!==__mpTableTarget.width||tb.rows[i].cells.length!==__mpTableTarget.width)return false;for(var j=0;j<__mpTableTarget.columns.length;j++){var c=__mpTableTarget.columns[j],x=ta.rows[i].cells[c],y=tb.rows[i].cells[c];if(!x||!y||y.style.textAlign!==__mpTableProbeAlignment)return false;[x,y].forEach(function(cell){cell.style.removeProperty('text-align');if(!cell.getAttribute('style'))cell.removeAttribute('style');});}}return a.body.innerHTML===b.body.innerHTML;})()";
+    context[@"__mpTableProbeAlignment"]=probeAlignment;
+    NSString *source=self.editor.string;
+    NSRange selection=[verified[@"range"] rangeValue];
+    NSUInteger selectionLineEnd=NSMaxRange([source lineRangeForRange:NSMakeRange(NSMaxRange(selection),0)]);
+    NSUInteger scanEnd=selectionLineEnd<source.length ? NSMaxRange([source lineRangeForRange:NSMakeRange(selectionLineEnd,0)]) : source.length;
+    NSRegularExpression *prefix=[NSRegularExpression regularExpressionWithPattern:@"^[ \\t]*(?:>[ \\t]*)*" options:0 error:NULL];
+    NSRegularExpression *token=[NSRegularExpression regularExpressionWithPattern:@"^[ \\t]*(:?-+:?)[ \\t]*$" options:0 error:NULL];
+    NSMutableArray *candidates=[NSMutableArray array];
+    [source enumerateSubstringsInRange:NSMakeRange(0,scanEnd) options:NSStringEnumerationByLines usingBlock:^(NSString *line, NSRange lineRange, NSRange enclosingRange, BOOL *stop){
+        NSUInteger start=[prefix firstMatchInString:line options:0 range:NSMakeRange(0,line.length)].range.length;
+        NSString *body=[line substringFromIndex:start];
+        NSArray *parts=[body componentsSeparatedByString:@"|"];
+        NSMutableArray *ranges=[NSMutableArray array];NSUInteger offset=start;
+        for (NSUInteger i=0;i<parts.count;i++) {
+            NSString *part=parts[i];
+            BOOL edge=(i==0 || i==parts.count-1) && ![part stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet].length;
+            if (!edge) {
+                NSTextCheckingResult *match=[token firstMatchInString:part options:0 range:NSMakeRange(0,part.length)];
+                if (!match) return;
+                NSRange range=[match rangeAtIndex:1];range.location+=lineRange.location+offset;
+                [ranges addObject:[NSValue valueWithRange:range]];
+            }
+            offset+=part.length+1;
+        }
+        if (ranges.count==[table[@"width"] unsignedIntegerValue]) [candidates addObject:ranges];
+    }];
+    NSArray *columns=[table[@"columns"] sortedArrayUsingSelector:@selector(compare:)];
+    NSUInteger probes=0;
+    for (NSArray *ranges in candidates.reverseObjectEnumerator) {
+        if (++probes>64) break;
+        NSMutableString *(^change)(NSString *)=^NSMutableString *(NSString *value){
+            NSMutableString *result=[source mutableCopy];
+            for (NSNumber *column in columns.reverseObjectEnumerator) {
+                NSRange range=[ranges[column.unsignedIntegerValue] rangeValue];
+                NSString *dashes=[[source substringWithRange:range] stringByTrimmingCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@":"]];
+                while (dashes.length<3) dashes=[dashes stringByAppendingString:@"-"];
+                NSString *replacement=[NSString stringWithFormat:@"%@%@%@",[value isEqual:@"right"]?@"":@":",dashes,[value isEqual:@"left"]?@"":@":"];
+                [result replaceCharactersInRange:range withString:replacement];
+            }
+            return result;
+        };
+        context[@"__mpTableCandidateHTML"]=[self.renderer HTMLForMarkdownSnapshot:change(probeAlignment)];
+        if (![[context evaluateScript:proof] toBool]) continue;
+        NSString *result=change(alignment);
+        if ([result isEqual:source]) return YES;
+        // Replace one envelope and retain the exact selected source occurrence.
+        NSRange first=[ranges.firstObject rangeValue],last=[ranges.lastObject rangeValue];
+        NSUInteger start=MIN(first.location,selection.location),end=MAX(NSMaxRange(last),NSMaxRange(selection));
+        NSInteger delta=(NSInteger)result.length-(NSInteger)source.length;
+        NSUInteger selectedStart=selection.location+(NSMaxRange(last)<=selection.location ? delta : 0);
+        NSRange envelope=NSMakeRange(start,end-start);
+        NSRange restored=NSMakeRange(selectedStart-start,selection.length);
+        return [self replacePreviewRange:envelope withString:[result substringWithRange:NSMakeRange(start,envelope.length+delta)] preservingSelection:selection restoringRange:restored];
+    }
+    return NO;
+}
+
 - (BOOL)applyPreviewEditPayload:(NSDictionary *)payload
 {
     if (![payload isKindOfClass:NSDictionary.class] || self.documentClosed || self.printing ||
@@ -7046,6 +7124,8 @@ to link outside that scope.", \
     NSRange selectedRange = range;
     NSString *value = payload[@"value"];
     if (value && ![value isKindOfClass:NSString.class]) return NO;
+    if ([action isEqualToString:@"table-align"])
+        return [self alignPreviewTable:payload selection:verified value:value];
     if ([action isEqualToString:@"block"])
         return [self applyBlockFormattingValue:value selection:verified callouts:self.renderer.calloutSourceEntries renderer:self.renderer];
     if ([action isEqualToString:@"strike"] && !self.preferences.extensionStrikethough) return NO;
@@ -7093,7 +7173,7 @@ to link outside that scope.", \
         ![payload[@"token"] isKindOfClass:NSString.class] ||
         ![payload[@"token"] isEqualToString:self.previewEditToken] ||
         ![action isKindOfClass:NSString.class] ||
-        ![@[@"block",@"bold",@"italic",@"underline",@"strike",@"clear",@"code",@"link",@"math"] containsObject:action] ||
+        ![@[@"block",@"bold",@"italic",@"underline",@"strike",@"clear",@"code",@"link",@"math",@"table-align"] containsObject:action] ||
         (value && ![value isKindOfClass:NSString.class])) return NO;
     if (self.previewSelectionToRestore && [self.previewSelectionToRestore[@"source"] isEqualToString:self.editor.string]) {
         // If the user selected another run in the still-visible old DOM,

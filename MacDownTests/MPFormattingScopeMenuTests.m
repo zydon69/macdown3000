@@ -24,6 +24,7 @@
 - (IBAction)toggleLink:(id)sender;
 - (BOOL)previewHasFindFocus;
 - (void)scaleWebview;
+- (BOOL)applyPreviewEditPayload:(NSDictionary *)payload;
 - (BOOL)formatSourceInlineAction:(NSString *)action value:(NSString *)value;
 - (void)editorSelectionDidChange:(NSNotification *)notification;
 @end
@@ -69,7 +70,7 @@
     // Keep resource loading local and independent of another suite's theme.
     self.document.preferences.htmlStyleName=@"GitHub2";
     NSDictionary *settings=@{@"htmlMathJax":@NO,@"extensionSmartyPants":@NO,@"htmlSyntaxHighlighting":@NO,
-        @"htmlMermaid":@NO,@"htmlGraphviz":@NO,@"htmlTaskList":@YES,@"extensionFencedCode":@YES,
+        @"htmlMermaid":@NO,@"htmlGraphviz":@NO,@"extensionTables":@YES,@"htmlTaskList":@YES,@"extensionFencedCode":@YES,
         @"extensionIntraEmphasis":@YES,@"extensionUnderline":@YES,@"extensionStrikethough":@YES};
     NSMutableDictionary *saved=[NSMutableDictionary dictionary];
     for (NSString *key in settings) {
@@ -747,6 +748,150 @@
     [self assertMenuScope:@"container" value:@"toggle-h2" active:YES];
     XCTAssertEqualObjects([self JS:@"document.querySelector('[data-mp-style=bold]').getAttribute('aria-pressed')"],@"true");
     XCTAssertEqualObjects([self JS:@"document.querySelector('details .mp-callout-body h1 strong').textContent"],@"Body");
+}
+
+- (void)chooseTableAlignment:(NSString *)alignment
+{
+    [self JS:[NSString stringWithFormat:@"document.querySelector('[data-mp-align=%@]').click()",alignment]];
+    [self waitForFormatting];
+}
+
+- (void)testTableAlignmentRoundTripsEveryColumnAndAlignment
+{
+    NSArray *alignments=@[@"left",@"center",@"right"];
+    NSDictionary *markers=@{@"left":@":---",@"center":@":---:",@"right":@"---:"};
+    for (NSString *before in alignments) for (NSString *after in alignments) for (NSUInteger column=0;column<3;column++) {
+        // Different dash lengths and a second table prove precise ownership.
+        NSString *source=[NSString stringWithFormat:@"| HeadA | HeadB | HeadC |\n| %@ | %@ | %@ |\n| Alpha | Beta | Gamma |\n| Delta | Epsilon | Zeta |\n\n| Other | Neighbor |\n| --- | --- |\n| untouched | text |\n",markers[before],markers[before],markers[before]];
+        [self loadSource:source];
+        NSString *word=@[@"Alpha",@"Beta",@"Gamma"][column];
+        [self selectFromText:word throughText:word];
+        XCTAssertEqualObjects([self JS:@"String(document.querySelector('[data-mp-table-alignment]').hidden)"],@"false");
+        if ([before isEqual:after]) {
+            [self JS:[NSString stringWithFormat:@"document.querySelector('[data-mp-align=%@]').click()",after]];
+        } else [self chooseTableAlignment:after];
+        NSMutableArray *expected=[@[markers[before],markers[before],markers[before]] mutableCopy];expected[column]=markers[after];
+        NSString *separator=[NSString stringWithFormat:@"| %@ | %@ | %@ |",expected[0],expected[1],expected[2]];
+        XCTAssertTrue([self.editor.string containsString:separator],@"%@ to %@ column %lu",before,after,(unsigned long)column);
+        XCTAssertTrue([self.editor.string hasSuffix:@"| Other | Neighbor |\n| --- | --- |\n| untouched | text |\n"]);
+        XCTAssertEqualObjects([self JS:@"getSelection().toString()"],word);
+        NSString *check=[NSString stringWithFormat:@"Array.from(document.querySelector('table').rows).every(function(r){return r.cells[%lu].style.textAlign==='%@';})",(unsigned long)column,after];
+        XCTAssertTrue([[self JS:check] boolValue]);
+        XCTAssertEqualObjects(([self JS:[NSString stringWithFormat:@"document.querySelector('[data-mp-align=%@]').getAttribute('aria-pressed')",after]]),@"true");
+    }
+}
+
+- (void)testTableAlignmentPreservesStyledPartialHeaderAndAllowsSuccessiveActions
+{
+    [self loadSource:@"| **First heading** | Second |\n| --- | --- |\n| Value | Other |\n"];
+    [self selectFromText:@"heading" throughText:@"heading"];
+    [self chooseTableAlignment:@"center"];
+    XCTAssertEqualObjects(self.editor.string,@"| **First heading** | Second |\n| :---: | --- |\n| Value | Other |\n");
+    XCTAssertEqualObjects([self JS:@"getSelection().toString()"],@"heading");
+    XCTAssertEqualObjects([self JS:@"document.querySelector('[data-mp-style=bold]').getAttribute('aria-pressed')"],@"true");
+    [self chooseTableAlignment:@"right"];
+    XCTAssertTrue([self.editor.string containsString:@"| ---: | --- |"]);
+    XCTAssertEqualObjects([self JS:@"getSelection().toString()"],@"heading");
+    XCTAssertEqualObjects([self JS:@"getComputedStyle(document.querySelector('[data-mp-align=right]')).color"],@"rgb(39, 132, 222)");
+}
+
+- (void)testTableAlignmentSupportsContainersOptionalPipesAndCRLF
+{
+    NSArray *fixtures=@[
+        @"First | Second\n------ | ------\nNeedle | Other\n",
+        @"> | First | Second |\n> | --- | --- |\n> | Needle | Other |\n",
+        @"::: {.callout-note}\n\n| First | Second |\n| --- | --- |\n| Needle | Other |\n\n:::\n",
+        @"| First | Second |\r\n| --- | --- |\r\n| Needle | Other |\r\n",
+        @"| First | Second |\n| --- | --- |\n| Needle **styled** `code` | Other |\n"];
+    for (NSString *source in fixtures) {
+        [self loadSource:source];
+        [self selectFromText:@"Needle" throughText:@"Needle"];
+        [self chooseTableAlignment:@"center"];
+        XCTAssertEqualObjects([self JS:@"getSelection().toString()"],@"Needle");
+        XCTAssertTrue([[self JS:@"Array.from(document.querySelector('table').rows).every(function(r){return r.cells[0].style.textAlign==='center' && !r.cells[1].style.textAlign;})"] boolValue]);
+        if ([source containsString:@"\r\n"]) XCTAssertTrue([self.editor.string containsString:@"| :---: | --- |\r\n"]);
+        if ([source containsString:@"------"]) XCTAssertTrue([self.editor.string containsString:@":------: | ------"]);
+    }
+}
+
+- (void)testTableAlignmentAppearsOnlyForTableSelections
+{
+    [self loadSource:@"Prose.\n\n| First | Second |\n| --- | --- |\n| Needle | Other |\n"];
+    [self selectFromText:@"Prose" throughText:@"Prose"];
+    XCTAssertEqualObjects([self JS:@"String(document.querySelector('[data-mp-table-alignment]').hidden)"],@"true");
+    [self selectFromText:@"Needle" throughText:@"Needle"];
+    XCTAssertEqualObjects([self JS:@"String(document.querySelector('[data-mp-table-alignment]').hidden)"],@"false");
+    [self selectFromText:@"Prose" throughText:@"Prose"];
+    XCTAssertEqualObjects([self JS:@"String(document.querySelector('[data-mp-table-alignment]').hidden)"],@"true");
+}
+
+- (void)testTableAlignmentAppliesToAllColumnsTouchedBySelection
+{
+    [self loadSource:@"| First | Second | Third |\n| --- | --- | --- |\n| Alpha | Beta | Gamma |\n| Delta | Epsilon | Zeta |\n"];
+    [self selectFromText:@"Alpha" throughText:@"Beta"];
+    [self chooseTableAlignment:@"center"];
+    XCTAssertTrue([self.editor.string containsString:@"| :---: | :---: | --- |"]);
+    XCTAssertTrue([[self JS:@"Array.from(document.querySelector('table').rows).every(function(r){return r.cells[0].style.textAlign==='center' && r.cells[1].style.textAlign==='center' && !r.cells[2].style.textAlign;})"] boolValue]);
+    XCTAssertTrue([[self JS:@"getSelection().toString().includes('Alpha') && getSelection().toString().includes('Beta')"] boolValue]);
+}
+
+- (void)testTableAlignmentRejectsInvalidOrNonMarkdownTargets
+{
+    [self loadSource:@"Prose.\n\n| First | Second |\n| --- | --- |\n| Needle | Other |\n"];
+    [self selectFromText:@"Prose" throughText:@"Prose"];
+    NSDictionary *prose=[self.web.mainFrame.javaScriptContext evaluateScript:@"macdownPreviewEditor.selectionPayload('table-align','center')"].toDictionary;
+    NSString *original=self.editor.string.copy;
+    XCTAssertFalse([self.document applyPreviewEditPayload:prose]);
+    XCTAssertEqualObjects(self.editor.string,original);
+    [self selectFromText:@"Needle" throughText:@"Needle"];
+    NSMutableDictionary *payload=[[self.web.mainFrame.javaScriptContext evaluateScript:@"macdownPreviewEditor.selectionPayload('table-align','center')"].toDictionary mutableCopy];
+    payload[@"value"]=@"justify";
+    XCTAssertFalse([self.document applyPreviewEditPayload:payload]);
+    payload[@"value"]=@"center";payload[@"token"]=@"stale";
+    XCTAssertFalse([self.document applyPreviewEditPayload:payload]);
+    XCTAssertEqualObjects(self.editor.string,original);
+    [self loadSource:@"<table><tr><th>Header</th></tr><tr><td>RawCell</td></tr></table>\n\n| Another | Table |\n| --- | --- |\n| Safe | Other |\n"];
+    [self selectFromText:@"RawCell" throughText:@"RawCell"];
+    original=self.editor.string.copy;
+    NSDictionary *raw=[self.web.mainFrame.javaScriptContext evaluateScript:@"macdownPreviewEditor.selectionPayload('table-align','center')"].toDictionary;
+    XCTAssertFalse([self.document applyPreviewEditPayload:raw]);
+    XCTAssertEqualObjects(self.editor.string,original);
+}
+
+- (void)testTableAlignmentUsesProvenColumnAndQueuesRapidChanges
+{
+    [self loadSource:@"| First | Second |\n| --- | --- |\n| Needle | Other |\n"];
+    [self selectFromText:@"Needle" throughText:@"Needle"];
+    NSMutableDictionary *payload=[[self.web.mainFrame.javaScriptContext evaluateScript:@"macdownPreviewEditor.selectionPayload('table-align','center')"].toDictionary mutableCopy];
+    // A page-provided column must never override ownership of the selected leaf.
+    payload[@"column"]=@1;
+    XCTAssertTrue([self.document applyPreviewEditPayload:payload]);
+    [self JS:@"document.querySelector('[data-mp-align=right]').click()"];
+    [self waitForFormatting];
+    XCTAssertEqualObjects(self.editor.string,@"| First | Second |\n| ---: | --- |\n| Needle | Other |\n");
+    XCTAssertEqualObjects([self JS:@"getSelection().toString()"],@"Needle");
+}
+
+- (void)testTableAlignmentRetainsMixedInlineRunsAndEscapedPipes
+{
+    NSString *source=@"| Heading | Other |\n| --- | --- |\n| **Bold** plain *italic* `code` escaped\\|pipe | Neighbor |\n";
+    [self loadSource:source];
+    [self selectFromText:@"Bold" throughText:@"code"];
+    [self chooseTableAlignment:@"center"];
+    XCTAssertEqualObjects(self.editor.string,[source stringByReplacingOccurrencesOfString:@"| --- | --- |" withString:@"| :---: | --- |"]);
+    XCTAssertTrue([[self JS:@"getSelection().toString().includes('Bold') && getSelection().toString().includes('code')"] boolValue]);
+    XCTAssertTrue([[self JS:@"!!document.querySelector('td strong') && !!document.querySelector('td em') && !!document.querySelector('td code')"] boolValue]);
+}
+
+- (void)testTableAlignmentAcrossRowsRetainsSelectionAndDisclosure
+{
+    [self loadSource:@"::: {.callout-note collapse=\"true\"}\n## Title\n\n| First | Second |\n| --- | --- |\n| Alpha | Beta |\n| Delta | Epsilon |\n\n:::\n"];
+    [self JS:@"document.querySelector('details').open=true"];
+    [self selectFromText:@"Alpha" throughText:@"Epsilon"];
+    [self chooseTableAlignment:@"right"];
+    XCTAssertTrue([self.editor.string containsString:@"| ---: | ---: |"]);
+    XCTAssertEqualObjects([self JS:@"String(document.querySelector('details').open)"],@"true");
+    XCTAssertTrue([[self JS:@"getSelection().toString().includes('Alpha') && getSelection().toString().includes('Epsilon')"] boolValue]);
 }
 
 @end
