@@ -430,6 +430,38 @@ final class MacDownUITests: XCTestCase {
         }
     }
 
+    func testSourceToolbarInlineActionsRetainOnlySelectedWord() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("SourceSelection.md")
+        let source = "Bonjour test après test\n"
+        try source.write(to: file, atomically: true, encoding: .utf8)
+        let window = openPreviewBlockFixture(file, style: "Github2 (dark)")
+        let editor = window.textViews.matching(identifier: "editor-text-view").firstMatch
+        XCTAssertTrue(editor.waitForExistence(timeout: 10))
+        editor.click()
+        app.typeKey("a", modifierFlags: .command)
+        app.typeKey(XCUIKeyboardKey.leftArrow.rawValue, modifierFlags: [])
+        for _ in 0..<8 { app.typeKey(XCUIKeyboardKey.rightArrow.rawValue, modifierFlags: []) }
+        for _ in 0..<4 { app.typeKey(XCUIKeyboardKey.rightArrow.rawValue, modifierFlags: .shift) }
+        let styles = app.toolbars.groups["text-formatting-group"].buttons
+        styles.element(boundBy: 0).click()
+        wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", "Bonjour **test** après test\n"), object: editor)], timeout: 5)
+        // Toggle without selecting again: neighbouring words must stay untouched.
+        styles.element(boundBy: 0).click()
+        wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", source), object: editor)], timeout: 5)
+        styles.element(boundBy: 0).click()
+        styles.element(boundBy: 1).click()
+        let formatted = try XCTUnwrap(editor.value as? String)
+        XCTAssertTrue(formatted.hasPrefix("Bonjour "))
+        XCTAssertTrue(formatted.hasSuffix(" après test\n"))
+        let word = try XCTUnwrap(formatted.range(of: "test"))
+        let expected = formatted.replacingCharacters(in: word, with: "MODIFIED")
+        editor.typeText("MODIFIED")
+        XCTAssertEqual(editor.value as? String, expected, "Typing must replace only the retained word, not its sentence or delimiters")
+    }
+
     func testBlankPreviewClickDismissesSelectionAndPanel() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

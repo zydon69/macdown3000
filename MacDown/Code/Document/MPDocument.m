@@ -3700,8 +3700,12 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
     if (!change) change=MPPreviewInlineSingleChange(source,selection,action,value,render,escape,@"auto");
     if (change && [self replacePreviewRange:[change[@"range"] rangeValue] withString:change[@"replacement"]
         preservingSelection:selection restoringRange:[change[@"selection"] rangeValue]]) {
-        NSDictionary *restored=self.previewSelectionToRestore;
-        if (restored) self.editor.selectedRange=NSMakeRange([restored[@"location"] unsignedIntegerValue],[restored[@"length"] unsignedIntegerValue]);
+        // Source focus notifications can clear preview restoration during the
+        // replacement. The transaction owns the exact inline selection, so
+        // restore it directly instead of depending on that transient DOM state.
+        NSRange replacementRange=[change[@"range"] rangeValue];
+        NSRange retained=[change[@"selection"] rangeValue];
+        self.editor.selectedRange=NSMakeRange(replacementRange.location+retained.location,retained.length);
         self.previewSelectionToRestore=nil;
         return YES;
     }

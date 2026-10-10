@@ -22,6 +22,8 @@
 - (IBAction)toggleStrong:(id)sender;
 - (IBAction)toggleLink:(id)sender;
 - (BOOL)previewHasFindFocus;
+- (BOOL)formatSourceInlineAction:(NSString *)action value:(NSString *)value;
+- (void)editorSelectionDidChange:(NSNotification *)notification;
 @end
 
 // Exercise rendered selections, the JavaScript controls and native formatting
@@ -311,6 +313,41 @@
             [self waitForFormatting];
             XCTAssertEqualObjects(self.editor.string,source);
         }
+    }
+}
+
+- (void)testSourceInlineActionsKeepTheChosenWordWithSelectionNotifications
+{
+    // Real document windows subscribe to this notification; these lightweight
+    // WebView fixtures must install the same observer to exercise focus handoff.
+    [NSNotificationCenter.defaultCenter addObserver:self.document selector:@selector(editorSelectionDidChange:)
+        name:NSTextViewDidChangeSelectionNotification object:self.editor];
+    @try {
+        for (NSString *prefix in @[@"",@"# ",@"> ",@"::: {.callout-note}\n## Title\n"]) {
+            for (NSString *action in @[@"bold",@"italic",@"underline",@"strike",@"code",@"link",@"clear"]) {
+                BOOL clear=[action isEqualToString:@"clear"];
+                NSString *source=[NSString stringWithFormat:@"%@Bonjour %@ après test\n%@",prefix,clear?@"**test**":@"test",[prefix hasPrefix:@":::"]?@":::\n":@""];
+                [self loadSource:source];
+                XCTAssertTrue([self.window makeFirstResponder:self.editor]);
+                NSRange word=[source rangeOfString:@"test"];
+                self.editor.selectedRange=word;
+                XCTAssertTrue([self.document formatSourceInlineAction:action value:[action isEqualToString:@"link"]?@"https://example.org":nil],@"%@ %@",prefix,action);
+                NSRange selected=self.editor.selectedRange;
+                XCTAssertTrue(NSMaxRange(selected)<=self.editor.string.length);
+                XCTAssertEqualObjects([self.editor.string substringWithRange:selected],@"test",@"%@ %@ — immediately after formatting",prefix,action);
+                [self waitForFormatting];
+                XCTAssertTrue(NSEqualRanges(self.editor.selectedRange,selected),@"%@ %@ — after preview rendering",prefix,action);
+                XCTAssertTrue([self.editor.string containsString:@" après test"],@"Neighbouring repeated word remains outside selection");
+                // Reapply using the retained selection, without selecting anew.
+                if (!clear && ![action isEqualToString:@"link"]) {
+                    XCTAssertTrue([self.document formatSourceInlineAction:action value:nil]);
+                    XCTAssertEqualObjects([self.editor.string substringWithRange:self.editor.selectedRange],@"test");
+                    [self waitForFormatting];
+                }
+            }
+        }
+    } @finally {
+        [NSNotificationCenter.defaultCenter removeObserver:self.document name:NSTextViewDidChangeSelectionNotification object:self.editor];
     }
 }
 
