@@ -10470,24 +10470,28 @@
     },
     {
       "path": "MacDown/Resources/Extensions/preview-edit.js",
-      "observed_sha256": "80ec38cbd9f534fd0a19cbb2d9d44acae2c2b6d4d1c7a2f4a32f436ac825ed2e",
-      "sha256": "80ec38cbd9f534fd0a19cbb2d9d44acae2c2b6d4d1c7a2f4a32f436ac825ed2e",
+      "observed_sha256": "bbb5e7cc1f4db9912d7229497e7bafc83f7d655cda2a7f15bddb68747391ada1",
+      "sha256": "bbb5e7cc1f4db9912d7229497e7bafc83f7d655cda2a7f15bddb68747391ada1",
       "read": false,
       "analyzed": false,
       "validation_tested": false,
       "validation_without_test": false,
       "state": "modifié après campagne04 — correction ciblée testée, relecture intégrale à renouveler",
-      "evidence": "../../features/quote-selection.md",
+      "evidence": "../../features/preview-mouse-selection.md",
       "open_findings": [],
       "read_ranges": [
-        "diff de la correction des citations ; contrats et consommateurs concernés"
+        "diff de la correction des citations ; contrats et consommateurs concernés",
+        "diff du parcours mousedown ; protection des modificateurs, liens, édition et contrôles"
       ],
       "review_flow": "styles",
       "review_decision": "Correction ciblée après audit ; la validation intégrale de la version précédente est conservée séparément. Aucun nouvel audit intégral du fichier déclaré.",
       "test_evidence": [
         "../../features/quote-selection.md",
         "preuves/citations-native.log",
-        "preuves/citations-ui.log"
+        "preuves/citations-ui.log",
+        "../../features/preview-mouse-selection.md",
+        "preuves/souris-native.log",
+        "preuves/souris-ui.log"
       ],
       "historical_campaign04_validation": {
         "path": "MacDown/Resources/Extensions/preview-edit.js",
@@ -10515,7 +10519,7 @@
           "preuves/campagne04-header-locations.log"
         ]
       },
-      "targeted_validation": {
+      "historical_quote_targeted_validation": {
         "source_revision": "7d5f2f5",
         "read": "diff et contrats concernés",
         "new_quote_scenarios": 212,
@@ -10528,6 +10532,16 @@
         "zoom_isolated_tests": 26,
         "zoom_repeated_tests": 520,
         "zoom_recheck_failures": 0
+      },
+      "targeted_validation": {
+        "source_revision": "fdf48aa",
+        "read": "diff et contrats concernés",
+        "native_tests": 7,
+        "ui_tests": 3,
+        "failures": 0,
+        "new_guard_cases": 36,
+        "physical_content_fixtures": 3,
+        "full_suite_rerun": false
       }
     },
     {
