@@ -4520,6 +4520,12 @@ static BOOL MPScanFenceMarker(NSString *line, unichar *outChar, NSUInteger *outL
 
     CGFloat scale = [self previewScale];
     [self.preview setPageSizeMultiplier:(float)scale];
+    JSValue *editor=self.preview.mainFrame.javaScriptContext[@"window"][@"macdownPreviewEditor"];
+    if (editor && !editor.isUndefined && !editor.isNull) {
+        JSValue *update=editor[@"setPreviewScale"];
+        if (update && !update.isUndefined && !update.isNull)
+            [update callWithArguments:@[@(scale)]];
+    }
 }
 
 - (NSFont *)zoomedEditorFont
@@ -6113,6 +6119,7 @@ to link outside that scope.", \
     for (NSString *type in @[@"note",@"tip",@"warning",@"important",@"caution"])
         calloutTitles[type]=MPPreviewDefaultCalloutTitle(type,NO);
     configuration[@"calloutTitles"]=calloutTitles;
+    configuration[@"previewScale"]=@([self previewScale]);
     if (restore) {
         NSMutableArray *runs = [NSMutableArray array];
         NSMutableString *visible = [NSMutableString string];

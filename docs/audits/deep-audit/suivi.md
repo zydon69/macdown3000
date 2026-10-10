@@ -743,3 +743,7 @@ Le [rapport](../../features/multiline-list-formatting.md) décrit la perte des s
 ### Suivi ciblé — menu au survol (10 octobre 2026)
 
 Le menu est réinitialisé à chaque nouvelle sélection et placé sur une surface séparée au survol. Les commandes existantes sont conservées. Rapport : `../../features/preview-hover-menu.md`. Cette correction ne renouvelle pas la certification exhaustive de la campagne 04.
+
+### Suivi ciblé — plafond du zoom de la modale (10 octobre 2026)
+
+La barre et son menu cessent de grandir au-delà de 100 %, sans limiter le zoom du document. Rapport : `../../features/preview-popover-zoom.md`. La validation exhaustive des nouvelles versions reste à renouveler ; cette intervention couvre le parcours de zoom et les contrôles concernés.

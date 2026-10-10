@@ -5,6 +5,7 @@
 #import "MPEditorView.h"
 #import "MPRenderer.h"
 #import "MPPreferences.h"
+#import "WebView+WebViewPrivateHeaders.h"
 
 @interface MPPreferences (FormattingScopeMenuTests)
 - (int)rendererFlags;
@@ -22,6 +23,7 @@
 - (IBAction)toggleStrong:(id)sender;
 - (IBAction)toggleLink:(id)sender;
 - (BOOL)previewHasFindFocus;
+- (void)scaleWebview;
 - (BOOL)formatSourceInlineAction:(NSString *)action value:(NSString *)value;
 - (void)editorSelectionDidChange:(NSNotification *)notification;
 @end
@@ -256,6 +258,71 @@
     [self assertMenuScope:@"block" value:@"h1" active:YES];
     [self assertMenuScope:@"container" value:@"callout-note" active:YES];
     XCTAssertEqualObjects([self JS:@"document.querySelector('[data-mp-style=link]').getAttribute('aria-pressed')"],@"true");
+}
+
+- (void)testPreviewToolbarAndMenuHavePhysicalSizeCeilingAtHighZoom
+{
+    MPPreferences *preferences=self.document.preferences;
+    CGFloat oldZoom=preferences.documentZoomLevel;
+    BOOL oldRelative=preferences.previewZoomRelativeToBaseFontSize;
+    @try {
+        preferences.previewZoomRelativeToBaseFontSize=NO;
+        [self loadSource:@"Heading\n\nBody\n"];
+        for(NSNumber *level in @[@1,@1.5,@2,@3,@0.5,@3,@1]) {
+            preferences.documentZoomLevel=level.doubleValue;
+            [self.document scaleWebview];
+            XCTAssertEqualWithAccuracy(self.web.pageSizeMultiplier,level.doubleValue,0.001);
+            [self selectFromText:@"Heading" throughText:@"Heading"];
+            NSString *dimensions=[self JS:@"JSON.stringify(document.querySelector('#macdown-preview-format').getBoundingClientRect().toJSON())"];
+            NSDictionary *rect=[NSJSONSerialization JSONObjectWithData:[dimensions dataUsingEncoding:NSUTF8StringEncoding] options:0 error:NULL];
+            XCTAssertLessThanOrEqual([rect[@"width"] doubleValue]*level.doubleValue,345,@"Toolbar width at %@",level);
+            XCTAssertLessThanOrEqual([rect[@"height"] doubleValue]*level.doubleValue,110,@"Toolbar height at %@",level);
+            [self JS:@"document.querySelector('[data-mp-format-menu]').dispatchEvent(new MouseEvent('mouseenter'))"];
+            dimensions=[self JS:@"JSON.stringify(document.querySelector('[role=menu]').getBoundingClientRect().toJSON())"];
+            rect=[NSJSONSerialization JSONObjectWithData:[dimensions dataUsingEncoding:NSUTF8StringEncoding] options:0 error:NULL];
+            XCTAssertLessThanOrEqual([rect[@"width"] doubleValue]*level.doubleValue,261,@"Menu width at %@",level);
+            XCTAssertTrue([[self JS:@"(function(){var m=document.querySelector('[role=menu]').getBoundingClientRect();return m.left>=0 && m.right<=innerWidth && m.top>=0 && m.bottom<=innerHeight;})()"] boolValue],@"Menu stays visible at %@",level);
+            XCTAssertTrue([[self JS:@"(function(){var b=document.querySelector('[data-mp-option=h2]'),r=b.getBoundingClientRect(),target=document.elementFromPoint(r.left+r.width/2,r.top+r.height/2);return target && target.closest('button')===b;})()"] boolValue],@"Menu hit target at %@",level);
+            XCTAssertEqualObjects([self JS:@"getSelection().toString()"],@"Heading");
+        }
+        preferences.documentZoomLevel=3;
+        [self.document scaleWebview];
+        [self selectFromText:@"Heading" throughText:@"Heading"];
+        [self JS:@"document.querySelector('[data-mp-style=bold]').click()"];
+        [self waitForFormatting];
+        XCTAssertEqualObjects(self.editor.string,@"**Heading**\n\nBody\n");
+        XCTAssertTrue([[self JS:@"document.querySelector('#macdown-preview-format').getBoundingClientRect().width*3<=345"] boolValue]);
+        XCTAssertEqualObjects([self JS:@"getSelection().toString()"],@"Heading");
+    } @finally {
+        preferences.documentZoomLevel=oldZoom;
+        preferences.previewZoomRelativeToBaseFontSize=oldRelative;
+    }
+}
+
+- (void)testPopoverCeilingAlsoAppliesOnInitialLoadWithRelativeFontZoom
+{
+    MPPreferences *preferences=self.document.preferences;
+    CGFloat oldZoom=preferences.documentZoomLevel;
+    NSFont *oldFont=preferences.editorBaseFont;
+    BOOL oldRelative=preferences.previewZoomRelativeToBaseFontSize;
+    @try {
+        preferences.previewZoomRelativeToBaseFontSize=YES;
+        NSFont *font=[NSFont fontWithName:oldFont.fontName size:21];
+        XCTAssertNotNil(font);
+        preferences.editorBaseFont=font;
+        preferences.documentZoomLevel=3;
+        [self loadSource:@"Heading\n\nBody\n"];
+        XCTAssertEqualWithAccuracy(self.web.pageSizeMultiplier,4.5,0.001);
+        [self selectFromText:@"Heading" throughText:@"Heading"];
+        XCTAssertTrue([[self JS:@"document.querySelector('#macdown-preview-format').getBoundingClientRect().width*4.5<=345"] boolValue]);
+        [self JS:@"document.querySelector('[data-mp-format-menu]').dispatchEvent(new MouseEvent('mouseenter'))"];
+        XCTAssertTrue([[self JS:@"(function(){var p=document.querySelector('#macdown-preview-format').getBoundingClientRect(),m=document.querySelector('[role=menu]').getBoundingClientRect();return m.width*4.5<=261 && Math.abs(p.right-m.left)<1 && m.bottom<=innerHeight;})()"] boolValue]);
+        XCTAssertEqualObjects(self.editor.string,@"Heading\n\nBody\n");
+    } @finally {
+        preferences.documentZoomLevel=oldZoom;
+        preferences.editorBaseFont=oldFont;
+        preferences.previewZoomRelativeToBaseFontSize=oldRelative;
+    }
 }
 
 - (void)testNewSelectionAlwaysReopensCompactToolbar

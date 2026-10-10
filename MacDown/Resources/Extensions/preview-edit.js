@@ -10,7 +10,7 @@
   if (!config || !config.nodes) return;
   var panel = null, panelStyle = null, errorMessage = null, active = null, saved = null, timer = null, errorSelection = null;
   var mappedSpans = [], panelClass = 'macdown-preview-ui-' + config.token.replace(/[^a-zA-Z0-9_-]/g,''), runClass = panelClass + '-run';
-  var handlers = [], rendering = false, selectingWithMouse = false, menuTimer = null;
+  var handlers = [], rendering = false, selectingWithMouse = false, menuTimer = null, uiZoom = 1;
   var calloutTypes = ['note','tip','warning','important','caution'];
   function listen(target, name, fn) {
     target.addEventListener(name, fn, false);
@@ -274,7 +274,7 @@
     panel.appendChild(panel.querySelector('[role="menu"]'));
     panelStyle = retainedUI ? retainedUI.style : document.createElement('style'); panelStyle.id='macdown-preview-edit-style';
     var selector='.'+panelClass;
-    panelStyle.textContent=selector+' button{font:inherit;color:#fff;background:#3c3c3c;border:1px solid #666;border-radius:4px;margin:2px;padding:6px;cursor:pointer;vertical-align:middle;width:36px;height:36px} '+selector+' svg{display:block;pointer-events:none} '+selector+' button:disabled{opacity:.5;cursor:default} '+selector+' [aria-pressed="true"],'+selector+' [data-mp-active]{color:#2784DE} '+selector+' [role="menu"]{position:fixed;box-sizing:border-box;width:260px;max-width:calc(100vw - 24px);max-height:calc(100vh - 16px);overflow:auto;background:#292929;color:#fff;border:1px solid #666;border-radius:8px;padding:8px;box-shadow:0 4px 20px #0005;margin:0} '+selector+' [role="menu"][hidden]{display:none!important} '+selector+' [data-mp-format-menu]{display:block;width:calc(100% - 4px);text-align:left} '+selector+' [role="group"]{display:block} '+selector+' [role="menu"] button{display:flex;align-items:center;gap:10px;width:calc(100% - 4px);height:auto;min-height:36px;text-align:left} '+selector+' [role="menu"] svg{flex-shrink:0} '+selector+' [role="separator"]{border-top:1px solid #666;margin:8px 2px} '+selector+' button:focus-visible{outline:2px solid #2784DE;outline-offset:1px} .'+runClass+'[contenteditable]{outline:2px solid #4385be;outline-offset:3px} @media print{'+selector+'{display:none!important}}';
+    panelStyle.textContent=selector+' button{font:inherit;color:#fff;background:#3c3c3c;border:1px solid #666;border-radius:4px;margin:2px;padding:6px;cursor:pointer;vertical-align:middle;width:36px;height:36px} '+selector+' svg{display:block;pointer-events:none} '+selector+' button:disabled{opacity:.5;cursor:default} '+selector+' [aria-pressed="true"],'+selector+' [data-mp-active]{color:#2784DE} '+selector+' [role="menu"]{position:absolute;box-sizing:border-box;width:260px;max-width:calc(100vw - 24px);max-height:calc(100vh - 16px);overflow:auto;background:#292929;color:#fff;border:1px solid #666;border-radius:8px;padding:8px;box-shadow:0 4px 20px #0005;margin:0} '+selector+' [role="menu"][hidden]{display:none!important} '+selector+' [data-mp-format-menu]{display:block;width:calc(100% - 4px);text-align:left} '+selector+' [role="group"]{display:block} '+selector+' [role="menu"] button{display:flex;align-items:center;gap:10px;width:calc(100% - 4px);height:auto;min-height:36px;text-align:left} '+selector+' [role="menu"] svg{flex-shrink:0} '+selector+' [role="separator"]{border-top:1px solid #666;margin:8px 2px} '+selector+' button:focus-visible{outline:2px solid #2784DE;outline-offset:1px} .'+runClass+'[contenteditable]{outline:2px solid #4385be;outline-offset:3px} @media print{'+selector+'{display:none!important}}';
     document.body.appendChild(panelStyle); document.body.appendChild(panel);
   }
   function begin(span) {
@@ -383,37 +383,53 @@
     saved=selected; updateStyles(selected);
     panel.style.display='block'; positionPanel();
   }
+  function setPreviewScale(scale) {
+    // Page zoom magnifies the document; controls stop growing at 100%.
+    // Scale only the controls, keeping document zoom and source text intact.
+    if(typeof scale!=='number' || !Number.isFinite(scale) || scale<=0) return;
+    config.previewScale=scale; uiZoom=1/Math.max(1,scale);
+    panel.style.transform='scale('+uiZoom+')';
+    panel.style.transformOrigin='0 0';
+    updatePanel();
+  }
   function positionPanel() {
     var selection=window.getSelection();
     if(!selection || !selection.rangeCount) return;
-    var rect=selection.getRangeAt(0).getBoundingClientRect();
-    var menuWidth=Math.min(260,Math.max(220,window.innerWidth-panel.offsetWidth-24));
-    var reservedWidth=panel.offsetWidth+menuWidth<=window.innerWidth-24 ? menuWidth : 0;
-    panel.style.left=Math.max(12,Math.min(rect.left,window.innerWidth-panel.offsetWidth-reservedWidth-12))+'px';
-    panel.style.top=Math.max(8,Math.min(rect.bottom+8,window.innerHeight-panel.offsetHeight-8))+'px';
+    var viewportWidth=window.innerWidth/uiZoom, viewportHeight=window.innerHeight/uiZoom;
+    panel.style.maxWidth=Math.max(0,viewportWidth-24)+'px';
+    panel.style.maxHeight=Math.max(0,viewportHeight-16)+'px';
+    function uiRect(rect) {
+      return {left:rect.left/uiZoom,right:rect.right/uiZoom,top:rect.top/uiZoom,bottom:rect.bottom/uiZoom};
+    }
+    var rect=uiRect(selection.getRangeAt(0).getBoundingClientRect());
+    var menuWidth=Math.min(260,Math.max(220,viewportWidth-panel.offsetWidth-24));
+    var reservedWidth=panel.offsetWidth+menuWidth<=viewportWidth-24 ? menuWidth : 0;
+    panel.style.left=(Math.max(12,Math.min(rect.left,viewportWidth-panel.offsetWidth-reservedWidth-12))*uiZoom)+'px';
+    panel.style.top=(Math.max(8,Math.min(rect.bottom+8,viewportHeight-panel.offsetHeight-8))*uiZoom)+'px';
     var menu=panel.querySelector('[role=menu]');
     if(menu.hidden) return;
     // Keep the compact toolbar unchanged. Prefer a touching right-hand menu,
     // then the left side; narrow viewports use a separate surface below it.
     menu.style.width=menuWidth+'px';
-    menu.style.maxHeight=(window.innerHeight-16)+'px';
-    var bounds=panel.getBoundingClientRect(), width=menu.offsetWidth, left, top=bounds.top;
-    if(bounds.right+width<=window.innerWidth-12) left=bounds.right;
+    menu.style.maxWidth=Math.max(0,viewportWidth-24)+'px';
+    menu.style.maxHeight=(viewportHeight-16)+'px';
+    var bounds=uiRect(panel.getBoundingClientRect()), width=menu.offsetWidth, left, top=bounds.top;
+    if(bounds.right+width<=viewportWidth-12) left=bounds.right;
     else if(bounds.left-width>=12) left=bounds.left-width;
     else {
       var pairWidth=panel.offsetWidth+width;
-      if(pairWidth<=window.innerWidth-24) {
-        panel.style.left=(window.innerWidth-pairWidth-12)+'px';
-        bounds=panel.getBoundingClientRect(); left=bounds.right;
+      if(pairWidth<=viewportWidth-24) {
+        panel.style.left=((viewportWidth-pairWidth-12)*uiZoom)+'px';
+        bounds=uiRect(panel.getBoundingClientRect()); left=bounds.right;
       } else {
-        left=Math.max(12,Math.min(bounds.left,window.innerWidth-width-12));
-        var below=window.innerHeight-bounds.bottom-8, above=bounds.top-8;
+        left=Math.max(12,Math.min(bounds.left,viewportWidth-width-12));
+        var below=viewportHeight-bounds.bottom-8, above=bounds.top-8;
         if(below>=above) {top=bounds.bottom;menu.style.maxHeight=Math.max(0,below)+'px';}
         else {menu.style.maxHeight=Math.max(0,above)+'px';top=bounds.top-menu.offsetHeight;}
       }
     }
-    menu.style.left=left+'px';
-    menu.style.top=Math.max(8,Math.min(top,window.innerHeight-menu.offsetHeight-8))+'px';
+    menu.style.left=(left-bounds.left-panel.clientLeft)+'px';
+    menu.style.top=(Math.max(8,Math.min(top,viewportHeight-menu.offsetHeight-8))-bounds.top-panel.clientTop)+'px';
   }
   listen(document,'selectionchange',function(){
     clearTimeout(timer); timer=setTimeout(updatePanel,120);
@@ -476,7 +492,7 @@
   function normalizedSelectionText(text) {
     return text.replace(/\r\n?/g,'\n').replace(/\n+/g,'\n');
   }
-  window.macdownPreviewEditor={elements:function(){return {panel:panel,style:panelStyle,spans:mappedSpans.slice()};},clearSelection:clearSelection,prepareForRender:function(){saved=currentSelection() || saved;rendering=true;clearTimeout(timer);},draft:draft,finish:finish,selectionPayload:selectionPayload,showError:function(){
+  window.macdownPreviewEditor={elements:function(){return {panel:panel,style:panelStyle,spans:mappedSpans.slice()};},clearSelection:clearSelection,prepareForRender:function(){saved=currentSelection() || saved;rendering=true;clearTimeout(timer);},draft:draft,finish:finish,selectionPayload:selectionPayload,setPreviewScale:setPreviewScale,showError:function(){
     showEditError('Modification refusée : la source a changé. Copiez votre texte, puis appuyez sur Échap pour annuler.');
   },showFormattingError:function(){
     showEditError('Mise en forme refusée : cette sélection ne peut pas être représentée correctement en Markdown. Sélectionnez un passage plus court.');
@@ -486,6 +502,7 @@
     if(!preservePanel && panel && panel.parentNode) panel.parentNode.removeChild(panel);
     if(panelStyle && !preservePanel)panelStyle.remove();
   }};
+  setPreviewScale(config.previewScale || 1);
   restoreSelection(config.selection);
   updatePanel();
 })();
