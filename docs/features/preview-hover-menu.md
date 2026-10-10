@@ -15,3 +15,9 @@ Les tests dans une vraie WebView couvrent la réouverture compacte, le survol, l
 Cette intervention est une correction ciblée ; elle ne certifie pas un nouvel audit exhaustif du dépôt.
 
 Résultat : 17 tests du composant réussis, puis 3 tests ciblés réussis sur la dernière version du positionnement (barre immobile au survol, menu contigu à 900/600 pixels et sans recouvrement à 300 pixels). Les préférences utilisateur ont été isolées puis restaurées par le lanceur. Les preuves se trouvent dans `docs/audits/deep-audit/preuves/menu-survol-{red,final,positionnement}.log`.
+
+## Lisibilité du sélecteur
+
+Le texte du sélecteur de la barre courte utilise maintenant 16 px au lieu de 13 px. Le bouton conserve sa hauteur de 36 px et sa largeur existante ; sa ligne de texte utilise 22 px, sans retour à la ligne. Un libellé exceptionnellement long est abrégé par une ellipse.
+
+Validation de cet ajustement : les 3 tests existants du positionnement, du plafond de zoom et des commandes du menu réussissent. Journal local : `/tmp/macdown-selector-font-tests.log`.

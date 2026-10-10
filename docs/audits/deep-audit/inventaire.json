@@ -10589,7 +10589,7 @@
     },
     {
       "path": "MacDown/Resources/Extensions/preview-edit.js",
-      "observed_sha256": "ffe4bb34f9bc59afd4fba3752f9ca5e866d4026bdcceea5389b47409c4eeddd6",
+      "observed_sha256": "0be4dc76d4f957e63d93c402a0ecedaeb04239184acc80e8b23b12d3d28c0829",
       "sha256": "16b41b77c6a23da171c54bbe30aad0edc75276268c2c8c1d1766ddece6940f0f",
       "read": false,
       "analyzed": false,
@@ -10604,7 +10604,8 @@
         "correction ciblée : chaîne verticale des contrôles Compilation et parcours Force Touch, selon le fichier",
         "diff de la désélection par clic hors segments mappés et protections des gestes",
         "diff ciblé : état compact, survol et positionnement du menu, maintien de la sélection",
-        "diff ciblé : plafond de taille des contrôles de sélection et propagation du facteur réel de zoom"
+        "diff ciblé : plafond de taille des contrôles de sélection et propagation du facteur réel de zoom",
+        "diff ciblé : texte du sélecteur à 16 px, bouton de dimensions inchangées"
       ],
       "review_flow": "styles",
       "review_decision": "Correction ciblée ; certification intégrale de la version précédente conservée séparément. Nouvelle validation exhaustive non déclarée.",
